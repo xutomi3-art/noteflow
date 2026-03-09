@@ -105,6 +105,17 @@ async def ingest_excel(source_id: uuid.UUID, file_path: str) -> str:
     # Step 4: Drop rows that are entirely empty
     df = df.dropna(how='all')
 
+    # Step 4b: Forward-fill merged cells
+    # Excel merged cells appear as value in first row, NaN in subsequent rows.
+    # Forward-fill label/category columns (non-numeric) so SQL queries can match all sub-rows.
+    for col in df.columns:
+        if df[col].dtype == object:
+            # Only ffill columns where >20% of values are NaN (likely merged cells)
+            null_ratio = df[col].isna().mean()
+            if 0.1 < null_ratio < 0.9:
+                df[col] = df[col].ffill()
+                logger.info("Forward-filled merged cells in column '%s' (%.0f%% null)", col, null_ratio * 100)
+
     # Step 5: Load into DuckDB
     con = duckdb.connect(str(duckdb_path))
     try:
@@ -163,6 +174,13 @@ def excel_to_markdown(file_path: str) -> str:
             df_data = df_data.dropna(how='all')
             if df_data.empty:
                 continue
+
+            # Forward-fill merged cells in label columns
+            for col_idx, col in enumerate(df_data.columns):
+                if df_data[col].dtype == object:
+                    null_ratio = df_data[col].isna().mean()
+                    if 0.1 < null_ratio < 0.9:
+                        df_data[col] = df_data[col].ffill()
 
             # Build section
             if len(sheet_names) > 1:

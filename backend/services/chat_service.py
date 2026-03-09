@@ -162,8 +162,10 @@ Rules:
 - The table name is always "data"
 - Return ONLY the SQL query, no explanation, no markdown
 - Use standard SQL compatible with DuckDB
-- IMPORTANT: Excel files often have summary/total rows at the bottom (rows where key identifier columns like ID, name, PO number are NULL). These summary rows contain pre-computed totals or formulas. When aggregating (SUM, COUNT, AVG), EXCLUDE these summary rows by filtering out rows where the primary identifier column IS NULL. Look at the sample data to identify which rows are summaries.
-- If the user asks for a total and a summary row already contains it, you can SELECT that value directly instead of re-summing."""
+- IMPORTANT: Excel merged cells have been forward-filled. If a category/topic spans multiple rows, ALL those rows now share the same category value. When asked about a budget/total for a category, use SUM() to aggregate all matching rows.
+- IMPORTANT: Excel files often have summary/total rows at the bottom (rows where key identifier columns like ID, name, PO number are NULL). When aggregating (SUM, COUNT, AVG), EXCLUDE these summary rows by filtering out rows where the primary identifier column IS NULL.
+- If the user asks for a total and a summary row already contains it, you can SELECT that value directly instead of re-summing.
+- Use ILIKE for string matching to be case-insensitive. Use '%keyword%' patterns for partial matching."""
 
             sql_query = await qwen_client.generate(
                 [{"role": "user", "content": sql_gen_prompt}]
