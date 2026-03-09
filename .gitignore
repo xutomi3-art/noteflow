@@ -34,3 +34,24 @@ uploads/
 
 # Logs
 *.log
+
+# Test artifacts
+*.exe
+.playwright-mcp/
+ai_test_document.txt
+python_document.txt
+test_people.csv
+test_products.xlsx
+test_bad_file.exe
+
+# Screenshots
+*.png
+
+# MCP config
+.mcp.json
+
+# VS Code
+.vscode/
+
+# Login credentials (sensitive)
+LOGIN.md
