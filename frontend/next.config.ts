@@ -1,16 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    // Stub out the canvas native module (not available in browser / Node builds)
+    resolveAlias: {
+      canvas: "./empty-module.ts",
+    },
+  },
   webpack: (config) => {
-    // Required for pdfjs-dist worker (webpack/production builds)
+    // Fallback alias for non-Turbopack builds
     config.resolve.alias["canvas"] = false;
     return config;
-  },
-  turbopack: {
-    // Required for pdfjs-dist worker (Turbopack/dev mode)
-    resolveAlias: {
-      canvas: { browser: false },
-    },
   },
 };
 
