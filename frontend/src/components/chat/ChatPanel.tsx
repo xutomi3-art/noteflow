@@ -75,7 +75,7 @@ export default function ChatPanel({ notebook }: ChatPanelProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[var(--background)]">
+    <div className="flex-1 flex flex-col min-h-0 bg-[var(--background)]">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 && !isStreaming ? (

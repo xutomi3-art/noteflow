@@ -17,14 +17,15 @@ from backend.services.excel_service import query_excel, get_table_schema, get_ta
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an AI assistant that answers questions based on the provided source documents.
+SYSTEM_PROMPT = """You are an AI assistant that answers questions STRICTLY based on the provided source documents.
 Follow these rules strictly:
-1. Only answer based on the provided context. If the context doesn't contain enough information, say so.
-2. Use inline citation markers like [1], [2], etc. to reference the source chunks.
-3. Each citation number corresponds to a chunk from the context provided below.
-4. Be concise and direct in your answers.
-5. If the question is in Chinese, answer in Chinese. If in English, answer in English.
-6. Format your answer using Markdown when appropriate (lists, bold, headers, etc.)."""
+1. ONLY answer based on the provided context. NEVER use your general knowledge or training data.
+2. If the context doesn't contain enough information to answer the question, clearly state that the uploaded documents do not contain this information. Do NOT guess or supplement with outside knowledge.
+3. Use inline citation markers like [1], [2], etc. to reference the source chunks.
+4. Each citation number corresponds to a chunk from the context provided below.
+5. Be concise and direct in your answers.
+6. If the question is in Chinese, answer in Chinese. If in English, answer in English.
+7. Format your answer using Markdown when appropriate (lists, bold, headers, etc.)."""
 
 
 def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, list[dict]]:
@@ -201,12 +202,11 @@ Provide a clear, concise answer based on these query results."""
 
 Question: {message}
 
-Answer the question based on the context above. Use [1], [2], etc. to cite specific sources."""
+Answer the question ONLY based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not contain relevant information to answer the question, say that the uploaded documents do not contain this information."""
     else:
         user_content = f"""Question: {message}
 
-Note: No source documents are available or the retrieval system is not connected.
-Answer based on your general knowledge, but mention that you don't have access to specific source documents."""
+The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
