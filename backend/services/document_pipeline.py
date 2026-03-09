@@ -11,6 +11,7 @@ from backend.services.event_bus import event_bus
 from backend.services.excel_service import ingest_excel
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
+from backend.services.qwen_client import qwen_client, IMAGE_EXTENSIONS
 from backend.services.source_service import get_source, update_source_status
 
 logger = logging.getLogger(__name__)
@@ -82,8 +83,20 @@ async def process_document(
                 logger.info("Excel ingestion complete: %s", filename)
                 return
 
+            # Step 2b: Route images to Qwen-VL pipeline
+            if file_type in IMAGE_EXTENSIONS:
+                logger.info("Processing image via Qwen-VL: %s", filename)
+                content = await qwen_client.analyze_image(file_path, filename)
+                # Save extracted text as .md alongside the image
+                md_path = file_path.rsplit(".", 1)[0] + ".md"
+                header = f"# Image: {filename}\n\n"
+                with open(md_path, "w", encoding="utf-8") as f:
+                    f.write(header + content)
+                # Continue to RAGFlow vectorization with the extracted text
+                # (content variable is set, will be uploaded as .md)
+
             # Step 3: Parse document to markdown/text
-            if file_type in ("txt", "md"):
+            elif file_type in ("txt", "md"):
                 content = await _read_text_file(file_path)
             else:
                 # Use MinerU for PDF, DOCX, PPTX

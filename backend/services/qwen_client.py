@@ -1,3 +1,4 @@
+import base64
 import logging
 from typing import AsyncGenerator
 
@@ -6,6 +7,8 @@ from openai import AsyncOpenAI
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "bmp"}
 
 
 class QwenClient:
@@ -60,6 +63,52 @@ class QwenClient:
         except Exception as e:
             logger.error("Qwen generate failed: %s", e)
             return f"[Error: AI generation failed - {e}]"
+
+
+    async def analyze_image(self, image_path: str, filename: str) -> str:
+        """Use Qwen-VL to extract text description from an image."""
+        try:
+            with open(image_path, "rb") as f:
+                image_data = base64.b64encode(f.read()).decode("utf-8")
+
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "png"
+            mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp", "gif": "gif", "bmp": "bmp"}
+            mime_type = f"image/{mime_map.get(ext, 'png')}"
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime_type};base64,{image_data}"},
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "Please analyze this image thoroughly. Extract ALL text content visible in the image. "
+                                "Then describe any diagrams, charts, tables, photos, or visual elements in detail. "
+                                "If this is a document scan or screenshot, reproduce the text as accurately as possible. "
+                                "If this is a photo, describe what is shown in detail. "
+                                "Output in the same language as the text in the image (if any). "
+                                "If no text is found, describe the image content in Chinese."
+                            ),
+                        },
+                    ],
+                }
+            ]
+
+            response = await self.client.chat.completions.create(
+                model="qwen-vl-plus",
+                messages=messages,  # type: ignore[arg-type]
+                max_tokens=4096,
+            )
+            content = response.choices[0].message.content or ""
+            logger.info("Qwen-VL analyzed image %s: %d chars", filename, len(content))
+            return content
+        except Exception as e:
+            logger.error("Qwen-VL image analysis failed for %s: %s", filename, e)
+            return f"[Image: {filename} — analysis failed: {e}]"
 
 
 qwen_client = QwenClient()

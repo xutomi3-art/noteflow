@@ -25,6 +25,11 @@ ALLOWED_TYPES = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
     'application/vnd.ms-excel': 'xls',
     'text/csv': 'csv',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/bmp': 'bmp',
 }
 
 EXT_MAP = {
@@ -36,6 +41,12 @@ EXT_MAP = {
     '.xlsx': 'xlsx',
     '.xls': 'xls',
     '.csv': 'csv',
+    '.jpg': 'jpg',
+    '.jpeg': 'jpg',
+    '.png': 'png',
+    '.webp': 'webp',
+    '.gif': 'gif',
+    '.bmp': 'bmp',
 }
 
 
@@ -59,7 +70,7 @@ async def upload_source(
 
     file_type = _detect_file_type(file.filename or '', file.content_type)
     if file_type is None:
-        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV')
+        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV, JPG, PNG, WEBP')
 
     content = await file.read()
     file_size = len(content)

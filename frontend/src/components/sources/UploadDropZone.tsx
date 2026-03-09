@@ -7,7 +7,7 @@ interface UploadDropZoneProps {
   disabled?: boolean;
 }
 
-const ACCEPTED = ".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv";
+const ACCEPTED = ".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp";
 
 export default function UploadDropZone({ onUpload, disabled }: UploadDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -88,7 +88,7 @@ export default function UploadDropZone({ onUpload, disabled }: UploadDropZonePro
         Drop files or click to upload
       </p>
       <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5">
-        PDF, DOCX, PPTX, TXT, MD, Excel, CSV
+        PDF, DOCX, PPTX, TXT, MD, Excel, CSV, Images
       </p>
     </div>
   );

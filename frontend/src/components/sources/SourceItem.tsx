@@ -24,6 +24,11 @@ const TYPE_ICONS: Record<string, string> = {
   pptx: "\uD83D\uDCCA",
   txt: "\uD83D\uDCC3",
   md: "\uD83D\uDCCB",
+  jpg: "\uD83D\uDDBC\uFE0F",
+  png: "\uD83D\uDDBC\uFE0F",
+  webp: "\uD83D\uDDBC\uFE0F",
+  gif: "\uD83D\uDDBC\uFE0F",
+  bmp: "\uD83D\uDDBC\uFE0F",
 };
 
 function formatSize(bytes: number | null): string {
