@@ -13,7 +13,7 @@ from backend.models.source import Source
 from backend.services.ragflow_client import ragflow_client
 from backend.services.qwen_client import qwen_client
 from backend.services.query_router import route_query
-from backend.services.excel_service import query_excel, get_table_schema, get_table_sample
+from backend.services.excel_service import query_excel, get_table_schema, get_table_sample, excel_to_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -136,19 +136,40 @@ async def stream_chat(
     excel_sources = list(excel_result.scalars().all())
     logger.info("Excel sources found: %d, source_ids: %s", len(excel_sources), source_ids)
 
-    # Route Excel queries — try each matching Excel source
+    # Handle Excel queries — LLM-native approach preferred (send markdown to LLM directly)
+    # qwen-plus supports 128K context, so we can handle fairly large spreadsheets
+    # ~60000 chars ≈ 200-300 rows × 8-10 columns, well within context limits
+    # For very large files: fall back to SQL generation via DuckDB
+    MAX_LLM_NATIVE_CHARS = 60000
+    excel_context = None
     sql_answer = None
     if excel_sources:
+        # First pass: try LLM-native approach for all Excel sources (no routing needed)
         for excel_src in excel_sources:
-            schema = get_table_schema(excel_src.duckdb_path)
-            route = await route_query(message, schema)
-            logger.info("Query route for '%s' on %s: %s", message[:50], excel_src.filename, route)
+            if excel_src.storage_url:
+                try:
+                    md_content = excel_to_markdown(excel_src.storage_url)
+                    if len(md_content) <= MAX_LLM_NATIVE_CHARS:
+                        excel_context = f"Data from file: {excel_src.filename}\n\n{md_content}"
+                        logger.info("Using LLM-native approach for %s (%d chars)", excel_src.filename, len(md_content))
+                        break
+                    else:
+                        logger.info("Excel markdown too large (%d chars), will try SQL for %s", len(md_content), excel_src.filename)
+                except Exception as e:
+                    logger.warning("Failed to convert %s to markdown: %s", excel_src.filename, e)
 
-            if route != "sql":
-                continue
+        # Second pass: SQL fallback for large files (only if LLM-native didn't work)
+        if excel_context is None:
+            for excel_src in excel_sources:
+                schema = get_table_schema(excel_src.duckdb_path)
+                route = await route_query(message, schema)
+                logger.info("Query route for '%s' on %s: %s", message[:50], excel_src.filename, route)
 
-            sample = get_table_sample(excel_src.duckdb_path)
-            sql_gen_prompt = f"""Given this DuckDB table schema:
+                if route != "sql":
+                    continue
+
+                sample = get_table_sample(excel_src.duckdb_path)
+                sql_gen_prompt = f"""Given this DuckDB table schema:
 {schema}
 
 Sample data (first and last rows):
@@ -167,22 +188,22 @@ Rules:
 - If the user asks for a total and a summary row already contains it, you can SELECT that value directly instead of re-summing.
 - Use ILIKE for string matching to be case-insensitive. Use '%keyword%' patterns for partial matching."""
 
-            sql_query = await qwen_client.generate(
-                [{"role": "user", "content": sql_gen_prompt}]
-            )
-            sql_query = sql_query.strip()
-            # Strip markdown code fences if present
-            if sql_query.startswith("```"):
-                sql_query = sql_query.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-            logger.info("Generated SQL: %s", sql_query)
+                sql_query = await qwen_client.generate(
+                    [{"role": "user", "content": sql_gen_prompt}]
+                )
+                sql_query = sql_query.strip()
+                # Strip markdown code fences if present
+                if sql_query.startswith("```"):
+                    sql_query = sql_query.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                logger.info("Generated SQL: %s", sql_query)
 
-            try:
-                sql_answer = query_excel(excel_src.duckdb_path, sql_query)
-                logger.info("SQL query succeeded on %s", excel_src.filename)
-                break  # Success — stop trying other files
-            except Exception as e:
-                logger.warning("SQL query failed on %s: %s\nQuery: %s", excel_src.filename, e, sql_query)
-                # Don't set sql_answer on failure — fall through to RAG
+                try:
+                    sql_answer = query_excel(excel_src.duckdb_path, sql_query)
+                    logger.info("SQL query succeeded on %s", excel_src.filename)
+                    break
+                except Exception as e:
+                    logger.warning("SQL query failed on %s: %s\nQuery: %s", excel_src.filename, e, sql_query)
+                    # Don't set sql_answer on failure — fall through to RAG
 
     chunks: list[dict] = []
     if dataset_ids:
@@ -191,7 +212,19 @@ Rules:
     context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
     # 3. Build messages for Qwen
-    if sql_answer is not None:
+    if excel_context is not None:
+        user_content = f"""The following is the complete content of a spreadsheet file. Read it carefully and answer the question based on this data.
+
+{excel_context}
+
+Question: {message}
+
+Rules:
+- Answer based ONLY on the data above.
+- If the question involves a category/item that spans multiple rows (merged cells), sum up all related rows.
+- Be precise with numbers. Show your calculation if summing multiple values.
+- If the data doesn't contain relevant information, say so."""
+    elif sql_answer is not None:
         user_content = f"""Question: {message}
 
 Result from structured data query:

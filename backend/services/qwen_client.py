@@ -12,14 +12,25 @@ IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "bmp"}
 
 
 class QwenClient:
-    """Client for Qwen LLM via OpenAI-compatible API."""
+    """Client for LLM via OpenAI-compatible API.
+
+    Uses DeepSeek for chat/generation (stronger reasoning, cheaper).
+    Falls back to Qwen for vision (analyze_image) since DeepSeek lacks multimodal.
+    """
 
     def __init__(self) -> None:
+        # Primary LLM client (DeepSeek)
         self.client = AsyncOpenAI(
+            api_key=settings.LLM_API_KEY or settings.QWEN_API_KEY,
+            base_url=settings.LLM_BASE_URL if settings.LLM_API_KEY else "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
+        self.model = settings.LLM_MODEL if settings.LLM_API_KEY else settings.QWEN_MODEL
+
+        # Qwen client (for vision/embedding only)
+        self.qwen_client = AsyncOpenAI(
             api_key=settings.QWEN_API_KEY,
             base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         )
-        self.model = settings.QWEN_MODEL
 
     async def stream_chat(
         self,
@@ -40,7 +51,7 @@ class QwenClient:
                 if chunk.choices and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
         except Exception as e:
-            logger.error("Qwen stream_chat failed: %s", e)
+            logger.error("LLM stream_chat failed: %s", e)
             yield f"\n\n[Error: AI generation failed - {e}]"
 
     async def generate(
@@ -61,9 +72,8 @@ class QwenClient:
             )
             return response.choices[0].message.content or ""
         except Exception as e:
-            logger.error("Qwen generate failed: %s", e)
+            logger.error("LLM generate failed: %s", e)
             return f"[Error: AI generation failed - {e}]"
-
 
     async def analyze_image(self, image_path: str, filename: str) -> str:
         """Use Qwen-VL to extract text description from an image."""
@@ -98,7 +108,7 @@ class QwenClient:
                 }
             ]
 
-            response = await self.client.chat.completions.create(
+            response = await self.qwen_client.chat.completions.create(
                 model="qwen-vl-plus",
                 messages=messages,  # type: ignore[arg-type]
                 max_tokens=4096,

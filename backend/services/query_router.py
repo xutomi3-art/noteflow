@@ -24,7 +24,6 @@ async def route_query(question: str, schema: str | None = None) -> str:
         prompt = ROUTER_PROMPT.format(schema=schema, question=question)
         result = await qwen_client.generate(
             [{"role": "user", "content": prompt}],
-            model="qwen-turbo",
             max_tokens=10,
         )
         decision = result.strip().lower()
