@@ -177,11 +177,12 @@ async def get_source_file(
     if not source.storage_url or not os.path.exists(source.storage_url):
         raise HTTPException(status_code=404, detail='File not found on disk')
 
+    from urllib.parse import quote
+    encoded_name = quote(source.filename)
     return FileResponse(
         path=source.storage_url,
         media_type='application/pdf',
-        filename=source.filename,
-        headers={'Content-Disposition': f'inline; filename="{source.filename}"'},
+        headers={'Content-Disposition': f"inline; filename*=UTF-8''{encoded_name}"},
     )
 
 
