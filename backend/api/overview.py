@@ -1,3 +1,4 @@
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +10,7 @@ from backend.core.deps import get_current_user
 from backend.models.user import User
 from backend.models.source import Source
 from backend.services.qwen_client import qwen_client
+from backend.services.excel_service import excel_to_markdown
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/overview", tags=["overview"])
 
@@ -26,7 +28,7 @@ QUESTIONS:
 2. <second question>
 3. <third question>
 
-Write in the same language as the documents.
+IMPORTANT: Write in the same language as the documents. If the documents contain Chinese text, write in Chinese. If in English, write in English.
 
 DOCUMENTS:
 {context}"""
@@ -45,15 +47,29 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID) -> str:
 
     context_parts: list[str] = []
     for source in sources:
-        if source.storage_url and source.file_type in ("txt", "md"):
-            try:
+        if not source.storage_url:
+            continue
+        content = None
+        try:
+            if source.file_type in ("txt", "md"):
                 with open(source.storage_url, "r", encoding="utf-8", errors="replace") as f:
                     content = f.read()[:8000]
-                context_parts.append(f"--- {source.filename} ---\n{content}")
-            except Exception:
-                pass
-        elif source.storage_url:
-            context_parts.append(f"--- {source.filename} (binary file) ---")
+            elif source.file_type in ("xlsx", "xls", "csv"):
+                # Convert Excel/CSV to markdown for overview context
+                content = excel_to_markdown(source.storage_url)[:8000]
+            else:
+                # For PDF/DOCX/PPTX: try reading the MinerU-parsed .md file
+                md_path = source.storage_url.rsplit(".", 1)[0] + ".md"
+                if os.path.isfile(md_path):
+                    with open(md_path, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()[:8000]
+        except Exception:
+            pass
+
+        if content:
+            context_parts.append(f"--- {source.filename} ---\n{content}")
+        else:
+            context_parts.append(f"--- {source.filename} ---")
 
     return "\n\n".join(context_parts)
 

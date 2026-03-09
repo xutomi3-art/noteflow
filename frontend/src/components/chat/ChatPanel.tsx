@@ -78,99 +78,118 @@ export default function ChatPanel({ notebook }: ChatPanelProps) {
     <div className="flex-1 flex flex-col min-h-0 bg-[var(--background)]">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 && !isStreaming ? (
-          /* Welcome state */
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center max-w-md px-4">
-              <div className="text-4xl mb-3">{notebook.emoji}</div>
-              <h2 className="text-[20px] font-semibold mb-2">{notebook.name}</h2>
-
-              {overviewLoading ? (
-                <div className="flex items-center justify-center gap-2 mt-4">
-                  <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
-                  <span className="text-[13px] text-[var(--text-secondary)]">Analyzing your documents...</span>
-                </div>
-              ) : overview ? (
-                <>
-                  <p className="text-[14px] text-[var(--text-secondary)] leading-relaxed mb-5">
-                    {overview}
-                  </p>
-                  {suggestedQuestions.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      <p className="text-[12px] text-[var(--text-tertiary)] uppercase tracking-wider font-medium mb-1">
-                        Suggested questions
-                      </p>
-                      {suggestedQuestions.map((q, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleSend(q)}
-                          className="text-left text-[13px] px-4 py-3 rounded-xl border border-[var(--border-light)] bg-[var(--card-bg)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all text-[var(--foreground)]"
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
+        <div className="max-w-2xl mx-auto px-4 py-6">
+          {/* Overview section — always visible when available */}
+          {messages.length === 0 && !isStreaming && !overview && !overviewLoading && (
+            <div className="h-full flex items-center justify-center min-h-[300px]">
+              <div className="text-center max-w-md">
+                <div className="text-4xl mb-3">{notebook.emoji}</div>
+                <h2 className="text-[20px] font-semibold mb-2">{notebook.name}</h2>
                 <p className="text-[14px] text-[var(--text-secondary)]">
                   {hasReadySources
                     ? "Your documents are ready. Ask anything about them — the AI will answer with full citations."
                     : "Upload documents to start asking questions. The AI will answer using your sources with full citation traceability."}
                 </p>
+              </div>
+            </div>
+          )}
+
+          {overviewLoading && messages.length === 0 && (
+            <div className="h-full flex items-center justify-center min-h-[300px]">
+              <div className="text-center max-w-md">
+                <div className="text-4xl mb-3">{notebook.emoji}</div>
+                <h2 className="text-[20px] font-semibold mb-2">{notebook.name}</h2>
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[13px] text-[var(--text-secondary)]">Analyzing your documents...</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {overview && (
+            <div className={`${messages.length === 0 && !isStreaming ? "text-center max-w-md mx-auto mb-6" : "mb-6"}`}>
+              {messages.length === 0 && !isStreaming && (
+                <>
+                  <div className="text-4xl mb-3">{notebook.emoji}</div>
+                  <h2 className="text-[20px] font-semibold mb-2">{notebook.name}</h2>
+                </>
+              )}
+              <p className={`text-[13px] text-[var(--text-secondary)] leading-relaxed ${messages.length > 0 ? "bg-[var(--card-bg)] border border-[var(--border-light)] rounded-xl px-4 py-3" : "mb-5"}`}>
+                {overview}
+              </p>
+              {suggestedQuestions.length > 0 && (
+                <div className={`flex flex-col gap-2 ${messages.length > 0 ? "mt-3" : ""}`}>
+                  {(messages.length === 0 && !isStreaming) && (
+                    <p className="text-[12px] text-[var(--text-tertiary)] uppercase tracking-wider font-medium mb-1">
+                      Suggested questions
+                    </p>
+                  )}
+                  <div className={`flex flex-wrap gap-2 ${messages.length > 0 ? "" : "flex-col"}`}>
+                    {suggestedQuestions.map((q, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSend(q)}
+                        disabled={isStreaming}
+                        className={`text-left text-[13px] rounded-xl border border-[var(--border-light)] bg-[var(--card-bg)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all text-[var(--foreground)] disabled:opacity-50 ${
+                          messages.length > 0 ? "px-3 py-2 text-[12px]" : "px-4 py-3"
+                        }`}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
-          </div>
-        ) : (
-          /* Chat messages */
-          <div className="max-w-2xl mx-auto px-4 py-6">
-            {/* Clear button */}
-            {messages.length > 0 && (
-              <div className="flex justify-center mb-4">
-                <button
-                  onClick={handleClear}
-                  className="text-[12px] text-[var(--text-tertiary)] hover:text-red-500 transition-colors"
-                >
-                  Clear conversation
-                </button>
-              </div>
-            )}
+          )}
 
-            {messages.map(msg => (
-              <ChatMessage
-                key={msg.id}
-                message={msg}
-                onSaveNote={msg.role === "assistant" ? handleSaveNote : undefined}
-              />
-            ))}
+          {/* Clear button */}
+          {messages.length > 0 && (
+            <div className="flex justify-center mb-4">
+              <button
+                onClick={handleClear}
+                className="text-[12px] text-[var(--text-tertiary)] hover:text-red-500 transition-colors"
+              >
+                Clear conversation
+              </button>
+            </div>
+          )}
 
-            {/* Streaming message */}
-            {isStreaming && streamingContent && (
-              <div className="flex justify-start mb-4">
-                <div className="max-w-[80%] bg-[var(--card-bg)] border border-[var(--border-light)] rounded-2xl rounded-tl-md px-4 py-3">
-                  <div className="text-[14px] leading-relaxed markdown-content">
-                    <MarkdownRenderer content={streamingContent} />
-                    <span className="inline-block w-2 h-4 bg-[var(--accent)] animate-pulse ml-0.5" />
-                  </div>
+          {messages.map(msg => (
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              onSaveNote={msg.role === "assistant" ? handleSaveNote : undefined}
+            />
+          ))}
+
+          {/* Streaming message */}
+          {isStreaming && streamingContent && (
+            <div className="flex justify-start mb-4">
+              <div className="max-w-[80%] bg-[var(--card-bg)] border border-[var(--border-light)] rounded-2xl rounded-tl-md px-4 py-3">
+                <div className="text-[14px] leading-relaxed markdown-content">
+                  <MarkdownRenderer content={streamingContent} />
+                  <span className="inline-block w-2 h-4 bg-[var(--accent)] animate-pulse ml-0.5" />
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Streaming without content yet */}
-            {isStreaming && !streamingContent && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-[var(--card-bg)] border border-[var(--border-light)] rounded-2xl rounded-tl-md px-4 py-3">
-                  <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
-                    <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
-                    Thinking...
-                  </div>
+          {/* Streaming without content yet */}
+          {isStreaming && !streamingContent && (
+            <div className="flex justify-start mb-4">
+              <div className="bg-[var(--card-bg)] border border-[var(--border-light)] rounded-2xl rounded-tl-md px-4 py-3">
+                <div className="flex items-center gap-2 text-[14px] text-[var(--text-secondary)]">
+                  <div className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+                  Thinking...
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Chat input */}
