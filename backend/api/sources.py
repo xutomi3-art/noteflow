@@ -2,7 +2,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
@@ -158,6 +158,30 @@ async def delete_source(
 
     await source_service.delete_source(db, uuid.UUID(source_id))
     return {'data': {'message': 'Source deleted'}}
+
+
+@router.get('/{source_id}/file')
+async def get_source_file(
+    notebook_id: str,
+    source_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'view'):
+        raise HTTPException(status_code=403, detail='No access to this notebook')
+
+    source = await source_service.get_source(db, uuid.UUID(source_id))
+    if source is None or str(source.notebook_id) != notebook_id:
+        raise HTTPException(status_code=404, detail='Source not found')
+
+    if not source.storage_url or not os.path.exists(source.storage_url):
+        raise HTTPException(status_code=404, detail='File not found on disk')
+
+    return FileResponse(
+        path=source.storage_url,
+        media_type='application/pdf',
+        filename=source.filename,
+    )
 
 
 @router.get('/status')
