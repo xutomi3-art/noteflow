@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ChatMessage as ChatMessageType } from "@/types/api";
 import CitationList from "./CitationList";
+import { useStudioStore } from "@/stores/studio-store";
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -12,6 +13,7 @@ interface ChatMessageProps {
 export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === "user";
+  const openPdf = useStudioStore(state => state.openPdf);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
@@ -44,6 +46,16 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
         <div
           key={i}
           className="whitespace-pre-wrap"
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            const idx = target.dataset.citationIdx;
+            if (idx && message.citations) {
+              const citation = message.citations.find(c => c.index === parseInt(idx));
+              if (citation && citation.file_type === 'pdf') {
+                openPdf(citation.source_id, citation.filename, citation.location.page ?? 1);
+              }
+            }
+          }}
           dangerouslySetInnerHTML={{
             __html: part
               .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -54,7 +66,7 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
               .replace(/^# (.+)$/gm, '<h1 class="text-[17px] font-bold mt-3 mb-1">$1</h1>')
               .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
               .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
-              .replace(/\[(\d+)\]/g, '<sup class="text-[var(--accent)] font-medium cursor-pointer">[$1]</sup>'),
+              .replace(/\[(\d+)\]/g, '<sup data-citation-idx="$1" class="text-[var(--accent)] font-medium cursor-pointer hover:underline">[$1]</sup>'),
           }}
         />
       );
