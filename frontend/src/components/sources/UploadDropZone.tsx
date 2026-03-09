@@ -66,7 +66,7 @@ export default function UploadDropZone({ onUpload, disabled }: UploadDropZonePro
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={`
-        border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all
+        relative border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all
         ${
           isDragging
             ? "border-[var(--accent)] bg-blue-50/50"
@@ -81,7 +81,7 @@ export default function UploadDropZone({ onUpload, disabled }: UploadDropZonePro
         accept={ACCEPTED}
         multiple
         onChange={handleChange}
-        className="hidden"
+        className="absolute w-0 h-0 opacity-0 overflow-hidden"
       />
       <div className="text-2xl mb-1">+</div>
       <p className="text-[12px] text-[var(--text-secondary)]">
