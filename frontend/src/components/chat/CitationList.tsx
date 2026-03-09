@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Citation } from "@/types/api";
+import { useStudioStore } from "@/stores/studio-store";
 
 interface CitationListProps {
   citations: Citation[];
@@ -17,6 +18,7 @@ function formatLocation(citation: Citation): string {
 
 export default function CitationList({ citations }: CitationListProps) {
   const [expanded, setExpanded] = useState<number | null>(null);
+  const openPdf = useStudioStore(state => state.openPdf);
 
   if (citations.length === 0) return null;
 
@@ -32,7 +34,12 @@ export default function CitationList({ citations }: CitationListProps) {
         return (
           <div key={citation.index} className="text-[12px]">
             <button
-              onClick={() => setExpanded(isExpanded ? null : citation.index)}
+              onClick={() => {
+                setExpanded(isExpanded ? null : citation.index);
+                if (citation.file_type === 'pdf') {
+                  openPdf(citation.source_id, citation.filename, citation.location.page ?? 1);
+                }
+              }}
               className="flex items-center gap-1.5 text-[var(--accent)] hover:underline"
             >
               <span className="font-medium">[{citation.index}]</span>
