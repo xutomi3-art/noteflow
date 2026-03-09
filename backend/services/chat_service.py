@@ -25,7 +25,8 @@ Follow these rules strictly:
 4. Each citation number corresponds to a chunk from the context provided below.
 5. Be concise and direct in your answers.
 6. If the question is in Chinese, answer in Chinese. If in English, answer in English.
-7. Format your answer using Markdown when appropriate (lists, bold, headers, etc.)."""
+7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
+8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
 
 
 def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, list[dict]]:

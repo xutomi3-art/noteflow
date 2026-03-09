@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ChatMessage as ChatMessageType } from "@/types/api";
 import CitationList from "./CitationList";
+import MarkdownRenderer from "@/components/ui/MarkdownRenderer";
 import { useStudioStore } from "@/stores/studio-store";
 
 interface ChatMessageProps {
@@ -26,54 +27,14 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
     onSaveNote?.(message.content, message.id);
   };
 
-  // Simple markdown rendering - convert markdown to HTML-like rendering
-  const renderContent = (content: string) => {
-    // Split by code blocks first
-    const parts = content.split(/(```[\s\S]*?```)/g);
-
-    return parts.map((part, i) => {
-      if (part.startsWith("```")) {
-        const code = part.replace(/```\w*\n?/, "").replace(/```$/, "");
-        return (
-          <pre key={i} className="bg-gray-100 rounded-lg p-3 my-2 overflow-x-auto text-[13px]">
-            <code>{code}</code>
-          </pre>
-        );
+  const handleCitationClick = (index: number) => {
+    if (message.citations) {
+      const citation = message.citations.find(c => c.index === index);
+      if (citation && citation.file_type === "pdf") {
+        openPdf(citation.source_id, citation.filename, citation.location.page ?? 1);
       }
-
-      // Process inline markdown
-      return (
-        <div
-          key={i}
-          className="whitespace-pre-wrap"
-          onClick={(e) => {
-            const target = e.target as HTMLElement;
-            const idx = target.dataset.citationIdx;
-            if (idx && message.citations) {
-              const citationIndex = parseInt(idx);
-              const citation = message.citations.find(c => c.index === citationIndex);
-              if (citation && citation.file_type === 'pdf') {
-                openPdf(citation.source_id, citation.filename, citation.location.page ?? 1);
-              }
-              // Always expand the citation in the list below
-              setActiveCitation(prev => prev === citationIndex ? null : citationIndex);
-            }
-          }}
-          dangerouslySetInnerHTML={{
-            __html: part
-              .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-              .replace(/\*(.+?)\*/g, "<em>$1</em>")
-              .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-[13px]">$1</code>')
-              .replace(/^### (.+)$/gm, '<h3 class="text-[15px] font-semibold mt-3 mb-1">$1</h3>')
-              .replace(/^## (.+)$/gm, '<h2 class="text-[16px] font-semibold mt-3 mb-1">$1</h2>')
-              .replace(/^# (.+)$/gm, '<h1 class="text-[17px] font-bold mt-3 mb-1">$1</h1>')
-              .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-              .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
-              .replace(/\[(\d+)\]/g, '<sup data-citation-idx="$1" class="text-[var(--accent)] font-medium cursor-pointer hover:underline">[$1]</sup>'),
-          }}
-        />
-      );
-    });
+    }
+    setActiveCitation(prev => (prev === index ? null : index));
   };
 
   return (
@@ -86,7 +47,14 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
         }`}
       >
         <div className="text-[14px] leading-relaxed">
-          {renderContent(message.content)}
+          {isUser ? (
+            <p>{message.content}</p>
+          ) : (
+            <MarkdownRenderer
+              content={message.content}
+              onCitationClick={handleCitationClick}
+            />
+          )}
         </div>
 
         {!isUser && message.citations && message.citations.length > 0 && (
