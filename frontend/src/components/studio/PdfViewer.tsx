@@ -21,6 +21,7 @@ export default function PdfViewer({ notebookId, sourceId, filename, initialPage,
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState<number>(1.0);
+  const [retryKey, setRetryKey] = useState<number>(0);
 
   const pdfUrl = `/api/notebooks/${notebookId}/sources/${sourceId}/file`;
 
@@ -101,7 +102,7 @@ export default function PdfViewer({ notebookId, sourceId, filename, initialPage,
             <span className="text-3xl">⚠️</span>
             <p className="text-[13px] text-[var(--text-secondary)]">{error}</p>
             <button
-              onClick={() => setError(null)}
+              onClick={() => { setError(null); setRetryKey(k => k + 1); }}
               className="text-[12px] text-[var(--accent)] hover:underline"
             >
               Retry
@@ -109,6 +110,7 @@ export default function PdfViewer({ notebookId, sourceId, filename, initialPage,
           </div>
         ) : (
           <Document
+            key={retryKey}
             file={pdfUrl}
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
