@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Citation } from "@/types/api";
 import { useStudioStore } from "@/stores/studio-store";
 
 interface CitationListProps {
   citations: Citation[];
+  /** When set externally, auto-expand and highlight this citation index */
+  activeCitationIndex?: number | null;
 }
 
 function formatLocation(citation: Citation): string {
@@ -40,17 +42,34 @@ function groupBySource(citations: Citation[]): GroupedSource[] {
   return Array.from(map.values());
 }
 
-export default function CitationList({ citations }: CitationListProps) {
+export default function CitationList({ citations, activeCitationIndex }: CitationListProps) {
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
   const [expandedCitation, setExpandedCitation] = useState<number | null>(null);
   const openPdf = useStudioStore(state => state.openPdf);
-
-  if (citations.length === 0) return null;
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const groups = groupBySource(citations);
 
+  // When activeCitationIndex changes from parent (inline [n] click), expand the right group
+  useEffect(() => {
+    if (activeCitationIndex == null) return;
+    const citation = citations.find(c => c.index === activeCitationIndex);
+    if (!citation) return;
+
+    const key = `${citation.source_id}-${citation.filename}`;
+    setExpandedSource(key);
+    setExpandedCitation(activeCitationIndex);
+
+    // Scroll this component into view
+    setTimeout(() => {
+      containerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 50);
+  }, [activeCitationIndex, citations]);
+
+  if (citations.length === 0) return null;
+
   return (
-    <div className="mt-2">
+    <div className="mt-2" ref={containerRef}>
       <p className="text-[12px] font-medium text-[var(--text-secondary)] mb-1.5">
         Sources ({citations.length})
       </p>

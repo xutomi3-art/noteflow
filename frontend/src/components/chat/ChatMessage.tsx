@@ -12,6 +12,7 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
+  const [activeCitation, setActiveCitation] = useState<number | null>(null);
   const isUser = message.role === "user";
   const openPdf = useStudioStore(state => state.openPdf);
 
@@ -26,7 +27,6 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
   };
 
   // Simple markdown rendering - convert markdown to HTML-like rendering
-  // For production, use react-markdown, but this works for basic cases
   const renderContent = (content: string) => {
     // Split by code blocks first
     const parts = content.split(/(```[\s\S]*?```)/g);
@@ -50,10 +50,13 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
             const target = e.target as HTMLElement;
             const idx = target.dataset.citationIdx;
             if (idx && message.citations) {
-              const citation = message.citations.find(c => c.index === parseInt(idx));
+              const citationIndex = parseInt(idx);
+              const citation = message.citations.find(c => c.index === citationIndex);
               if (citation && citation.file_type === 'pdf') {
                 openPdf(citation.source_id, citation.filename, citation.location.page ?? 1);
               }
+              // Always expand the citation in the list below
+              setActiveCitation(prev => prev === citationIndex ? null : citationIndex);
             }
           }}
           dangerouslySetInnerHTML={{
@@ -87,7 +90,7 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
         </div>
 
         {!isUser && message.citations && message.citations.length > 0 && (
-          <CitationList citations={message.citations} />
+          <CitationList citations={message.citations} activeCitationIndex={activeCitation} />
         )}
 
         {!isUser && (
