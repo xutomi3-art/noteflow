@@ -13,7 +13,7 @@ from backend.models.source import Source
 from backend.services.ragflow_client import ragflow_client
 from backend.services.qwen_client import qwen_client
 from backend.services.query_router import route_query
-from backend.services.excel_service import query_excel, get_table_schema
+from backend.services.excel_service import query_excel, get_table_schema, get_table_sample
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +133,7 @@ async def stream_chat(
         excel_query = excel_query.where(Source.id.in_([uuid.UUID(sid) for sid in source_ids]))
     excel_result = await db.execute(excel_query)
     excel_sources = list(excel_result.scalars().all())
+    logger.info("Excel sources found: %d, source_ids: %s", len(excel_sources), source_ids)
 
     # Route Excel queries — try each matching Excel source
     sql_answer = None
@@ -140,12 +141,17 @@ async def stream_chat(
         for excel_src in excel_sources:
             schema = get_table_schema(excel_src.duckdb_path)
             route = await route_query(message, schema)
+            logger.info("Query route for '%s' on %s: %s", message[:50], excel_src.filename, route)
 
             if route != "sql":
                 continue
 
+            sample = get_table_sample(excel_src.duckdb_path)
             sql_gen_prompt = f"""Given this DuckDB table schema:
 {schema}
+
+Sample data (first and last rows):
+{sample}
 
 The data comes from file: {excel_src.filename}
 
@@ -154,7 +160,9 @@ Generate a SQL query to answer: {message}
 Rules:
 - The table name is always "data"
 - Return ONLY the SQL query, no explanation, no markdown
-- Use standard SQL compatible with DuckDB"""
+- Use standard SQL compatible with DuckDB
+- IMPORTANT: Excel files often have summary/total rows at the bottom (rows where key identifier columns like ID, name, PO number are NULL). These summary rows contain pre-computed totals or formulas. When aggregating (SUM, COUNT, AVG), EXCLUDE these summary rows by filtering out rows where the primary identifier column IS NULL. Look at the sample data to identify which rows are summaries.
+- If the user asks for a total and a summary row already contains it, you can SELECT that value directly instead of re-summing."""
 
             sql_query = await qwen_client.generate(
                 [{"role": "user", "content": sql_gen_prompt}]
@@ -163,10 +171,11 @@ Rules:
             # Strip markdown code fences if present
             if sql_query.startswith("```"):
                 sql_query = sql_query.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            logger.info("Generated SQL: %s", sql_query)
 
             try:
                 sql_answer = query_excel(excel_src.duckdb_path, sql_query)
-                logger.info("SQL query succeeded on %s: %s", excel_src.filename, sql_query)
+                logger.info("SQL query succeeded on %s", excel_src.filename)
                 break  # Success — stop trying other files
             except Exception as e:
                 logger.warning("SQL query failed on %s: %s\nQuery: %s", excel_src.filename, e, sql_query)

@@ -73,3 +73,32 @@ def get_table_schema(duckdb_path: str) -> str:
         return schema_df.to_string(index=False)
     finally:
         con.close()
+
+
+def get_table_sample(duckdb_path: str, head: int = 3, tail: int = 3) -> str:
+    """Return sample rows (first N + last N) to help LLM understand data structure."""
+    con = duckdb.connect(duckdb_path, read_only=True)
+    try:
+        total = con.execute("SELECT COUNT(*) FROM data").fetchone()[0]
+        columns = [d[0] for d in con.execute("DESCRIBE data").fetchall()]
+        header = "| " + " | ".join(columns) + " |"
+        separator = "| " + " | ".join("---" for _ in columns) + " |"
+
+        if total <= head + tail:
+            rows = con.execute("SELECT * FROM data").fetchall()
+            lines = [header, separator]
+            for i, r in enumerate(rows):
+                lines.append(f"| " + " | ".join(str(v) for v in r) + f" | (row {i+1})")
+        else:
+            head_rows = con.execute(f"SELECT * FROM data LIMIT {head}").fetchall()
+            tail_rows = con.execute(f"SELECT * FROM data OFFSET {total - tail}").fetchall()
+            lines = [header, separator]
+            for i, r in enumerate(head_rows):
+                lines.append(f"| " + " | ".join(str(v) for v in r) + f" | (row {i+1})")
+            lines.append(f"| ... ({total - head - tail} more rows) ... |")
+            for i, r in enumerate(tail_rows):
+                lines.append(f"| " + " | ".join(str(v) for v in r) + f" | (row {total - tail + i + 1})")
+
+        return "\n".join(lines)
+    finally:
+        con.close()
