@@ -124,22 +124,30 @@ async def stream_chat(
     # 2. Retrieve from RAGFlow
     dataset_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
-    # Get Excel sources with duckdb paths
-    excel_result = await db.execute(
-        select(Source)
-        .where(Source.notebook_id == notebook_id, Source.duckdb_path.isnot(None))
+    # Get Excel sources with duckdb paths (filtered by source_ids if provided)
+    excel_query = select(Source).where(
+        Source.notebook_id == notebook_id,
+        Source.duckdb_path.isnot(None),
     )
+    if source_ids:
+        excel_query = excel_query.where(Source.id.in_([uuid.UUID(sid) for sid in source_ids]))
+    excel_result = await db.execute(excel_query)
     excel_sources = list(excel_result.scalars().all())
 
-    # Route Excel queries
+    # Route Excel queries — try each matching Excel source
     sql_answer = None
     if excel_sources:
-        schema = get_table_schema(excel_sources[0].duckdb_path)
-        route = await route_query(message, schema)
+        for excel_src in excel_sources:
+            schema = get_table_schema(excel_src.duckdb_path)
+            route = await route_query(message, schema)
 
-        if route == "sql":
+            if route != "sql":
+                continue
+
             sql_gen_prompt = f"""Given this DuckDB table schema:
 {schema}
+
+The data comes from file: {excel_src.filename}
 
 Generate a SQL query to answer: {message}
 
@@ -157,10 +165,12 @@ Rules:
                 sql_query = sql_query.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
             try:
-                sql_answer = query_excel(excel_sources[0].duckdb_path, sql_query)
+                sql_answer = query_excel(excel_src.duckdb_path, sql_query)
+                logger.info("SQL query succeeded on %s: %s", excel_src.filename, sql_query)
+                break  # Success — stop trying other files
             except Exception as e:
-                logger.warning("SQL query failed: %s\nQuery: %s", e, sql_query)
-                sql_answer = f"Structured query failed: {e}"
+                logger.warning("SQL query failed on %s: %s\nQuery: %s", excel_src.filename, e, sql_query)
+                # Don't set sql_answer on failure — fall through to RAG
 
     chunks: list[dict] = []
     if dataset_ids:

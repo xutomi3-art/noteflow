@@ -94,7 +94,7 @@ export default function StudioPanel({ notebookId }: StudioPanelProps) {
   };
 
   return (
-    <div className="h-full flex flex-col border-l border-[var(--border-light)] bg-[var(--card-bg)]">
+    <div className="h-full flex flex-col border-l border-[var(--border-light)] bg-[var(--card-bg)] min-h-0">
       {pdfViewer ? (
         <PdfViewer
           notebookId={notebookId}
@@ -105,11 +105,11 @@ export default function StudioPanel({ notebookId }: StudioPanelProps) {
         />
       ) : (
         <>
-          <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
+          <h3 className="text-[13px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider p-4 pb-0 mb-3 shrink-0">
             Studio
           </h3>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5 px-4 shrink-0">
             {TABS.map(tab => (
               <button
                 key={tab.key}
@@ -139,7 +139,7 @@ export default function StudioPanel({ notebookId }: StudioPanelProps) {
 
           {/* Content area */}
           {activeTab && (
-            <div className="mt-3 pt-3 border-t border-[var(--border-light)] flex-1 overflow-y-auto">
+            <div className="mt-3 pt-3 border-t border-[var(--border-light)] flex-1 overflow-y-auto min-h-0 px-4">
               {activeTab === "notes" ? (
                 <SavedNotesList
                   notes={notes}
@@ -235,7 +235,7 @@ export default function StudioPanel({ notebookId }: StudioPanelProps) {
           )}
 
           {!hasReadySources && (
-            <p className="text-[11px] text-[var(--text-tertiary)] mt-3">
+            <p className="text-[11px] text-[var(--text-tertiary)] mt-3 px-4">
               Upload and process documents to use Studio features.
             </p>
           )}

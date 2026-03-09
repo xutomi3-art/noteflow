@@ -101,7 +101,7 @@ export default function NotebookPage() {
         </div>
 
         {/* Studio Panel */}
-        <aside className={`${mobileTab === 'studio' ? 'flex flex-col' : 'hidden'} lg:flex lg:flex-col w-full lg:w-64 border-l border-[var(--border-light)] bg-[var(--card-bg)] p-4 overflow-y-auto shrink-0`}>
+        <aside className={`${mobileTab === 'studio' ? 'flex flex-col' : 'hidden'} lg:flex lg:flex-col w-full lg:w-64 bg-[var(--card-bg)] shrink-0 overflow-hidden`}>
           <StudioPanel notebookId={params.id as string} />
         </aside>
       </div>

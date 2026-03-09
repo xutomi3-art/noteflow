@@ -45,10 +45,18 @@ export default function UploadDropZone({ onUpload, disabled }: UploadDropZonePro
     if (!disabled) inputRef.current?.click();
   };
 
+  const uploadingRef = useRef(false);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (uploadingRef.current) return;
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) onUpload(files);
     e.target.value = "";
+    if (files.length > 0) {
+      uploadingRef.current = true;
+      Promise.resolve(onUpload(files)).finally(() => {
+        uploadingRef.current = false;
+      });
+    }
   };
 
   return (

@@ -48,10 +48,19 @@ def query_excel(duckdb_path: str, sql: str) -> str:
     """Execute SQL against DuckDB and return formatted markdown result."""
     con = duckdb.connect(duckdb_path, read_only=True)
     try:
-        result = con.execute(sql).fetchdf()
-        if result.empty:
+        result = con.execute(sql)
+        columns = [desc[0] for desc in result.description]
+        rows = result.fetchall()
+        if not rows:
             return "Query returned no results."
-        return result.to_markdown(index=False)
+        # Build markdown table manually to avoid pandas issues with complex types
+        header = "| " + " | ".join(columns) + " |"
+        separator = "| " + " | ".join("---" for _ in columns) + " |"
+        body_lines = []
+        for row in rows:
+            cells = [str(v) for v in row]
+            body_lines.append("| " + " | ".join(cells) + " |")
+        return "\n".join([header, separator] + body_lines)
     finally:
         con.close()
 
