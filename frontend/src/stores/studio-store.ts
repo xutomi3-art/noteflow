@@ -2,17 +2,26 @@ import { create } from "zustand";
 import type { SavedNote } from "@/types/api";
 import { api } from "@/services/api";
 
+interface PdfViewerState {
+  sourceId: string;
+  filename: string;
+  page: number;
+}
+
 interface StudioState {
   activeTab: "summary" | "faq" | "study_guide" | "ppt" | "mindmap" | "podcast" | "notes" | null;
-  content: Record<string, string>;  // content_type -> generated content
+  content: Record<string, string>;
   isGenerating: Record<string, boolean>;
   notes: SavedNote[];
   isLoadingNotes: boolean;
+  pdfViewer: PdfViewerState | null;
 
   setActiveTab: (tab: StudioState["activeTab"]) => void;
   generateContent: (notebookId: string, contentType: string) => Promise<void>;
   fetchNotes: (notebookId: string) => Promise<void>;
   deleteNote: (notebookId: string, noteId: string) => Promise<void>;
+  openPdf: (sourceId: string, filename: string, page: number) => void;
+  closePdf: () => void;
   reset: () => void;
 }
 
@@ -22,8 +31,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   isGenerating: {},
   notes: [],
   isLoadingNotes: false,
+  pdfViewer: null,
 
   setActiveTab: (tab) => set({ activeTab: tab }),
+
+  openPdf: (sourceId, filename, page) => set({ pdfViewer: { sourceId, filename, page } }),
+
+  closePdf: () => set({ pdfViewer: null }),
 
   generateContent: async (notebookId: string, contentType: string) => {
     set(state => ({ isGenerating: { ...state.isGenerating, [contentType]: true } }));
@@ -58,5 +72,5 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }));
   },
 
-  reset: () => set({ activeTab: null, content: {}, isGenerating: {}, notes: [], isLoadingNotes: false }),
+  reset: () => set({ activeTab: null, content: {}, isGenerating: {}, notes: [], isLoadingNotes: false, pdfViewer: null }),
 }));
