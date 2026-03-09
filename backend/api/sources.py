@@ -181,6 +181,7 @@ async def get_source_file(
         path=source.storage_url,
         media_type='application/pdf',
         filename=source.filename,
+        headers={'Content-Disposition': f'inline; filename="{source.filename}"'},
     )
 
 
