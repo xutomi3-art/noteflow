@@ -8,7 +8,7 @@ from sqlalchemy import select
 from backend.core.database import async_session
 from backend.models.notebook import Notebook
 from backend.services.event_bus import event_bus
-from backend.services.excel_service import ingest_excel
+from backend.services.excel_service import ingest_excel, excel_to_markdown
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
 from backend.services.qwen_client import qwen_client, IMAGE_EXTENSIONS
@@ -75,16 +75,21 @@ async def process_document(
             await update_source_status(db, sid, "parsing")
             await _notify(notebook_id, source_id, "parsing")
 
-            # Step 2: Route Excel/CSV to DuckDB pipeline (skip MinerU/RAGFlow)
+            # Step 2: Excel/CSV — dual track: DuckDB (SQL) + RAGFlow (semantic)
             if file_type in ("xlsx", "xls", "csv"):
+                # Track 1: DuckDB for structured SQL queries
                 duckdb_path = await ingest_excel(sid, file_path)
-                await update_source_status(db, sid, "ready", duckdb_path=duckdb_path)
-                await _notify(notebook_id, source_id, "ready")
-                logger.info("Excel ingestion complete: %s", filename)
-                return
+                await update_source_status(db, sid, "vectorizing", duckdb_path=duckdb_path)
+                await _notify(notebook_id, source_id, "vectorizing")
+                logger.info("Excel DuckDB ingestion complete: %s", filename)
+
+                # Track 2: Convert to markdown for RAGFlow semantic search
+                content = excel_to_markdown(file_path)
+                logger.info("Excel to markdown: %s (%d chars)", filename, len(content))
+                # Fall through to RAGFlow upload below
 
             # Step 2b: Route images to Qwen-VL pipeline
-            if file_type in IMAGE_EXTENSIONS:
+            elif file_type in IMAGE_EXTENSIONS:
                 logger.info("Processing image via Qwen-VL: %s", filename)
                 content = await qwen_client.analyze_image(file_path, filename)
                 # Save extracted text as .md alongside the image

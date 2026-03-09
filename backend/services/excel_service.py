@@ -119,6 +119,90 @@ async def ingest_excel(source_id: uuid.UUID, file_path: str) -> str:
     return str(duckdb_path)
 
 
+def excel_to_markdown(file_path: str) -> str:
+    """Convert Excel/CSV to a markdown text representation for RAGFlow vectorization.
+
+    Reads all sheets, auto-detects headers, and outputs readable markdown tables.
+    This allows semantic search over Excel content via RAGFlow.
+    """
+    path = Path(file_path)
+    sections: list[str] = []
+
+    if path.suffix.lower() in ('.xlsx', '.xls'):
+        xls = pd.ExcelFile(file_path)
+        sheet_names = xls.sheet_names
+    else:
+        sheet_names = ["data"]
+
+    for sheet in sheet_names:
+        try:
+            if path.suffix.lower() in ('.xlsx', '.xls'):
+                df_raw = pd.read_excel(file_path, sheet_name=sheet, header=None)
+            else:
+                df_raw = pd.read_csv(file_path, header=None)
+
+            if df_raw.empty:
+                continue
+
+            # Detect header row
+            header_row = _detect_header_row(df_raw)
+
+            if header_row == 0:
+                headers = [str(c) for c in df_raw.iloc[0].tolist()]
+                df_data = df_raw.iloc[1:].reset_index(drop=True)
+            else:
+                headers = [str(c) for c in df_raw.iloc[header_row].tolist()]
+                df_data = df_raw.iloc[header_row + 1:].reset_index(drop=True)
+
+            # Clean headers
+            headers = [
+                h if h.lower() not in ('nan', 'none', '') else f"Column {i+1}"
+                for i, h in enumerate(headers)
+            ]
+
+            df_data = df_data.dropna(how='all')
+            if df_data.empty:
+                continue
+
+            # Build section
+            if len(sheet_names) > 1:
+                sections.append(f"## Sheet: {sheet}\n")
+
+            # Markdown table
+            sections.append("| " + " | ".join(headers) + " |")
+            sections.append("| " + " | ".join("---" for _ in headers) + " |")
+
+            for _, row in df_data.iterrows():
+                cells = []
+                for v in row:
+                    s = str(v) if pd.notna(v) else ""
+                    # Truncate very long cells and replace newlines
+                    s = s.replace('\n', ' ').replace('|', '/')
+                    if len(s) > 200:
+                        s = s[:200] + "..."
+                    cells.append(s)
+                sections.append("| " + " | ".join(cells) + " |")
+
+            sections.append("")  # blank line between sheets
+
+            # Also add a row-by-row text version for better semantic matching
+            sections.append(f"### {sheet} - Row Details\n")
+            for idx, row in df_data.iterrows():
+                row_parts = []
+                for h, v in zip(headers, row):
+                    if pd.notna(v) and str(v).strip():
+                        row_parts.append(f"{h}: {str(v).strip()}")
+                if row_parts:
+                    sections.append(f"- {'; '.join(row_parts)}")
+            sections.append("")
+
+        except Exception as e:
+            logger.warning("Failed to convert sheet '%s' to markdown: %s", sheet, e)
+            continue
+
+    return "\n".join(sections) if sections else "[Empty spreadsheet]"
+
+
 def query_excel(duckdb_path: str, sql: str) -> str:
     """Execute SQL against DuckDB and return formatted markdown result."""
     con = duckdb.connect(duckdb_path, read_only=True)
