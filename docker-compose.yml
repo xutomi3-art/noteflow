@@ -1,0 +1,62 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://noteflow:noteflow_secret@postgres:5432/noteflow
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-noteflow-dev-secret-change-in-production}
+      - QWEN_API_KEY=${QWEN_API_KEY:-}
+      - RAGFLOW_BASE_URL=http://host.docker.internal:9380
+      - RAGFLOW_API_KEY=${RAGFLOW_API_KEY:-}
+      - MINERU_BASE_URL=http://host.docker.internal:8010
+      - UPLOAD_DIR=/app/uploads
+    volumes:
+      - uploads:/app/uploads
+      - ./backend:/app/backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=noteflow
+      - POSTGRES_PASSWORD=noteflow_secret
+      - POSTGRES_DB=noteflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U noteflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:

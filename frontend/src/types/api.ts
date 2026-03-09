@@ -1,0 +1,85 @@
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar: string | null;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface Notebook {
+  id: string;
+  name: string;
+  emoji: string;
+  cover_color: string;
+  owner_id: string;
+  is_shared: boolean;
+  user_role: string;
+  source_count: number;
+  member_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Source {
+  id: string;
+  notebook_id: string;
+  filename: string;
+  file_type: string;
+  file_size: number | null;
+  status: "uploading" | "parsing" | "vectorizing" | "ready" | "failed";
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface Citation {
+  index: number;
+  source_id: string;
+  filename: string;
+  file_type: string;
+  location: {
+    page?: number;
+    slide?: number;
+    paragraph?: number;
+  };
+  excerpt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  notebook_id: string;
+  user_id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: Citation[];
+  created_at: string;
+}
+
+export interface SavedNote {
+  id: string;
+  notebook_id: string;
+  source_message_id: string | null;
+  content: string;
+  created_at: string;
+}
+
+export interface InviteLink {
+  id: string;
+  token: string;
+  role: string;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface Member {
+  user_id: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  role: string;
+  joined_at: string;
+}

@@ -1,0 +1,66 @@
+import { create } from "zustand";
+import type { Member, InviteLink } from "@/types/api";
+import { api } from "@/services/api";
+
+interface SharingState {
+  members: Member[];
+  inviteLinks: InviteLink[];
+  isLoading: boolean;
+
+  fetchMembers: (notebookId: string) => Promise<void>;
+  createInviteLink: (notebookId: string, role: string) => Promise<InviteLink>;
+  updateMemberRole: (notebookId: string, userId: string, role: string) => Promise<void>;
+  removeMember: (notebookId: string, userId: string) => Promise<void>;
+  stopSharing: (notebookId: string) => Promise<void>;
+  transferOwnership: (notebookId: string, newOwnerId: string) => Promise<void>;
+  reset: () => void;
+}
+
+export const useSharingStore = create<SharingState>((set) => ({
+  members: [],
+  inviteLinks: [],
+  isLoading: false,
+
+  fetchMembers: async (notebookId: string) => {
+    set({ isLoading: true });
+    try {
+      const members = await api.getMembers(notebookId);
+      set({ members });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  createInviteLink: async (notebookId: string, role: string) => {
+    const link = await api.createInviteLink(notebookId, role);
+    set((state) => ({ inviteLinks: [link, ...state.inviteLinks] }));
+    return link;
+  },
+
+  updateMemberRole: async (notebookId: string, userId: string, role: string) => {
+    await api.updateMemberRole(notebookId, userId, role);
+    set((state) => ({
+      members: state.members.map((m) =>
+        m.user_id === userId ? { ...m, role } : m
+      ),
+    }));
+  },
+
+  removeMember: async (notebookId: string, userId: string) => {
+    await api.removeMember(notebookId, userId);
+    set((state) => ({
+      members: state.members.filter((m) => m.user_id !== userId),
+    }));
+  },
+
+  stopSharing: async (notebookId: string) => {
+    await api.stopSharing(notebookId);
+    set({ members: [], inviteLinks: [] });
+  },
+
+  transferOwnership: async (notebookId: string, newOwnerId: string) => {
+    await api.transferOwnership(notebookId, newOwnerId);
+  },
+
+  reset: () => set({ members: [], inviteLinks: [], isLoading: false }),
+}));

@@ -1,0 +1,29 @@
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class ChatRequest(BaseModel):
+    message: str
+    source_ids: list[str] | None = None
+
+
+class CitationSchema(BaseModel):
+    index: int
+    source_id: str
+    filename: str
+    file_type: str
+    location: dict = {}
+    excerpt: str = ""
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    notebook_id: str
+    user_id: str
+    role: str
+    content: str
+    citations: list[CitationSchema] = []
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

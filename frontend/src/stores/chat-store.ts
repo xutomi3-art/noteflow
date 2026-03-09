@@ -1,0 +1,109 @@
+import { create } from "zustand";
+import type { ChatMessage, Citation } from "@/types/api";
+import { api } from "@/services/api";
+
+interface ChatState {
+  messages: ChatMessage[];
+  isStreaming: boolean;
+  streamingContent: string;
+  isLoading: boolean;
+
+  fetchHistory: (notebookId: string) => Promise<void>;
+  sendMessage: (notebookId: string, message: string, sourceIds: string[]) => Promise<void>;
+  clearHistory: (notebookId: string) => Promise<void>;
+  reset: () => void;
+}
+
+export const useChatStore = create<ChatState>((set, get) => ({
+  messages: [],
+  isStreaming: false,
+  streamingContent: "",
+  isLoading: false,
+
+  fetchHistory: async (notebookId: string) => {
+    set({ isLoading: true });
+    try {
+      const messages = await api.getChatHistory(notebookId);
+      set({ messages });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  sendMessage: async (notebookId: string, message: string, sourceIds: string[]) => {
+    // Add optimistic user message
+    const tempUserMsg: ChatMessage = {
+      id: `temp-${Date.now()}`,
+      notebook_id: notebookId,
+      user_id: "",
+      role: "user",
+      content: message,
+      citations: [],
+      created_at: new Date().toISOString(),
+    };
+
+    set(state => ({
+      messages: [...state.messages, tempUserMsg],
+      isStreaming: true,
+      streamingContent: "",
+    }));
+
+    await api.sendChatMessage(
+      notebookId,
+      message,
+      sourceIds,
+      // onToken
+      (token: string) => {
+        set(state => ({
+          streamingContent: state.streamingContent + token,
+        }));
+      },
+      // onDone
+      (data: { id: string; citations: Citation[] }) => {
+        const { streamingContent } = get();
+        const assistantMsg: ChatMessage = {
+          id: data.id,
+          notebook_id: notebookId,
+          user_id: "",
+          role: "assistant",
+          content: streamingContent,
+          citations: data.citations,
+          created_at: new Date().toISOString(),
+        };
+
+        set(state => ({
+          messages: [...state.messages, assistantMsg],
+          isStreaming: false,
+          streamingContent: "",
+        }));
+      },
+      // onError
+      (error: string) => {
+        const errorMsg: ChatMessage = {
+          id: `error-${Date.now()}`,
+          notebook_id: notebookId,
+          user_id: "",
+          role: "assistant",
+          content: `Error: ${error}`,
+          citations: [],
+          created_at: new Date().toISOString(),
+        };
+
+        set(state => ({
+          messages: [...state.messages, errorMsg],
+          isStreaming: false,
+          streamingContent: "",
+        }));
+      },
+    );
+  },
+
+  clearHistory: async (notebookId: string) => {
+    await api.clearChatHistory(notebookId);
+    set({ messages: [] });
+  },
+
+  reset: () => {
+    set({ messages: [], isStreaming: false, streamingContent: "", isLoading: false });
+  },
+}));
