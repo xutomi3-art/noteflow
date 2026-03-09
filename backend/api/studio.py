@@ -113,10 +113,11 @@ Source content:
 {context}"""
 
 # Broad retrieval queries to get comprehensive coverage of all document content
+# Bilingual to handle both English and Chinese documents
 _RETRIEVAL_QUERIES = [
-    "main topics key points overview",
-    "important details information content",
-    "background context introduction",
+    "main topics key points overview 主要内容 关键要点 概述",
+    "important details information content 重要信息 详细内容",
+    "background context introduction 背景介绍 基本概念",
 ]
 
 
@@ -168,11 +169,14 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID) -> str:
 
             # Use multiple broad queries to get comprehensive coverage
             for query in _RETRIEVAL_QUERIES:
-                chunks = await ragflow_client.retrieve(
-                    dataset_ids=[dataset_id],
-                    question=query,
-                    top_k=15,
-                )
+                try:
+                    chunks = await ragflow_client.retrieve(
+                        dataset_ids=[dataset_id],
+                        question=query,
+                        top_k=15,
+                    )
+                except Exception:
+                    chunks = []
                 for chunk in chunks:
                     text = chunk.get("content_with_weight", chunk.get("content", "")).strip()
                     if text and text not in seen_texts:
