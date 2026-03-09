@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback } from "react";
 import { useSourceStore } from "@/stores/source-store";
+import { useStudioStore } from "@/stores/studio-store";
 import SourceItem from "./SourceItem";
 import UploadDropZone from "./UploadDropZone";
 
@@ -24,6 +25,8 @@ export default function SourcesPanel({ notebookId, userRole = "owner" }: Sources
     subscribeStatus,
     cleanup,
   } = useSourceStore();
+
+  const openPdf = useStudioStore(state => state.openPdf);
 
   useEffect(() => {
     fetchSources(notebookId);
@@ -100,6 +103,7 @@ export default function SourcesPanel({ notebookId, userRole = "owner" }: Sources
                   selected={selectedIds.has(source.id)}
                   onToggle={() => toggleSelect(source.id)}
                   onDelete={() => handleDelete(source.id)}
+                  onOpenPdf={openPdf}
                 />
               ))
             )}

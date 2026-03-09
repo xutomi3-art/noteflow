@@ -7,6 +7,7 @@ interface SourceItemProps {
   selected: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onOpenPdf?: (sourceId: string, filename: string, page: number) => void;
 }
 
 const STATUS_CONFIG: Record<string, { icon: string; label: string; color: string }> = {
@@ -32,7 +33,7 @@ function formatSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export default function SourceItem({ source, selected, onToggle, onDelete }: SourceItemProps) {
+export default function SourceItem({ source, selected, onToggle, onDelete, onOpenPdf }: SourceItemProps) {
   const status = STATUS_CONFIG[source.status] || STATUS_CONFIG.uploading;
   const typeIcon = TYPE_ICONS[source.file_type] || "\uD83D\uDCC4";
   const isProcessing = source.status !== "ready" && source.status !== "failed";
@@ -49,7 +50,17 @@ export default function SourceItem({ source, selected, onToggle, onDelete }: Sou
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-[13px]">{typeIcon}</span>
-          <span className="text-[13px] truncate font-medium">{source.filename}</span>
+          {source.file_type === 'pdf' && source.status === 'ready' && onOpenPdf ? (
+            <button
+              onClick={() => onOpenPdf(source.id, source.filename, 1)}
+              className="text-[13px] truncate font-medium text-[var(--accent)] hover:underline text-left"
+              title={`Open ${source.filename}`}
+            >
+              {source.filename}
+            </button>
+          ) : (
+            <span className="text-[13px] truncate font-medium">{source.filename}</span>
+          )}
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className={`text-[11px] ${status.color}`}>
