@@ -55,7 +55,7 @@ export default function SourceItem({ source, selected, onToggle, onDelete, onOpe
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-[13px]">{typeIcon}</span>
-          {source.file_type === 'pdf' && source.status === 'ready' && onOpenPdf ? (
+          {['pdf', 'pptx', 'docx'].includes(source.file_type) && source.status === 'ready' && onOpenPdf ? (
             <button
               onClick={() => onOpenPdf(source.id, source.filename, 1)}
               className="text-[13px] truncate font-medium text-[var(--accent)] hover:underline text-left"

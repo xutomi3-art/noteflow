@@ -30,8 +30,9 @@ export default function ChatMessage({ message, onSaveNote }: ChatMessageProps) {
   const handleCitationClick = (index: number) => {
     if (message.citations) {
       const citation = message.citations.find(c => c.index === index);
-      if (citation && citation.file_type === "pdf") {
-        openPdf(citation.source_id, citation.filename, citation.location.page ?? 1);
+      if (citation && ["pdf", "pptx", "docx"].includes(citation.file_type)) {
+        const page = citation.location.page ?? citation.location.slide ?? 1;
+        openPdf(citation.source_id, citation.filename, page);
       }
     }
     setActiveCitation(prev => (prev === index ? null : index));

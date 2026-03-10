@@ -17,6 +17,26 @@ from backend.services.source_service import get_source, update_source_status
 logger = logging.getLogger(__name__)
 
 
+def _convert_to_pdf(file_path: str) -> str | None:
+    """Convert PPTX/DOCX to PDF using LibreOffice. Returns PDF path or None."""
+    import subprocess
+    out_dir = os.path.dirname(file_path)
+    try:
+        result = subprocess.run(
+            ["libreoffice", "--headless", "--convert-to", "pdf", "--outdir", out_dir, file_path],
+            capture_output=True, timeout=120,
+        )
+        if result.returncode == 0:
+            pdf_path = os.path.splitext(file_path)[0] + ".pdf"
+            if os.path.exists(pdf_path):
+                logger.info("Converted %s to PDF: %s", file_path, pdf_path)
+                return pdf_path
+        logger.warning("LibreOffice conversion failed: %s", result.stderr.decode(errors="replace"))
+    except Exception as e:
+        logger.warning("LibreOffice conversion error: %s", e)
+    return None
+
+
 async def _notify(
     notebook_id: str, source_id: str, status: str, error: str | None = None
 ) -> None:
@@ -113,6 +133,10 @@ async def process_document(
                         filename,
                     )
                     content = None  # Signal to upload raw file
+
+            # Step 3b: Convert PPTX/DOCX to PDF for inline viewing
+            if file_type in ("pptx", "docx"):
+                _convert_to_pdf(file_path)
 
             # Step 4: Upload to RAGFlow
             await update_source_status(db, sid, "vectorizing")

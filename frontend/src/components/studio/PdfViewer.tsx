@@ -23,7 +23,8 @@ export default function PdfViewer({ notebookId, sourceId, filename, initialPage,
   const [scale, setScale] = useState<number>(1.0);
   const [retryKey, setRetryKey] = useState<number>(0);
 
-  const pdfUrl = `/api/notebooks/${notebookId}/sources/${sourceId}/file`;
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const pdfUrl = `/api/notebooks/${notebookId}/sources/${sourceId}/file${token ? `?token=${token}` : ""}`;
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages);

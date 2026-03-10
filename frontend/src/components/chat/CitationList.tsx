@@ -86,7 +86,7 @@ export default function CitationList({ citations, activeCitationIndex }: Citatio
                   onClick={() => {
                     setExpandedSource(isExpanded ? null : key);
                     setExpandedCitation(null);
-                    if (group.fileType === 'pdf') {
+                    if (['pdf', 'pptx', 'docx'].includes(group.fileType)) {
                       openPdf(group.sourceId, group.filename, 1);
                     }
                   }}
@@ -108,8 +108,8 @@ export default function CitationList({ citations, activeCitationIndex }: Citatio
                     <button
                       key={c.index}
                       onClick={() => {
-                        if (c.file_type === 'pdf') {
-                          openPdf(c.source_id, c.filename, c.location.page ?? 1);
+                        if (['pdf', 'pptx', 'docx'].includes(c.file_type)) {
+                          openPdf(c.source_id, c.filename, c.location.page ?? c.location.slide ?? 1);
                         }
                         setExpandedSource(key);
                         setExpandedCitation(expandedCitation === c.index ? null : c.index);
@@ -138,8 +138,8 @@ export default function CitationList({ citations, activeCitationIndex }: Citatio
                         <button
                           onClick={() => {
                             setExpandedCitation(isCitExpanded ? null : c.index);
-                            if (c.file_type === 'pdf') {
-                              openPdf(c.source_id, c.filename, c.location.page ?? 1);
+                            if (['pdf', 'pptx', 'docx'].includes(c.file_type)) {
+                              openPdf(c.source_id, c.filename, c.location.page ?? c.location.slide ?? 1);
                             }
                           }}
                           className="flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--accent)]"

@@ -175,9 +175,36 @@ async def delete_source(
 async def get_source_file(
     notebook_id: str,
     source_id: str,
-    user: User = Depends(get_current_user),
+    token: str | None = None,
+    request: "Request" = None,
     db: AsyncSession = Depends(get_db),
 ) -> FileResponse:
+    """Serve source file. Accepts Bearer header OR ?token= query param for inline viewer."""
+    from fastapi import Request
+    from sqlalchemy import select as sa_select
+    from backend.core.security import decode_token
+    from backend.models.user import User as UserModel
+
+    # Extract token from Bearer header or query param
+    auth_token = token
+    if not auth_token and request:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            auth_token = auth_header[7:]
+
+    if not auth_token:
+        raise HTTPException(status_code=401, detail='Authentication required')
+
+    payload = decode_token(auth_token)
+    if not payload or payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail='Invalid token')
+
+    user_id = payload.get("sub")
+    result = await db.execute(sa_select(UserModel).where(UserModel.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=401, detail='User not found')
+
     if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'view'):
         raise HTTPException(status_code=403, detail='No access to this notebook')
 
@@ -188,11 +215,19 @@ async def get_source_file(
     if not source.storage_url or not os.path.exists(source.storage_url):
         raise HTTPException(status_code=404, detail='File not found on disk')
 
+    # For PPTX/DOCX: serve the converted PDF if available
+    serve_path = source.storage_url
+    media_type = 'application/pdf'
+    if source.file_type in ('pptx', 'docx'):
+        pdf_path = os.path.splitext(source.storage_url)[0] + '.pdf'
+        if os.path.exists(pdf_path):
+            serve_path = pdf_path
+
     from urllib.parse import quote
     encoded_name = quote(source.filename)
     return FileResponse(
-        path=source.storage_url,
-        media_type='application/pdf',
+        path=serve_path,
+        media_type=media_type,
         headers={'Content-Disposition': f"inline; filename*=UTF-8''{encoded_name}"},
     )
 
