@@ -396,12 +396,16 @@ export default function DashboardPage() {
 
             {/* Hidden file input */}
             <input
+              id="create-modal-file-input"
               ref={fileInputRef}
               type="file"
               multiple
               accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif"
-              className="hidden"
-              onChange={(e) => handleFilesSelected(e.target.files)}
+              className="absolute w-0 h-0 opacity-0 overflow-hidden"
+              onChange={(e) => {
+                handleFilesSelected(e.target.files);
+                e.target.value = '';
+              }}
             />
 
             {createModalType === 'team' && createStep === 2 ? (
@@ -473,9 +477,9 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Drop zone */}
-                <div
+                <label
+                  htmlFor="create-modal-file-input"
                   className="border-2 border-dashed border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center text-center bg-slate-50/50 cursor-pointer hover:border-[#5b8c15]/40 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
                   onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                   onDrop={(e) => {
                     e.preventDefault();
@@ -485,8 +489,9 @@ export default function DashboardPage() {
                 >
                   <Upload className="w-10 h-10 text-slate-300 mb-4" />
                   <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
-                  <p className="text-sm text-slate-500">PDF, DOCX, PPTX, TXT, MD, EXCEL, CSV, Image</p>
-                </div>
+                  <p className="text-sm text-slate-500 mb-1">PDF, DOCX, PPTX, TXT, MD, EXCEL, CSV, Image</p>
+                  <p className="text-sm text-[#5b8c15] font-medium">or click to browse</p>
+                </label>
 
                 {/* Selected files list */}
                 {pendingFiles.length > 0 && (
