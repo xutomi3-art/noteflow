@@ -6,6 +6,7 @@ interface PdfViewerState {
   sourceId: string;
   filename: string;
   page: number;
+  _seq: number;  // monotonic counter to force re-render on same-source page changes
 }
 
 interface StudioState {
@@ -35,7 +36,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  openPdf: (sourceId, filename, page) => set({ pdfViewer: { sourceId, filename, page } }),
+  openPdf: (sourceId, filename, page) => set(state => ({
+    pdfViewer: { sourceId, filename, page, _seq: (state.pdfViewer?._seq ?? 0) + 1 },
+  })),
 
   closePdf: () => set({ pdfViewer: null }),
 

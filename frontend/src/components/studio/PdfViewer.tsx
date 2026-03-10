@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -18,19 +18,30 @@ interface PdfViewerProps {
 
 export default function PdfViewer({ notebookId, sourceId, filename, initialPage, onClose }: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState<number>(1.0);
   const [retryKey, setRetryKey] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(initialPage);
+
+  // Track the last initialPage so we detect external navigation (citation clicks)
+  const lastInitialPage = useRef(initialPage);
+
+  useEffect(() => {
+    if (initialPage !== lastInitialPage.current) {
+      lastInitialPage.current = initialPage;
+      setCurrentPage(initialPage);
+    }
+  }, [initialPage]);
+
+  const clampedPage = Math.max(1, Math.min(numPages || 999, currentPage));
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   const pdfUrl = `/api/notebooks/${notebookId}/sources/${sourceId}/file${token ? `?token=${token}` : ""}`;
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
-    setCurrentPage(Math.min(initialPage, numPages));
     setError(null);
-  }, [initialPage]);
+  }, []);
 
   const onDocumentLoadError = useCallback((err: Error) => {
     setError(`Failed to load PDF: ${err.message}`);
@@ -58,7 +69,7 @@ export default function PdfViewer({ notebookId, sourceId, filename, initialPage,
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={goToPrev}
-            disabled={currentPage <= 1}
+            disabled={clampedPage <= 1}
             className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 text-[var(--text-secondary)] transition-colors"
             title="Previous page"
           >
@@ -67,11 +78,11 @@ export default function PdfViewer({ notebookId, sourceId, filename, initialPage,
             </svg>
           </button>
           <span className="text-[11px] text-[var(--text-tertiary)] tabular-nums min-w-[48px] text-center">
-            {numPages > 0 ? `${currentPage} / ${numPages}` : "—"}
+            {numPages > 0 ? `${clampedPage} / ${numPages}` : "—"}
           </span>
           <button
             onClick={goToNext}
-            disabled={currentPage >= numPages}
+            disabled={clampedPage >= numPages}
             className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 text-[var(--text-secondary)] transition-colors"
             title="Next page"
           >
@@ -122,7 +133,7 @@ export default function PdfViewer({ notebookId, sourceId, filename, initialPage,
             }
           >
             <Page
-              pageNumber={currentPage}
+              pageNumber={clampedPage}
               scale={scale}
               width={220}
               renderTextLayer={true}
