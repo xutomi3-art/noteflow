@@ -52,13 +52,17 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
                 location = {k: v for k, v in pos.items() if k in ("page", "slide", "paragraph")}
 
         # Find source_id from sources_map
-        # Compare stems (without extension) to handle RAGFlow renaming .txt → .md
+        # Compare stems (without extension) to handle RAGFlow renaming:
+        #   .txt → .md, or appending (2)/(3) suffixes for duplicates
         source_id = ""
         file_type = "txt"
         doc_stem = doc_name.rsplit(".", 1)[0] if "." in doc_name else doc_name
+        # Strip RAGFlow's duplicate suffix like "(2)", "(3)" etc.
+        doc_stem_clean = re.sub(r'\(\d+\)$', '', doc_stem).strip()
         for sid, sinfo in sources_map.items():
             sinfo_stem = sinfo["filename"].rsplit(".", 1)[0] if "." in sinfo["filename"] else sinfo["filename"]
-            if sinfo_stem == doc_stem or sinfo["filename"] in doc_name or doc_name in sinfo["filename"]:
+            if (sinfo_stem == doc_stem or sinfo_stem == doc_stem_clean
+                    or sinfo["filename"] in doc_name or doc_name in sinfo["filename"]):
                 source_id = sid
                 file_type = sinfo["file_type"]
                 break
