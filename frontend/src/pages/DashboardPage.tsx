@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Files, Plus, User, Users, ChevronRight, X, Upload, LogOut, Star } from 'lucide-react';
+import { Files, Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
+import { api } from '@/services/api';
 import type { Notebook } from '@/types/api';
 
 const EMOJIS = ['📝', '🚀', '🔬', '📈', '💡', '💰', '⚡', '🎨', '🏷️', '📋', '⚙️', '📅', '🌟', '🎯', '📚', '🧪', '🔥', '🌈', '🎵', '🧠'];
@@ -14,6 +15,14 @@ function randomEmoji(): string {
 
 function randomColor(): string {
   return COLORS[Math.floor(Math.random() * COLORS.length)];
+}
+
+/** Derive a stable pastel color from notebook id when default #4A90D9 is used */
+function cardColor(nb: Notebook): string {
+  if (nb.cover_color && nb.cover_color !== '#4A90D9') return nb.cover_color;
+  let hash = 0;
+  for (let i = 0; i < nb.id.length; i++) hash = (hash * 31 + nb.id.charCodeAt(i)) | 0;
+  return COLORS[Math.abs(hash) % COLORS.length];
 }
 
 function formatRelativeDate(dateStr: string): string {
@@ -48,6 +57,10 @@ export default function DashboardPage() {
   const [memberEmail, setMemberEmail] = useState('');
   const [emails, setEmails] = useState<string[]>([]);
   const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [notebookName, setNotebookName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchNotebooks();
@@ -88,6 +101,9 @@ export default function DashboardPage() {
     setCreateStep(1);
     setMemberEmail('');
     setEmails([]);
+    setPendingFiles([]);
+    setNotebookName('');
+    setIsCreating(false);
   };
 
   const handleAddEmail = () => {
@@ -102,33 +118,37 @@ export default function DashboardPage() {
     navigate('/notebook/' + notebook.id);
   };
 
-  const handleCreatePersonal = async () => {
-    try {
-      const notebook = await createNotebook({
-        name: 'New Notebook',
-        emoji: randomEmoji(),
-        cover_color: randomColor(),
-        is_team: false,
-      });
-      closeModal();
-      navigate('/notebook/' + notebook.id);
-    } catch {
-      // Error handled by store
-    }
+  const handleFilesSelected = (files: FileList | null) => {
+    if (!files) return;
+    setPendingFiles(prev => [...prev, ...Array.from(files)]);
   };
 
-  const handleCreateTeam = async () => {
+  const removePendingFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCreateAndUpload = async (isTeam: boolean) => {
+    setIsCreating(true);
     try {
+      const name = notebookName.trim() || (isTeam ? 'New Team Notebook' : 'New Notebook');
       const notebook = await createNotebook({
-        name: 'New Team Notebook',
+        name,
         emoji: randomEmoji(),
         cover_color: randomColor(),
-        is_team: true,
+        is_team: isTeam,
       });
+      // Upload all pending files
+      for (const file of pendingFiles) {
+        try {
+          await api.uploadSource(notebook.id, file);
+        } catch {
+          // Continue with remaining files
+        }
+      }
       closeModal();
       navigate('/notebook/' + notebook.id);
     } catch {
-      // Error handled by store
+      setIsCreating(false);
     }
   };
 
@@ -254,7 +274,7 @@ export default function DashboardPage() {
                 >
                   <div
                     className="h-36 flex items-center justify-center text-5xl group-hover:opacity-90 transition-opacity relative"
-                    style={{ backgroundColor: notebook.cover_color }}
+                    style={{ backgroundColor: cardColor(notebook) }}
                   >
                     <button
                       onClick={(e) => toggleStarred(notebook.id, e)}
@@ -262,7 +282,7 @@ export default function DashboardPage() {
                     >
                       <Star className={`w-3.5 h-3.5 ${starredIds.has(notebook.id) ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
                     </button>
-                    {notebook.emoji}
+                    <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
                   <div className="p-5">
                     <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
@@ -275,7 +295,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {personalNotebooks.length > 4 && (
+          {personalNotebooks.length > 6 && (
             <div className="mt-8 flex justify-end">
               <button
                 onClick={() => setShowAllPersonal(!showAllPersonal)}
@@ -304,8 +324,8 @@ export default function DashboardPage() {
                   className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative"
                 >
                   <div
-                    className="h-36 relative flex items-center justify-center text-5xl group-hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: notebook.cover_color }}
+                    className="h-36 relative flex items-center justify-center group-hover:opacity-90 transition-opacity"
+                    style={{ backgroundColor: cardColor(notebook) }}
                   >
                     <div className="absolute top-4 left-4 flex items-center gap-2">
                       <div className="flex items-center gap-1.5 bg-white/90 px-2.5 py-1 rounded-lg text-[11px] font-bold text-slate-700 shadow-sm">
@@ -318,7 +338,7 @@ export default function DashboardPage() {
                     >
                       <Star className={`w-3.5 h-3.5 ${starredIds.has(notebook.id) ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
                     </button>
-                    {notebook.emoji}
+                    <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
                   <div className="p-5">
                     <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
@@ -331,7 +351,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {teamNotebooks.length > 4 && (
+          {teamNotebooks.length > 6 && (
             <div className="mt-8 flex justify-end">
               <button
                 onClick={() => setShowAllTeam(!showAllTeam)}
@@ -374,6 +394,16 @@ export default function DashboardPage() {
               )}
             </div>
 
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif"
+              className="hidden"
+              onChange={(e) => handleFilesSelected(e.target.files)}
+            />
+
             {createModalType === 'team' && createStep === 2 ? (
               <div className="mb-6 flex flex-col items-center">
                 <div className="w-full max-w-md flex flex-col gap-3">
@@ -400,7 +430,6 @@ export default function DashboardPage() {
                     </button>
                   </div>
 
-                  {/* Email Chips */}
                   {emails.length > 0 && (
                     <div className="flex flex-wrap gap-2 justify-center">
                       {emails.map((email) => (
@@ -418,43 +447,90 @@ export default function DashboardPage() {
                   )}
 
                   <button
-                    onClick={handleCreateTeam}
-                    className="mt-4 w-full bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm"
+                    onClick={() => handleCreateAndUpload(true)}
+                    disabled={isCreating}
+                    className="mt-4 w-full bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-60"
                   >
-                    Finish & Open Notebook
+                    {isCreating ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" /> Creating...
+                      </span>
+                    ) : 'Finish & Open Notebook'}
                   </button>
                 </div>
               </div>
             ) : (
               <>
-                <div className="border-2 border-dashed border-slate-200 rounded-3xl p-12 flex flex-col items-center justify-center text-center bg-slate-50/50">
-                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
-                  <p className="text-sm text-slate-500 mb-8">PDF, DOCX, PPTX, TXT, MD, EXCEL, CSV, Image..</p>
-                  <button
-                    onClick={() => {
-                      if (createModalType === 'team') {
-                        setCreateStep(2);
-                      } else {
-                        handleCreatePersonal();
-                      }
-                    }}
-                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-semibold hover:bg-slate-50 transition-colors shadow-sm"
-                  >
-                    <Upload className="w-5 h-5" />
-                    {createModalType === 'team' ? 'Upload & Next' : 'Upload files'}
-                  </button>
+                {/* Notebook name input */}
+                <div className="mb-6">
+                  <input
+                    type="text"
+                    placeholder="Notebook name (optional)"
+                    value={notebookName}
+                    onChange={(e) => setNotebookName(e.target.value)}
+                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                  />
                 </div>
-                {createModalType === 'team' && (
-                  <div className="mt-4 flex justify-center">
-                    <button
-                      onClick={() => setCreateStep(2)}
-                      className="text-sm font-semibold text-[#5b8c15] hover:underline"
-                    >
-                      Next step
-                    </button>
+
+                {/* Drop zone */}
+                <div
+                  className="border-2 border-dashed border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center text-center bg-slate-50/50 cursor-pointer hover:border-[#5b8c15]/40 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleFilesSelected(e.dataTransfer.files);
+                  }}
+                >
+                  <Upload className="w-10 h-10 text-slate-300 mb-4" />
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
+                  <p className="text-sm text-slate-500">PDF, DOCX, PPTX, TXT, MD, EXCEL, CSV, Image</p>
+                </div>
+
+                {/* Selected files list */}
+                {pendingFiles.length > 0 && (
+                  <div className="mt-4 max-h-40 overflow-y-auto space-y-1.5">
+                    {pendingFiles.map((file, i) => (
+                      <div key={i} className="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-xl text-sm">
+                        <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="flex-1 truncate text-slate-700">{file.name}</span>
+                        <span className="text-xs text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+                        <button onClick={() => removePendingFile(i)} className="text-slate-400 hover:text-slate-600 shrink-0">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
-                <p className="text-center text-xs text-slate-400 mt-6">Up to 50 files, 50 MB each.</p>
+
+                {/* Action buttons */}
+                <div className="mt-6 flex flex-col items-center gap-3">
+                  {createModalType === 'team' ? (
+                    <button
+                      onClick={() => setCreateStep(2)}
+                      className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm"
+                    >
+                      Next: Invite Members
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleCreateAndUpload(false)}
+                      disabled={isCreating}
+                      className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-60"
+                    >
+                      {isCreating ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          {pendingFiles.length > 0 ? 'Creating & Uploading...' : 'Creating...'}
+                        </span>
+                      ) : (
+                        pendingFiles.length > 0 ? `Create Notebook & Upload ${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : 'Create Notebook'
+                      )}
+                    </button>
+                  )}
+                </div>
+                <p className="text-center text-xs text-slate-400 mt-4">Up to 50 files, 50 MB each.</p>
               </>
             )}
           </div>
