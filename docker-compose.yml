@@ -32,6 +32,12 @@ services:
       - RAGFLOW_API_KEY=${RAGFLOW_API_KEY:-}
       - MINERU_BASE_URL=http://host.docker.internal:8010
       - UPLOAD_DIR=/app/uploads
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
     volumes:
       - uploads:/app/uploads
       - ./backend:/app/backend
