@@ -43,22 +43,30 @@ class RAGFlowClient:
         self, dataset_id: str, filename: str, content: bytes
     ) -> str | None:
         """Upload a document to a RAGFlow dataset. Returns document_id or None."""
-        try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-                resp = await client.post(
-                    f"{self.base_url}/api/v1/datasets/{dataset_id}/documents",
-                    headers=self._headers,
-                    files={"file": (filename, content, "application/octet-stream")},
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                if data.get("code") == 0 and data.get("data"):
-                    return data["data"][0]["id"]
-                logger.error("RAGFlow upload_document error: %s", data)
-                return None
-        except Exception as e:
-            logger.error("RAGFlow upload_document failed: %s", e)
-            return None
+        import asyncio
+        upload_timeout = httpx.Timeout(120.0, connect=10.0)
+        last_error = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=upload_timeout) as client:
+                    resp = await client.post(
+                        f"{self.base_url}/api/v1/datasets/{dataset_id}/documents",
+                        headers=self._headers,
+                        files={"file": (filename, content, "application/octet-stream")},
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    if data.get("code") == 0 and data.get("data"):
+                        return data["data"][0]["id"]
+                    logger.error("RAGFlow upload_document error: %s", data)
+                    return None
+            except Exception as e:
+                last_error = e
+                logger.warning("RAGFlow upload attempt %d failed: %r", attempt + 1, e)
+                if attempt < 2:
+                    await asyncio.sleep(2)
+        logger.error("RAGFlow upload_document failed after 3 attempts: %r", last_error, exc_info=True)
+        return None
 
     async def parse_document(self, dataset_id: str, document_id: str) -> bool:
         """Trigger parsing (chunking + embedding) for a document."""
