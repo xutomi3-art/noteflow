@@ -29,12 +29,15 @@ export default function SourcesPanel({ notebookId, userRole = "owner", isShared 
   } = useSourceStore();
 
   const openPdf = useStudioStore(state => state.openPdf);
-  const { members, fetchMembers, createInviteLink } = useSharingStore();
+  const { members, fetchMembers, createInviteLink, sendEmailInvite } = useSharingStore();
 
   const [inviteRole, setInviteRole] = useState("editor");
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     fetchSources(notebookId);
@@ -86,6 +89,22 @@ export default function SourcesPanel({ notebookId, userRole = "owner", isShared 
     await navigator.clipboard.writeText(inviteLink);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailInput.trim()) return;
+    setEmailSending(true);
+    setEmailStatus(null);
+    try {
+      const message = await sendEmailInvite(notebookId, emailInput.trim(), inviteRole);
+      setEmailStatus({ type: "success", message });
+      setEmailInput("");
+      setTimeout(() => setEmailStatus(null), 3000);
+    } catch (err) {
+      setEmailStatus({ type: "error", message: err instanceof Error ? err.message : "Failed to send invite" });
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   const readyCount = sources.filter((s) => s.status === "ready").length;
@@ -158,45 +177,88 @@ export default function SourcesPanel({ notebookId, userRole = "owner", isShared 
 
           {/* Invite controls */}
           {canInvite && (
-            <div className="space-y-2 mb-4">
+            <div className="space-y-3 mb-4">
+              {/* Role selector */}
               <div className="flex items-center gap-2">
+                <span className="text-[11px] text-[var(--text-tertiary)]">Invite as</span>
                 <select
                   value={inviteRole}
                   onChange={(e) => {
                     setInviteRole(e.target.value);
                     setInviteLink(null);
                   }}
-                  className="flex-1 text-[12px] px-2 py-1.5 rounded-lg border border-[var(--border)]
+                  className="text-[12px] px-2 py-1 rounded-lg border border-[var(--border)]
                     bg-[var(--background)] text-[var(--foreground)]
                     focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                 >
                   <option value="editor">Editor</option>
                   <option value="viewer">Viewer</option>
                 </select>
+              </div>
+
+              {/* Email invite */}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  value={emailInput}
+                  onChange={(e) => { setEmailInput(e.target.value); setEmailStatus(null); }}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSendEmail(); }}
+                  className="flex-1 text-[12px] px-2 py-1.5 rounded-lg border border-[var(--border)]
+                    bg-[var(--background)] text-[var(--foreground)] placeholder:text-[var(--text-tertiary)]
+                    focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                />
                 <button
-                  onClick={handleGenerateLink}
-                  disabled={generatingLink}
+                  onClick={handleSendEmail}
+                  disabled={emailSending || !emailInput.trim()}
                   className="text-[12px] font-medium px-3 py-1.5 rounded-lg
                     bg-[var(--accent)] text-white hover:opacity-90 transition-opacity
-                    disabled:opacity-50"
+                    disabled:opacity-50 shrink-0"
                 >
-                  {generatingLink ? "..." : "Invite"}
+                  {emailSending ? "..." : "Send"}
                 </button>
               </div>
 
-              {inviteLink && (
-                <div className="flex items-center gap-1.5 bg-[var(--background)] rounded-lg border border-[var(--border)] px-2 py-1.5">
-                  <span className="flex-1 text-[11px] text-[var(--text-secondary)] truncate">
-                    {inviteLink}
-                  </span>
-                  <button
-                    onClick={handleCopyLink}
-                    className="shrink-0 text-[11px] font-medium text-[var(--accent)] hover:underline"
-                  >
-                    {linkCopied ? "Copied!" : "Copy"}
-                  </button>
-                </div>
+              {emailStatus && (
+                <p className={`text-[11px] px-1 ${emailStatus.type === "success" ? "text-green-600" : "text-red-500"}`}>
+                  {emailStatus.message}
+                </p>
               )}
+
+              {/* Divider */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-[var(--border-light)]" />
+                <span className="text-[10px] text-[var(--text-tertiary)]">or</span>
+                <div className="flex-1 h-px bg-[var(--border-light)]" />
+              </div>
+
+              {/* Link invite */}
+              <div className="space-y-1.5">
+                <button
+                  onClick={handleGenerateLink}
+                  disabled={generatingLink}
+                  className="w-full text-[12px] font-medium px-3 py-1.5 rounded-lg
+                    border border-[var(--border)] text-[var(--foreground)]
+                    hover:bg-[var(--background-secondary)] transition-colors
+                    disabled:opacity-50"
+                >
+                  {generatingLink ? "Generating..." : "Copy invite link"}
+                </button>
+
+                {inviteLink && (
+                  <div className="flex items-center gap-1.5 bg-[var(--background)] rounded-lg border border-[var(--border)] px-2 py-1.5">
+                    <span className="flex-1 text-[11px] text-[var(--text-secondary)] truncate">
+                      {inviteLink}
+                    </span>
+                    <button
+                      onClick={handleCopyLink}
+                      className="shrink-0 text-[11px] font-medium text-[var(--accent)] hover:underline"
+                    >
+                      {linkCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

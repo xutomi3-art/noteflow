@@ -275,6 +275,13 @@ class ApiClient {
     });
   }
 
+  async sendEmailInvite(notebookId: string, email: string, role: string): Promise<{ message: string }> {
+    return this.request(`/notebooks/${notebookId}/share/email`, {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    });
+  }
+
   async stopSharing(notebookId: string): Promise<void> {
     await this.request(`/notebooks/${notebookId}/share`, { method: "DELETE" });
   }

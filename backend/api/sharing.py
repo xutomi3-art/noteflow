@@ -1,19 +1,25 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.deps import get_current_user
+from backend.models.notebook import Notebook
 from backend.models.user import User
 from backend.schemas.sharing import (
     CreateInviteLinkRequest,
+    EmailInviteRequest,
+    EmailInviteResponse,
     InviteLinkResponse,
     MemberResponse,
     UpdateMemberRoleRequest,
     TransferOwnershipRequest,
 )
 from backend.services import sharing_service, permission_service
+from backend.services.email_service import is_smtp_configured, send_invite_email
 
 router = APIRouter(tags=["sharing"])
 
@@ -41,6 +47,45 @@ async def create_invite_link(
         expires_at=link.expires_at,
         created_at=link.created_at,
     )
+
+
+@router.post("/notebooks/{notebook_id}/share/email", response_model=EmailInviteResponse)
+async def send_email_invite(
+    notebook_id: str,
+    req: EmailInviteRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    nb_uuid = uuid.UUID(notebook_id)
+    if not await permission_service.check_permission(db, nb_uuid, user.id, "share"):
+        raise HTTPException(status_code=403, detail="No permission to share")
+
+    if req.role not in ("editor", "viewer"):
+        raise HTTPException(status_code=400, detail="Role must be 'editor' or 'viewer'")
+
+    if not is_smtp_configured():
+        raise HTTPException(status_code=503, detail="Email service not configured on this server")
+
+    # Create invite link (reuses existing token logic)
+    link = await sharing_service.create_invite_link(db, nb_uuid, user.id, req.role)
+    join_url = f"{settings.APP_BASE_URL}/join/{link.token}"
+
+    # Get notebook name
+    result = await db.execute(select(Notebook).where(Notebook.id == nb_uuid))
+    notebook = result.scalar_one_or_none()
+    notebook_name = notebook.name if notebook else "Untitled"
+
+    try:
+        await send_invite_email(
+            to_email=req.email,
+            inviter_name=user.name,
+            notebook_name=notebook_name,
+            join_url=join_url,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+    return EmailInviteResponse(message=f"Invite sent to {req.email}")
 
 
 @router.delete("/notebooks/{notebook_id}/share")

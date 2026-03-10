@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     ALIBABA_TTS_APPKEY: str = os.getenv("ALIBABA_TTS_APPKEY", "")
     ALIBABA_TTS_TOKEN: str = os.getenv("ALIBABA_TTS_TOKEN", "")
 
+    # SMTP Email
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 465
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    APP_BASE_URL: str = "http://10.200.0.112"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

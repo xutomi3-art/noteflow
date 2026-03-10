@@ -30,3 +30,12 @@ class UpdateMemberRoleRequest(BaseModel):
 
 class TransferOwnershipRequest(BaseModel):
     new_owner_id: str
+
+
+class EmailInviteRequest(BaseModel):
+    email: str
+    role: str = "viewer"
+
+
+class EmailInviteResponse(BaseModel):
+    message: str
