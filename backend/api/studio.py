@@ -3,6 +3,7 @@ import json as json_lib
 import os
 import re
 import tempfile
+import urllib.parse
 import uuid
 
 from pydub import AudioSegment
@@ -268,7 +269,7 @@ async def generate_ppt(
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"}
     )
 
 
