@@ -1,32 +1,33 @@
 {
-  "name": "frontend",
-  "version": "0.1.0",
+  "name": "noteflow-frontend",
   "private": true,
+  "version": "2.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 3000",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-markdown": "^10.1.0",
-    "react-pdf": "^10.4.1",
-    "reactflow": "^11.11.4",
-    "rehype-raw": "^7.0.0",
-    "remark-gfm": "^4.0.1",
-    "zustand": "^5.0.11"
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
+    "zustand": "^5.0.0",
+    "motion": "^12.23.24",
+    "tailwindcss": "^4.1.14",
+    "vite": "^6.2.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.21",
+    "typescript": "~5.8.2"
   }
 }
