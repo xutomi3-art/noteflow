@@ -7,6 +7,7 @@ class NotebookCreate(BaseModel):
     name: str
     emoji: str = "📒"
     cover_color: str = "#4A90D9"
+    is_team: bool = False
 
 
 class NotebookUpdate(BaseModel):

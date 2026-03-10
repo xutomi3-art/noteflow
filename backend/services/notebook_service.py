@@ -16,6 +16,7 @@ async def create_notebook(db: AsyncSession, owner_id: uuid.UUID, req: NotebookCr
         emoji=req.emoji,
         cover_color=req.cover_color,
         owner_id=owner_id,
+        is_shared=req.is_team,
     )
     db.add(notebook)
     await db.commit()

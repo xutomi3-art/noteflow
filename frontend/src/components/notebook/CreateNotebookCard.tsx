@@ -2,9 +2,10 @@
 
 interface CreateNotebookCardProps {
   onClick: () => void;
+  label?: string;
 }
 
-export function CreateNotebookCard({ onClick }: CreateNotebookCardProps) {
+export function CreateNotebookCard({ onClick, label = "Create notebook" }: CreateNotebookCardProps) {
   return (
     <button
       onClick={onClick}
@@ -21,7 +22,7 @@ export function CreateNotebookCard({ onClick }: CreateNotebookCardProps) {
         </svg>
       </div>
       <span className="text-[13px] font-medium text-[var(--text-secondary)] group-hover:text-[var(--accent)] transition-colors">
-        Create notebook
+        {label}
       </span>
     </button>
   );

@@ -7,7 +7,7 @@ interface NotebookState {
   isLoading: boolean;
 
   fetchNotebooks: () => Promise<void>;
-  createNotebook: (data: { name: string; emoji?: string; cover_color?: string }) => Promise<Notebook>;
+  createNotebook: (data: { name: string; emoji?: string; cover_color?: string; is_team?: boolean }) => Promise<Notebook>;
   updateNotebook: (id: string, data: { name?: string; emoji?: string; cover_color?: string }) => Promise<void>;
   deleteNotebook: (id: string) => Promise<void>;
 }

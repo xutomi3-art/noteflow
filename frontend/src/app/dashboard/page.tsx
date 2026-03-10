@@ -13,6 +13,7 @@ export default function DashboardPage() {
   const { user, isAuthenticated, isLoading: authLoading, loadUser, logout } = useAuthStore();
   const { notebooks, isLoading: nbLoading, fetchNotebooks } = useNotebookStore();
   const [showCreate, setShowCreate] = useState(false);
+  const [showCreateTeam, setShowCreateTeam] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -36,8 +37,8 @@ export default function DashboardPage() {
     );
   }
 
-  const myNotebooks = notebooks.filter((nb) => nb.user_role === "owner");
-  const sharedNotebooks = notebooks.filter((nb) => nb.user_role !== "owner");
+  const myNotebooks = notebooks.filter((nb) => !nb.is_shared);
+  const teamNotebooks = notebooks.filter((nb) => nb.is_shared);
 
   return (
     <div className="min-h-screen">
@@ -82,22 +83,24 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* Shared Notebooks */}
-        {!nbLoading && sharedNotebooks.length > 0 && (
+        {/* Team Notebooks */}
+        {!nbLoading && (
           <section>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-[22px] font-semibold tracking-tight">Shared with Me</h2>
+              <h2 className="text-[22px] font-semibold tracking-tight">Team Notebooks</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {sharedNotebooks.map((nb) => (
+              {teamNotebooks.map((nb) => (
                 <NotebookCard key={nb.id} notebook={nb} />
               ))}
+              <CreateNotebookCard onClick={() => setShowCreateTeam(true)} label="Create team notebook" />
             </div>
           </section>
         )}
       </main>
 
       <CreateNotebookModal open={showCreate} onClose={() => setShowCreate(false)} />
+      <CreateNotebookModal open={showCreateTeam} onClose={() => setShowCreateTeam(false)} defaultIsTeam />
     </div>
   );
 }

@@ -67,7 +67,7 @@ class ApiClient {
     return this.request("/notebooks");
   }
 
-  async createNotebook(data: { name: string; emoji?: string; cover_color?: string }): Promise<Notebook> {
+  async createNotebook(data: { name: string; emoji?: string; cover_color?: string; is_team?: boolean }): Promise<Notebook> {
     return this.request("/notebooks", {
       method: "POST",
       body: JSON.stringify(data),

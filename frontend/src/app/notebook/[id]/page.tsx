@@ -92,7 +92,7 @@ export default function NotebookPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Sources Panel */}
         <aside className={`${mobileTab === 'sources' ? 'flex flex-col' : 'hidden'} lg:flex lg:flex-col w-full lg:w-64 border-r border-[var(--border-light)] bg-[var(--card-bg)] p-4 overflow-y-auto shrink-0`}>
-          <SourcesPanel notebookId={params.id as string} userRole={notebook.user_role} />
+          <SourcesPanel notebookId={params.id as string} userRole={notebook.user_role} isShared={notebook.is_shared} />
         </aside>
 
         {/* Chat Panel */}
