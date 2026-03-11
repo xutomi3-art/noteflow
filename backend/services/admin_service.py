@@ -157,6 +157,9 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     except Exception as e:
         services["redis"] = {"status": "error", "latency_ms": 0, "message": str(e)}
 
+    # Presenton (Slide Deck Generator)
+    services["presenton"] = await _check_http(f"{settings.PRESENTON_BASE_URL}/")
+
     # DeepSeek LLM API
     if settings.LLM_API_KEY:
         services["deepseek"] = await _check_http(

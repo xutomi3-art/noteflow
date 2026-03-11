@@ -37,6 +37,8 @@ import { useSharingStore } from "@/stores/sharing-store";
 import { api } from "@/services/api";
 import type { Notebook, Source, ChatMessage } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
+import PptConfigModal from "@/components/PptConfigModal";
+import type { PptConfig } from "@/components/PptConfigModal";
 
 /* ─── helpers ─── */
 
@@ -134,6 +136,7 @@ export default function NotebookPage() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [podcastUrl, setPodcastUrl] = useState<string | null>(null);
   const [pptLoading, setPptLoading] = useState(false);
+  const [pptModalOpen, setPptModalOpen] = useState(false);
   const [podcastLoading, setPodcastLoading] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -272,14 +275,8 @@ export default function NotebookPage() {
     async (action: string) => {
       if (!id) return;
       if (action === "ppt") {
-        setPptLoading(true);
-        try {
-          await api.downloadPPT(id);
-        } catch (err) {
-          console.error("PPT download failed:", err);
-        } finally {
-          setPptLoading(false);
-        }
+        setPptModalOpen(true);
+        return;
       } else if (action === "podcast") {
         setPodcastLoading(true);
         try {
@@ -1141,6 +1138,23 @@ export default function NotebookPage() {
           if (id) {
             api.getNotebook(id).then(setNotebook).catch(() => {});
             fetchMembers(id);
+          }
+        }}
+      />
+      <PptConfigModal
+        isOpen={pptModalOpen}
+        onClose={() => setPptModalOpen(false)}
+        isGenerating={pptLoading}
+        onGenerate={async (config: PptConfig) => {
+          if (!id) return;
+          setPptLoading(true);
+          try {
+            await api.downloadPPT(id, config);
+            setPptModalOpen(false);
+          } catch (err) {
+            console.error("PPT generation failed:", err);
+          } finally {
+            setPptLoading(false);
           }
         }}
       />

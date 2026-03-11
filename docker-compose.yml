@@ -44,6 +44,7 @@ services:
       - SMTP_FROM=${SMTP_FROM:-}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-test@noteflow.dev}
+      - PRESENTON_BASE_URL=http://presenton:80
     volumes:
       - uploads:/app/uploads
       - ./backend:/app/backend
@@ -55,6 +56,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
+
+  presenton:
+    image: ghcr.io/presenton/presenton:latest
+    environment:
+      - LLM=custom
+      - CUSTOM_LLM_URL=https://api.deepseek.com/v1
+      - CUSTOM_LLM_API_KEY=${LLM_API_KEY:-sk-d6a264ea0ee54726b5927fe05a1d7d04}
+      - CUSTOM_MODEL=deepseek-chat
+      - TOOL_CALLS=false
+      - DISABLE_THINKING=true
+      - DISABLE_IMAGE_GENERATION=true
+      - DISABLE_ANONYMOUS_TELEMETRY=true
+      - CAN_CHANGE_KEYS=false
+    volumes:
+      - presenton_data:/app_data
     restart: unless-stopped
 
   postgres:
@@ -79,3 +96,4 @@ networks:
 volumes:
   pgdata:
   uploads:
+  presenton_data:

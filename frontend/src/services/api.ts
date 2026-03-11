@@ -354,16 +354,26 @@ class ApiClient {
     return URL.createObjectURL(blob);
   }
 
-  async downloadPPT(notebookId: string): Promise<void> {
+  async downloadPPT(notebookId: string, config?: {
+    n_slides?: number;
+    template?: string;
+    tone?: string;
+    verbosity?: string;
+    language?: string;
+  }): Promise<void> {
     const headers: Record<string, string> = {};
     if (this.accessToken) {
       headers["Authorization"] = `Bearer ${this.accessToken}`;
+    }
+    if (config) {
+      headers["Content-Type"] = "application/json";
     }
 
     const response = await fetch(`${API_BASE}/notebooks/${notebookId}/studio/ppt`, {
       method: "POST",
       headers,
       credentials: "include",
+      body: config ? JSON.stringify(config) : undefined,
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({ detail: "Unknown error" }));

@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # MinerU
     MINERU_BASE_URL: str = "http://mineru:8010"
 
+    # Presenton
+    PRESENTON_BASE_URL: str = "http://presenton:80"
+
     # File Storage
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE_MB: int = 50

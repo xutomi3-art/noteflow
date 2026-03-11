@@ -8,6 +8,7 @@ const SERVICE_LABELS: Record<string, string> = {
   elasticsearch: 'Elasticsearch',
   redis: 'Redis',
   mineru: 'MinerU',
+  presenton: 'Presenton',
   deepseek: 'DeepSeek',
   qwen: 'Qwen',
 };
