@@ -10,7 +10,7 @@ interface PdfViewerState {
 }
 
 interface StudioState {
-  activeTab: "summary" | "faq" | "study_guide" | "ppt" | "mindmap" | "podcast" | "notes" | null;
+  activeTab: "summary" | "faq" | "study_guide" | "ppt" | "mindmap" | "podcast" | "action_items" | "notes" | null;
   content: Record<string, string>;
   isGenerating: Record<string, boolean>;
   notes: SavedNote[];

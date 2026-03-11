@@ -52,6 +52,16 @@ Write in the same language as the documents.
 
 DOCUMENTS:
 {context}""",
+    "action_items": """Based on the following document contents, extract all action items, tasks, to-dos, next steps, and follow-up items. For each action item, include:
+- The specific task or action required
+- Who is responsible (if mentioned)
+- Deadline or timeline (if mentioned)
+- Priority level (High/Medium/Low) based on context
+
+Group related action items together under clear category headers. Write in the same language as the documents.
+
+DOCUMENTS:
+{context}""",
     "mindmap": """Generate a mind map JSON structure from the source documents.
 Return ONLY valid JSON in this exact format:
 {{

@@ -27,6 +27,7 @@ import {
   LogOut,
   Brain,
   GripVertical,
+  ListChecks,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -954,6 +955,20 @@ export default function NotebookPage() {
                 )}
                 <div className="text-[11px] font-bold text-purple-900">Podcast</div>
               </button>
+
+              {/* Action Items */}
+              <button
+                onClick={() => handleStudioAction("action_items")}
+                disabled={isGenerating.action_items}
+                className="bg-[#fef9c3] hover:bg-yellow-100 border border-yellow-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+              >
+                {isGenerating.action_items ? (
+                  <Loader2 className="w-4 h-4 text-yellow-600 mb-2 animate-spin" />
+                ) : (
+                  <ListChecks className="w-4 h-4 text-yellow-600 mb-2" />
+                )}
+                <div className="text-[11px] font-bold text-yellow-900">Action Items</div>
+              </button>
             </div>
 
             {/* PDF / Source Viewer */}
@@ -985,7 +1000,7 @@ export default function NotebookPage() {
             )}
 
             {/* Generated Content Display */}
-            {(studioContent.summary || studioContent.faq || studioContent.mindmap) && (
+            {(studioContent.summary || studioContent.faq || studioContent.mindmap || studioContent.action_items) && (
               <div className="mb-6 space-y-4">
                 {studioContent.summary && (
                   <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
@@ -1011,6 +1026,15 @@ export default function NotebookPage() {
                     <div
                       className="text-[13px] text-slate-700 leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: renderContent(studioContent.mindmap) }}
+                    />
+                  </div>
+                )}
+                {studioContent.action_items && (
+                  <div className="p-3 bg-yellow-50 rounded-xl border border-yellow-100">
+                    <h4 className="text-[11px] font-bold text-yellow-600 mb-2">ACTION ITEMS</h4>
+                    <div
+                      className="text-[13px] text-slate-700 leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: renderContent(studioContent.action_items) }}
                     />
                   </div>
                 )}
