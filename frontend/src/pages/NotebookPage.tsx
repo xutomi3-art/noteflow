@@ -32,6 +32,7 @@ import { useSourceStore } from "@/stores/source-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useStudioStore } from "@/stores/studio-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useSharingStore } from "@/stores/sharing-store";
 import { api } from "@/services/api";
 import type { Notebook, Source, ChatMessage } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
@@ -157,6 +158,7 @@ export default function NotebookPage() {
     closePdf,
     reset: resetStudio,
   } = useStudioStore();
+  const { members, fetchMembers, removeMember } = useSharingStore();
 
   // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -173,7 +175,10 @@ export default function NotebookPage() {
   useEffect(() => {
     if (!id) return;
 
-    api.getNotebook(id).then(setNotebook).catch(() => {});
+    api.getNotebook(id).then((nb) => {
+      setNotebook(nb);
+      if (nb.is_shared) fetchMembers(id);
+    }).catch(() => {});
     fetchSources(id);
     subscribeStatus(id);
     fetchHistory(id);
@@ -420,12 +425,14 @@ export default function NotebookPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsShareModalOpen(true)}
-            className="flex items-center gap-2 bg-[#5b8c15] text-white px-4 py-1.5 rounded-full text-[13px] font-medium hover:bg-[#4a7311] transition-colors shadow-sm"
-          >
-            <Users className="w-3.5 h-3.5" /> Share with Team
-          </button>
+          {notebook && !notebook.is_shared && (
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              className="flex items-center gap-2 bg-[#5b8c15] text-white px-4 py-1.5 rounded-full text-[13px] font-medium hover:bg-[#4a7311] transition-colors shadow-sm"
+            >
+              <Users className="w-3.5 h-3.5" /> Share with Team
+            </button>
+          )}
           <div className="text-right">
             <div className="font-semibold text-sm">{user?.name || "User"}</div>
             <div className="text-xs text-slate-500">{user?.email}</div>
@@ -564,6 +571,48 @@ export default function NotebookPage() {
               ))}
             </div>
           </div>
+
+          {/* Team Members (shown for team notebooks) */}
+          {notebook?.is_shared && (
+            <div className="border-t border-slate-100 px-4 py-3 shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Team ({members.length})
+                </h3>
+                <button
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="text-[12px] text-[#5b8c15] hover:text-[#4a7311] font-medium transition-colors flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Invite
+                </button>
+              </div>
+              <div className="space-y-1 max-h-[120px] overflow-y-auto">
+                {members.map((member) => (
+                  <div
+                    key={member.user_id}
+                    className="flex items-center gap-2 py-1 group"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-[#5b8c15] text-white flex items-center justify-center text-[10px] font-semibold shrink-0">
+                      {(member.name || member.email || "U").charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-[12px] text-slate-700 flex-1 truncate">
+                      {member.name || member.email}
+                    </span>
+                    <span className="text-[10px] text-slate-400 capitalize">{member.role}</span>
+                    {member.role !== "owner" && notebook?.user_role === "owner" && (
+                      <button
+                        onClick={() => removeMember(id || "", member.user_id)}
+                        className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Left Drag Handle */}
@@ -1055,7 +1104,17 @@ export default function NotebookPage() {
           </div>
         </section>
       </main>
-      <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} notebookId={id || ""} />
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        notebookId={id || ""}
+        onMemberAdded={() => {
+          if (id) {
+            api.getNotebook(id).then(setNotebook).catch(() => {});
+            fetchMembers(id);
+          }
+        }}
+      />
     </div>
   );
 }
