@@ -31,6 +31,11 @@ router = APIRouter(prefix="/notebooks/{notebook_id}/studio", tags=["studio"])
 PROMPTS = {
     "summary": """Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points. Write in the same language as the documents.
 
+Formatting rules:
+- Use ## for main section headers and ### for sub-sections. Do NOT use #### or deeper headings.
+- Use bullet points (- ) for details under each section.
+- Keep the structure flat and readable.
+
 DOCUMENTS:
 {context}""",
     "faq": """Based on the following document contents, generate a list of 8-10 frequently asked questions with detailed answers. Each Q&A should cover an important concept from the documents. Format as:

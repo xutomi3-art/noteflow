@@ -77,7 +77,9 @@ function statusLabel(status: Source["status"]): string {
 function renderContent(text: string): string {
   const lines = text.split("\n");
   const htmlLines = lines.map((line) => {
-    // Headings
+    // Headings (match deeper levels first so #### doesn't match ###)
+    if (/^#{4,} (.+)/.test(line))
+      return `<h5 class="font-semibold text-[13px] text-slate-700 mt-2 mb-1">${line.replace(/^#{4,} /, "")}</h5>`;
     if (/^### (.+)/.test(line))
       return `<h4 class="font-semibold text-sm text-slate-800 mt-3 mb-1">${line.replace(/^### /, "")}</h4>`;
     if (/^## (.+)/.test(line))
