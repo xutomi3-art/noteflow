@@ -59,7 +59,10 @@ class QwenClient:
             async for chunk in response:
                 if chunk.choices:
                     delta = chunk.choices[0].delta
-                    # Skip reasoning_content from R1 — only yield final content
+                    # Yield reasoning_content from R1 with prefix so caller can distinguish
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if reasoning:
+                        yield f"__REASONING__:{reasoning}"
                     if delta.content:
                         yield delta.content
         except Exception as e:

@@ -8,6 +8,8 @@ interface ChatState {
   streamingContent: string;
   isLoading: boolean;
   thinking: boolean;
+  reasoningContent: string;
+  isThinkingPhase: boolean;
 
   setThinking: (value: boolean) => void;
   fetchHistory: (notebookId: string) => Promise<void>;
@@ -22,6 +24,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamingContent: "",
   isLoading: false,
   thinking: false,
+  reasoningContent: "",
+  isThinkingPhase: false,
 
   setThinking: (value: boolean) => set({ thinking: value }),
 
@@ -51,6 +55,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...state.messages, tempUserMsg],
       isStreaming: true,
       streamingContent: "",
+      reasoningContent: "",
+      isThinkingPhase: false,
     }));
 
     await api.sendChatMessage(
@@ -61,6 +67,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       (token: string) => {
         set(state => ({
           streamingContent: state.streamingContent + token,
+          isThinkingPhase: false,
         }));
       },
       // onDone
@@ -82,7 +89,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           streamingContent: "",
         }));
       },
-      // onError
+      // onError (6th param)
       (error: string) => {
         const errorMsg: ChatMessage = {
           id: `error-${Date.now()}`,
@@ -101,6 +108,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
       },
       thinking,
+      // onThinkingStart
+      () => {
+        set({ isThinkingPhase: true });
+      },
+      // onReasoning
+      (content: string) => {
+        set(state => ({
+          reasoningContent: state.reasoningContent + content,
+        }));
+      },
     );
   },
 
@@ -110,6 +127,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   reset: () => {
-    set({ messages: [], isStreaming: false, streamingContent: "", isLoading: false });
+    set({ messages: [], isStreaming: false, streamingContent: "", isLoading: false, reasoningContent: "", isThinkingPhase: false });
   },
 }));

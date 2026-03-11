@@ -266,9 +266,15 @@ The uploaded documents do not contain information relevant to this question. Ple
 
     # 4. Stream response from LLM
     full_response = ""
+    if thinking:
+        yield f"data: {json.dumps({'type': 'thinking_start'})}\n\n"
     async for token in qwen_client.stream_chat(messages, thinking=thinking):
-        full_response += token
-        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+        if token.startswith("__REASONING__:"):
+            reasoning_text = token[len("__REASONING__:"):]
+            yield f"data: {json.dumps({'type': 'reasoning', 'content': reasoning_text})}\n\n"
+        else:
+            full_response += token
+            yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
     # 5. Parse citation references from response
     used_indices = set(int(m) for m in re.findall(r'\[(\d+)\]', full_response))

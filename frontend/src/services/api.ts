@@ -187,6 +187,8 @@ class ApiClient {
     onDone: (data: { id: string; citations: Citation[] }) => void,
     onError: (error: string) => void,
     thinking: boolean = false,
+    onThinkingStart?: () => void,
+    onReasoning?: (content: string) => void,
   ): Promise<void> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -230,7 +232,11 @@ class ApiClient {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.type === "token") {
+              if (data.type === "thinking_start") {
+                onThinkingStart?.();
+              } else if (data.type === "reasoning") {
+                onReasoning?.(data.content);
+              } else if (data.type === "token") {
                 onToken(data.content);
               } else if (data.type === "done") {
                 onDone({ id: data.id, citations: data.citations || [] });

@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
   LogOut,
   Zap,
+  GripVertical,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -33,6 +34,7 @@ import { useStudioStore } from "@/stores/studio-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/services/api";
 import type { Notebook, Source, ChatMessage } from "@/types/api";
+import ShareModal from "@/components/sharing/ShareModal";
 
 /* ─── helpers ─── */
 
@@ -130,12 +132,18 @@ export default function NotebookPage() {
   const [pptLoading, setPptLoading] = useState(false);
   const [podcastLoading, setPodcastLoading] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [leftWidth, setLeftWidth] = useState(300);
+  const [rightWidth, setRightWidth] = useState(340);
+  const isDraggingRef = useRef<"left" | "right" | null>(null);
+  const dragStartXRef = useRef(0);
+  const dragStartWidthRef = useRef(0);
 
   // Stores
   const { user, logout } = useAuthStore();
   const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup } =
     useSourceStore();
-  const { messages, isStreaming, streamingContent, thinking, setThinking, fetchHistory, sendMessage, reset: resetChat } = useChatStore();
+  const { messages, isStreaming, streamingContent, thinking, setThinking, reasoningContent, isThinkingPhase, fetchHistory, sendMessage, reset: resetChat } = useChatStore();
   const {
     content: studioContent,
     isGenerating,
@@ -182,7 +190,7 @@ export default function NotebookPage() {
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingContent]);
+  }, [messages, streamingContent, reasoningContent]);
 
   // Handlers
   const handleSend = useCallback(() => {
@@ -294,6 +302,61 @@ export default function NotebookPage() {
     navigate("/login");
   }, [logout, navigate]);
 
+  /** Handle Ctrl+V paste image in chat */
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent) => {
+      if (!id) return;
+      const items = e.clipboardData.items;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            const ext = file.type.split("/")[1] || "png";
+            const namedFile = new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type });
+            await uploadSource(id, namedFile);
+          }
+          return;
+        }
+      }
+    },
+    [id, uploadSource],
+  );
+
+  /** Resizable panel drag */
+  const handleDragStart = useCallback(
+    (panel: "left" | "right", e: React.MouseEvent) => {
+      e.preventDefault();
+      isDraggingRef.current = panel;
+      dragStartXRef.current = e.clientX;
+      dragStartWidthRef.current = panel === "left" ? leftWidth : rightWidth;
+
+      const handleMouseMove = (ev: MouseEvent) => {
+        if (!isDraggingRef.current) return;
+        const delta = ev.clientX - dragStartXRef.current;
+        if (isDraggingRef.current === "left") {
+          setLeftWidth(Math.max(200, Math.min(500, dragStartWidthRef.current + delta)));
+        } else {
+          setRightWidth(Math.max(240, Math.min(600, dragStartWidthRef.current - delta)));
+        }
+      };
+
+      const handleMouseUp = () => {
+        isDraggingRef.current = null;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [leftWidth, rightWidth],
+  );
+
   /** Handle citation badge click — find citation data and open source viewer */
   const handleCitationClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -354,7 +417,10 @@ export default function NotebookPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button className="flex items-center gap-2 bg-[#5b8c15] text-white px-4 py-1.5 rounded-full text-[13px] font-medium hover:bg-[#4a7311] transition-colors shadow-sm">
+          <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="flex items-center gap-2 bg-[#5b8c15] text-white px-4 py-1.5 rounded-full text-[13px] font-medium hover:bg-[#4a7311] transition-colors shadow-sm"
+          >
             <Users className="w-3.5 h-3.5" /> Share with Team
           </button>
           <div className="text-right">
@@ -390,7 +456,8 @@ export default function NotebookPage() {
       <main className="flex-1 flex overflow-hidden px-4 pb-4 gap-0">
         {/* Left Panel: Sources */}
         <section
-          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm transition-all duration-300 ${isLeftCollapsed ? "w-0 border-none" : "w-[300px]"}`}
+          style={isLeftCollapsed ? undefined : { width: leftWidth }}
+          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm transition-all duration-300 ${isLeftCollapsed ? "w-0 border-none" : ""}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Sources</h2>
@@ -495,6 +562,16 @@ export default function NotebookPage() {
             </div>
           </div>
         </section>
+
+        {/* Left Drag Handle */}
+        {!isLeftCollapsed && (
+          <div
+            className="w-2 shrink-0 cursor-col-resize flex items-center justify-center group hover:bg-slate-100/50 transition-colors rounded"
+            onMouseDown={(e) => handleDragStart("left", e)}
+          >
+            <div className="w-0.5 h-8 bg-slate-200 group-hover:bg-slate-400 rounded-full transition-colors" />
+          </div>
+        )}
 
         {/* Left Toggle */}
         {isLeftCollapsed && (
@@ -607,6 +684,22 @@ export default function NotebookPage() {
                   </div>
                 ))}
 
+                {/* Thinking indicator */}
+                {isStreaming && isThinkingPhase && (
+                  <div className="flex justify-start">
+                    <div className="bg-purple-50 border border-purple-100 rounded-2xl px-5 py-3 text-[14px] text-purple-700">
+                      <div className="flex items-center gap-2 mb-2 font-medium">
+                        <Zap className="w-4 h-4" /> Thinking...
+                      </div>
+                      {reasoningContent && (
+                        <div className="text-[12px] text-purple-500/70 max-h-32 overflow-y-auto leading-relaxed">
+                          {reasoningContent}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Streaming bubble */}
                 {isStreaming && streamingContent && (
                   <div className="flex justify-start">
@@ -656,6 +749,7 @@ export default function NotebookPage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
                   disabled={isStreaming || hasProcessingSelected || readySources.length === 0}
                 />
                 <div className="flex items-center gap-2 pr-1">
@@ -703,9 +797,20 @@ export default function NotebookPage() {
           </div>
         )}
 
+        {/* Right Drag Handle */}
+        {!isRightCollapsed && (
+          <div
+            className="w-2 shrink-0 cursor-col-resize flex items-center justify-center group hover:bg-slate-100/50 transition-colors rounded"
+            onMouseDown={(e) => handleDragStart("right", e)}
+          >
+            <div className="w-0.5 h-8 bg-slate-200 group-hover:bg-slate-400 rounded-full transition-colors" />
+          </div>
+        )}
+
         {/* Right Panel: Studio */}
         <section
-          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm relative transition-all duration-300 ${isRightCollapsed ? "w-0 border-none" : "w-[340px]"}`}
+          style={isRightCollapsed ? undefined : { width: rightWidth }}
+          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm relative transition-all duration-300 ${isRightCollapsed ? "w-0 border-none" : ""}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Studio</h2>
@@ -948,6 +1053,7 @@ export default function NotebookPage() {
           </div>
         </section>
       </main>
+      <ShareModal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} notebookId={id || ""} />
     </div>
   );
 }

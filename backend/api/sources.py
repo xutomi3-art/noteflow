@@ -217,11 +217,26 @@ async def get_source_file(
 
     # For PPTX/DOCX: serve the converted PDF if available
     serve_path = source.storage_url
-    media_type = 'application/pdf'
     if source.file_type in ('pptx', 'docx'):
         pdf_path = os.path.splitext(source.storage_url)[0] + '.pdf'
         if os.path.exists(pdf_path):
             serve_path = pdf_path
+
+    # Determine media_type from the actual file being served
+    ext = os.path.splitext(serve_path)[1].lower()
+    mime_map = {
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain; charset=utf-8',
+        '.md': 'text/plain; charset=utf-8',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+        '.gif': 'image/gif',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.csv': 'text/csv; charset=utf-8',
+    }
+    media_type = mime_map.get(ext, 'application/octet-stream')
 
     from urllib.parse import quote
     encoded_name = quote(source.filename)
