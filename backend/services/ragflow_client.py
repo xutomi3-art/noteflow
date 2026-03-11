@@ -116,21 +116,30 @@ class RAGFlowClient:
             return None
 
     async def retrieve(
-        self, dataset_ids: list[str], question: str, top_k: int = 6
+        self, dataset_ids: list[str], question: str, top_k: int = 6,
+        document_ids: list[str] | None = None,
     ) -> list[dict]:
-        """Retrieve relevant chunks from RAGFlow datasets."""
+        """Retrieve relevant chunks from RAGFlow datasets.
+
+        Args:
+            document_ids: Optional list of RAGFlow document IDs to scope
+                retrieval to specific documents within the datasets.
+        """
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+                payload: dict = {
+                    "question": question,
+                    "dataset_ids": dataset_ids,
+                    "similarity_threshold": 0.2,
+                    "vector_similarity_weight": 0.7,
+                    "top_k": top_k,
+                }
+                if document_ids:
+                    payload["document_ids"] = document_ids
                 resp = await client.post(
                     f"{self.base_url}/api/v1/retrieval",
                     headers=self._headers,
-                    json={
-                        "question": question,
-                        "dataset_ids": dataset_ids,
-                        "similarity_threshold": 0.2,
-                        "vector_similarity_weight": 0.7,
-                        "top_k": top_k,
-                    },
+                    json=payload,
                 )
                 resp.raise_for_status()
                 data = resp.json()

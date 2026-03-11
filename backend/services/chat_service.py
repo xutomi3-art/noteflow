@@ -109,8 +109,13 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
 
 async def _get_source_dataset_ids(
     db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None
-) -> tuple[list[str], dict]:
-    """Get RAGFlow dataset IDs and source info for retrieval."""
+) -> tuple[list[str], list[str], dict]:
+    """Get RAGFlow dataset IDs, document IDs, and source info for retrieval.
+
+    Returns:
+        (dataset_ids, document_ids, sources_map) where document_ids are the
+        RAGFlow doc IDs used to scope retrieval to selected sources only.
+    """
     query = select(Source).where(
         Source.notebook_id == notebook_id,
         Source.status == "ready",
@@ -122,12 +127,13 @@ async def _get_source_dataset_ids(
     sources = list(result.scalars().all())
 
     dataset_ids = list(set(s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id))
+    document_ids = [s.ragflow_doc_id for s in sources if s.ragflow_doc_id]
     sources_map = {
         str(s.id): {"filename": s.filename, "file_type": s.file_type}
         for s in sources
     }
 
-    return dataset_ids, sources_map
+    return dataset_ids, document_ids, sources_map
 
 
 async def stream_chat(
@@ -155,7 +161,7 @@ async def stream_chat(
     yield f"data: {json.dumps({'type': 'user_message', 'id': str(user_msg.id)})}\n\n"
 
     # 2. Retrieve from RAGFlow
-    dataset_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
+    dataset_ids, document_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
     # Get Excel sources with duckdb paths (filtered by source_ids if provided)
     excel_query = select(Source).where(
@@ -239,7 +245,10 @@ Rules:
 
     chunks: list[dict] = []
     if dataset_ids:
-        chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=6)
+        # When source_ids are specified, pass document_ids to scope retrieval
+        # to only the selected sources within the shared notebook dataset
+        filter_doc_ids = document_ids if source_ids and document_ids else None
+        chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=6, document_ids=filter_doc_ids)
 
     context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
