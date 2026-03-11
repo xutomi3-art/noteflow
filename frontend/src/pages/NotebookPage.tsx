@@ -53,16 +53,33 @@ function statusLabel(status: Source["status"]): string {
 
 /** Render markdown-ish content with citation badges [1] [2] */
 function renderContent(text: string): string {
-  let html = text
+  const lines = text.split("\n");
+  const htmlLines = lines.map((line) => {
+    // Headings
+    if (/^### (.+)/.test(line))
+      return `<h4 class="font-semibold text-sm text-slate-800 mt-3 mb-1">${line.replace(/^### /, "")}</h4>`;
+    if (/^## (.+)/.test(line))
+      return `<h3 class="font-semibold text-base text-slate-900 mt-4 mb-1">${line.replace(/^## /, "")}</h3>`;
+    if (/^# (.+)/.test(line))
+      return `<h2 class="font-bold text-lg text-slate-900 mt-4 mb-2">${line.replace(/^# /, "")}</h2>`;
+    // List items
+    if (/^[-*] (.+)/.test(line))
+      return `<li class="ml-4 list-disc text-sm">${line.replace(/^[-*] /, "")}</li>`;
+    if (/^\d+\. (.+)/.test(line))
+      return `<li class="ml-4 list-decimal text-sm">${line.replace(/^\d+\. /, "")}</li>`;
+    // Empty line
+    if (line.trim() === "") return "<br />";
+    // Normal text
+    return `<p class="text-sm leading-relaxed">${line}</p>`;
+  });
+  let html = htmlLines.join("")
     // Bold
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     // Inline citations [n]
     .replace(
       /\[(\d+)\]/g,
-      '<span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-[9px] text-slate-500 ml-0.5 cursor-pointer hover:bg-slate-200">$1</span>',
-    )
-    // Line breaks
-    .replace(/\n/g, "<br />");
+      '<span class="citation-badge inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-[9px] text-slate-500 ml-0.5 cursor-pointer hover:bg-slate-200 hover:ring-1 hover:ring-slate-300" data-citation-index="$1">$1</span>',
+    );
   return html;
 }
 
@@ -103,9 +120,12 @@ export default function NotebookPage() {
     content: studioContent,
     isGenerating,
     notes,
+    pdfViewer,
     generateContent,
     fetchNotes,
     deleteNote,
+    openPdf,
+    closePdf,
     reset: resetStudio,
   } = useStudioStore();
 
@@ -249,6 +269,42 @@ export default function NotebookPage() {
     [id, deleteSource],
   );
 
+  /** Handle citation badge click — find citation data and open source viewer */
+  const handleCitationClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      const badge = target.closest(".citation-badge") as HTMLElement | null;
+      if (!badge) return;
+
+      const citationIndex = parseInt(badge.dataset.citationIndex || "", 10);
+      if (isNaN(citationIndex)) return;
+
+      // Find the message that contains this citation
+      const msgEl = badge.closest("[data-message-id]") as HTMLElement | null;
+      const msgId = msgEl?.dataset.messageId;
+      const msg = messages.find((m) => m.id === msgId);
+      if (!msg) return;
+
+      const citation = msg.citations.find((c) => c.index === citationIndex);
+      if (!citation) return;
+
+      // Open the source file viewer
+      const fileType = citation.file_type?.toLowerCase() || "";
+      const page = citation.location?.page || citation.location?.slide || 1;
+
+      if (["pdf", "pptx", "docx"].includes(fileType)) {
+        // Open PDF viewer in Studio panel (PPTX/DOCX are converted to PDF by backend)
+        openPdf(citation.source_id, citation.filename, page);
+        setIsRightCollapsed(false);
+      } else {
+        // For text files, show the excerpt in a simple way — open PDF viewer which will display the excerpt
+        openPdf(citation.source_id, citation.filename, page);
+        setIsRightCollapsed(false);
+      }
+    },
+    [messages, openPdf],
+  );
+
   return (
     <div className="h-screen flex flex-col bg-[#f0f2f5] font-sans text-slate-900 overflow-hidden select-none">
       {/* Header */}
@@ -322,8 +378,9 @@ export default function NotebookPage() {
               <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV</span>
             </label>
 
-            <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-[11px] font-medium text-slate-500">Select all sources</span>
+            <div className="flex items-center gap-3 p-2 mb-1">
+              <span className="text-[11px] font-medium text-slate-500 flex-1">Select all sources</span>
+              <div className="w-[18px] shrink-0" />
               <input
                 type="checkbox"
                 className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 cursor-pointer shrink-0"
@@ -455,9 +512,9 @@ export default function NotebookPage() {
               )}
 
               {/* Chat History */}
-              <div className="space-y-8">
+              <div className="space-y-8" onClick={handleCitationClick}>
                 {messages.map((msg) => (
-                  <div key={msg.id}>
+                  <div key={msg.id} data-message-id={msg.id}>
                     {msg.role === "user" ? (
                       <div className="flex justify-end">
                         <div className="bg-[#eef1f5] text-slate-800 px-5 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-[14px]">
@@ -665,6 +722,34 @@ export default function NotebookPage() {
                 <div className="text-[11px] font-bold text-purple-900">Podcast</div>
               </button>
             </div>
+
+            {/* PDF / Source Viewer */}
+            {pdfViewer && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[11px] font-bold text-slate-500 tracking-wider truncate flex-1">
+                    {pdfViewer.filename}
+                    {pdfViewer.page > 1 && (
+                      <span className="ml-1 text-slate-400">— Page {pdfViewer.page}</span>
+                    )}
+                  </h4>
+                  <button
+                    onClick={closePdf}
+                    className="text-slate-400 hover:text-slate-600 transition-colors ml-2 shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
+                  <iframe
+                    key={pdfViewer._seq}
+                    src={`/api/notebooks/${id}/sources/${pdfViewer.sourceId}/file?token=${api.getToken()}#page=${pdfViewer.page}`}
+                    className="w-full h-[500px] border-none"
+                    title={pdfViewer.filename}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Generated Content Display */}
             {(studioContent.summary || studioContent.faq || studioContent.mindmap) && (
