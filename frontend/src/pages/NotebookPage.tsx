@@ -135,6 +135,7 @@ export default function NotebookPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [leftWidth, setLeftWidth] = useState(300);
   const [rightWidth, setRightWidth] = useState(340);
+  const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef<"left" | "right" | null>(null);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(0);
@@ -328,6 +329,7 @@ export default function NotebookPage() {
     (panel: "left" | "right", e: React.MouseEvent) => {
       e.preventDefault();
       isDraggingRef.current = panel;
+      setIsDragging(true);
       dragStartXRef.current = e.clientX;
       dragStartWidthRef.current = panel === "left" ? leftWidth : rightWidth;
 
@@ -335,14 +337,15 @@ export default function NotebookPage() {
         if (!isDraggingRef.current) return;
         const delta = ev.clientX - dragStartXRef.current;
         if (isDraggingRef.current === "left") {
-          setLeftWidth(Math.max(200, Math.min(500, dragStartWidthRef.current + delta)));
+          setLeftWidth(Math.max(180, Math.min(600, dragStartWidthRef.current + delta)));
         } else {
-          setRightWidth(Math.max(240, Math.min(600, dragStartWidthRef.current - delta)));
+          setRightWidth(Math.max(200, Math.min(700, dragStartWidthRef.current - delta)));
         }
       };
 
       const handleMouseUp = () => {
         isDraggingRef.current = null;
+        setIsDragging(false);
         document.removeEventListener("mousemove", handleMouseMove);
         document.removeEventListener("mouseup", handleMouseUp);
         document.body.style.cursor = "";
@@ -379,7 +382,7 @@ export default function NotebookPage() {
       if (!msg) return;
 
       const citation = msg.citations.find((c) => c.index === citationIndex);
-      if (!citation) return;
+      if (!citation || !citation.source_id) return;
 
       // Open the source file viewer
       const fileType = citation.file_type?.toLowerCase() || "";
@@ -457,7 +460,7 @@ export default function NotebookPage() {
         {/* Left Panel: Sources */}
         <section
           style={isLeftCollapsed ? undefined : { width: leftWidth }}
-          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm transition-all duration-300 ${isLeftCollapsed ? "w-0 border-none" : ""}`}
+          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed ? "w-0 border-none" : ""}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Sources</h2>
@@ -586,7 +589,7 @@ export default function NotebookPage() {
         )}
 
         {/* Center Panel: Chat */}
-        <section className="flex-1 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shadow-sm relative">
+        <section className="flex-1 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shadow-sm relative" onPaste={handlePaste}>
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-6 shrink-0">
             <h2 className="text-[13px] font-semibold text-slate-700">Chat</h2>
           </div>
@@ -749,7 +752,6 @@ export default function NotebookPage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  onPaste={handlePaste}
                   disabled={isStreaming || hasProcessingSelected || readySources.length === 0}
                 />
                 <div className="flex items-center gap-2 pr-1">
@@ -810,7 +812,7 @@ export default function NotebookPage() {
         {/* Right Panel: Studio */}
         <section
           style={isRightCollapsed ? undefined : { width: rightWidth }}
-          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm relative transition-all duration-300 ${isRightCollapsed ? "w-0 border-none" : ""}`}
+          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed ? "w-0 border-none" : ""}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Studio</h2>

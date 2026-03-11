@@ -61,11 +61,37 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
         doc_stem_clean = re.sub(r'\(\d+\)$', '', doc_stem).strip()
         for sid, sinfo in sources_map.items():
             sinfo_stem = sinfo["filename"].rsplit(".", 1)[0] if "." in sinfo["filename"] else sinfo["filename"]
-            if (sinfo_stem == doc_stem or sinfo_stem == doc_stem_clean
-                    or sinfo["filename"] in doc_name or doc_name in sinfo["filename"]):
+            if (sinfo_stem.lower() == doc_stem.lower()
+                    or sinfo_stem.lower() == doc_stem_clean.lower()
+                    or sinfo["filename"].lower() in doc_name.lower()
+                    or doc_name.lower() in sinfo["filename"].lower()):
                 source_id = sid
                 file_type = sinfo["file_type"]
                 break
+
+        # Fallback 1: match on version patterns like "20250228v9" or date patterns
+        if not source_id:
+            # Extract version-like patterns from doc_name (e.g., "20251121v1", "20250228v9")
+            doc_versions = set(re.findall(r'\d{8}v\d+', doc_name.lower()))
+            if doc_versions:
+                for sid, sinfo in sources_map.items():
+                    src_versions = set(re.findall(r'\d{8}v\d+', sinfo["filename"].lower()))
+                    if doc_versions & src_versions:
+                        source_id = sid
+                        file_type = sinfo["file_type"]
+                        logger.info("Version-pattern fallback: mapped '%s' → %s (%s)", doc_name, sinfo["filename"], sid)
+                        break
+
+        # Fallback 2: if only one source exists, assign it
+        if not source_id and len(sources_map) == 1:
+            sid, sinfo = next(iter(sources_map.items()))
+            source_id = sid
+            file_type = sinfo["file_type"]
+            logger.info("Single-source fallback: mapped '%s' → %s", doc_name, sid)
+
+        if not source_id:
+            logger.warning("Citation mapping failed: doc_name='%s', sources_map keys=%s",
+                          doc_name, {s: info["filename"] for s, info in sources_map.items()})
 
         context_parts.append(f"[{i}] (Source: {doc_name})\n{text}\n")
         citations.append({
