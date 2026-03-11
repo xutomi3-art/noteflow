@@ -302,15 +302,27 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
                     key={member.user_id}
                     className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors group"
                   >
-                    <div className="w-7 h-7 rounded-full bg-[#5b8c15] text-white flex items-center justify-center text-[12px] font-semibold shrink-0">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-semibold shrink-0 ${
+                      member.status === "pending"
+                        ? "bg-slate-200 text-slate-500"
+                        : "bg-[#5b8c15] text-white"
+                    }`}>
                       {(member.name || member.email || "U").charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-slate-800 truncate">
+                      <p className={`text-[13px] truncate ${
+                        member.status === "pending"
+                          ? "text-slate-400 italic"
+                          : "font-medium text-slate-800"
+                      }`}>
                         {member.name || member.email}
                       </p>
                     </div>
-                    <span className="text-[11px] text-slate-400 capitalize">{member.role}</span>
+                    {member.status === "pending" ? (
+                      <span className="text-[11px] text-amber-500 font-medium">Pending</span>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 capitalize">{member.role}</span>
+                    )}
                     <button
                       onClick={() => handleRemoveMember(member.user_id)}
                       className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
