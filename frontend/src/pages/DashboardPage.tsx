@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Files, Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield } from 'lucide-react';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { api } from '@/services/api';
@@ -179,9 +179,7 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-4 md:px-8 py-5">
         <div className="flex items-center gap-3">
-          <div className="bg-[#5b8c15] p-2 rounded-xl">
-            <Files className="w-6 h-6 text-white" />
-          </div>
+          <img src="/logo.png" alt="Noteflow" className="w-10 h-10 rounded-xl" />
           <span className="text-2xl font-bold tracking-tight">Noteflow</span>
         </div>
         <div className="flex items-center gap-4">

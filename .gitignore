@@ -46,6 +46,8 @@ test_bad_file.exe
 
 # Screenshots
 *.png
+!frontend/public/logo.png
+!frontend/public/favicon.png
 
 # MCP config
 .mcp.json

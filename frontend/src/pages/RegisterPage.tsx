@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Files } from 'lucide-react';
+
 import { useAuthStore } from '@/stores/auth-store';
 
 export default function RegisterPage() {
@@ -32,9 +32,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-[400px]">
         {/* Logo & Branding */}
         <div className="flex flex-col items-center mb-10">
-          <div className="w-14 h-14 rounded-2xl bg-[#5b8c15] flex items-center justify-center mb-4 shadow-sm">
-            <Files className="w-7 h-7 text-white" />
-          </div>
+          <img src="/logo.png" alt="Noteflow" className="w-14 h-14 rounded-2xl mb-4 shadow-sm" />
           <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Noteflow</h1>
           <p className="text-sm text-gray-500 mt-1">Create your account</p>
         </div>

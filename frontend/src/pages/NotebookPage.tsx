@@ -425,9 +425,7 @@ export default function NotebookPage() {
             onClick={() => navigate("/dashboard")}
             className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
           >
-            <div className="bg-[#5b8c15] p-1 rounded-md">
-              <Files className="w-4 h-4 text-white" />
-            </div>
+            <img src="/logo.png" alt="Noteflow" className="w-6 h-6 rounded-md" />
           </button>
           <span className="font-semibold text-[15px] text-slate-800 truncate max-w-[300px]">
             {notebook?.name || "Loading..."}
