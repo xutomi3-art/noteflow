@@ -407,9 +407,13 @@ export default function DashboardPage() {
               type="file"
               multiple
               accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif"
-              className="absolute w-0 h-0 opacity-0 overflow-hidden"
+              className="sr-only"
               onChange={(e) => {
-                handleFilesSelected(e.target.files);
+                const files = e.target.files;
+                if (files && files.length > 0) {
+                  const cloned = Array.from(files);
+                  setPendingFiles(prev => [...prev, ...cloned]);
+                }
                 e.target.value = '';
               }}
             />

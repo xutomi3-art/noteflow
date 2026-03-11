@@ -480,14 +480,14 @@ export default function NotebookPage() {
             </button>
           </div>
 
-          <div className="p-4 flex-1 overflow-y-auto">
+          <div className="p-4 flex-1 overflow-y-auto" onPaste={handlePaste}>
             <input
               id="notebook-file-input"
               ref={fileInputRef}
               type="file"
               multiple
               accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv,.jpg,.jpeg,.png,.webp,.gif"
-              className="absolute w-0 h-0 opacity-0 overflow-hidden"
+              className="sr-only"
               onChange={handleFileUpload}
             />
             <label
@@ -509,7 +509,8 @@ export default function NotebookPage() {
             >
               <Plus className="w-4 h-4 text-slate-400" />
               <span className="text-[13px] font-medium text-slate-600">Add sources</span>
-              <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV</span>
+              <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV, Image</span>
+              <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
             </label>
 
             <div className="flex items-center gap-3 p-2 mb-1">
