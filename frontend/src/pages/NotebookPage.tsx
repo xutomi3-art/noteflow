@@ -25,7 +25,7 @@ import {
   AlignLeft,
   Image as ImageIcon,
   LogOut,
-  Zap,
+  Brain,
   GripVertical,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
@@ -741,7 +741,7 @@ export default function NotebookPage() {
                   <div className="flex justify-start">
                     <div className="bg-purple-50 border border-purple-100 rounded-2xl px-5 py-3 text-[14px] text-purple-700">
                       <div className="flex items-center gap-2 mb-2 font-medium">
-                        <Zap className="w-4 h-4" /> Thinking...
+                        <Brain className="w-4 h-4" /> Thinking...
                       </div>
                       {reasoningContent && (
                         <div className="text-[12px] text-purple-500/70 max-h-32 overflow-y-auto leading-relaxed">
@@ -812,7 +812,7 @@ export default function NotebookPage() {
                         : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                     }`}
                   >
-                    <Zap className="w-3 h-3" />
+                    <Brain className="w-3 h-3" />
                     {thinking ? "Thinking" : "Think"}
                   </button>
                   <span className="text-[11px] text-slate-400 font-medium px-2">
@@ -830,7 +830,7 @@ export default function NotebookPage() {
                 </div>
               </div>
               <div className="text-center mt-3 text-[10px] text-slate-400">
-                Noteflow can be inaccurate; please double-check its responses.
+                AI can be inaccurate; please double-check its responses.
               </div>
             </div>
           </div>
