@@ -61,10 +61,23 @@ export default function DashboardPage() {
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const createMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchNotebooks();
   }, [fetchNotebooks]);
+
+  // Close create-menu dropdown when clicking outside
+  useEffect(() => {
+    if (!isCreateMenuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) {
+        setIsCreateMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isCreateMenuOpen]);
 
   const personalNotebooks = notebooks.filter(
     (nb) => nb.user_role === 'owner' && !nb.is_shared
@@ -220,12 +233,11 @@ export default function DashboardPage() {
         <section className="mb-16">
           <div className="flex items-center justify-between mb-6 relative">
             <h2 className="text-[28px] font-bold tracking-tight">Personal Notebooks</h2>
-            <div
-              className="relative"
-              onMouseEnter={() => setIsCreateMenuOpen(true)}
-              onMouseLeave={() => setIsCreateMenuOpen(false)}
-            >
-              <button className="flex items-center gap-2 bg-[#5b8c15] hover:bg-[#4a7311] text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm">
+            <div className="relative" ref={createMenuRef}>
+              <button
+                onClick={() => setIsCreateMenuOpen((prev) => !prev)}
+                className="flex items-center gap-2 bg-[#5b8c15] hover:bg-[#4a7311] text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm"
+              >
                 <Plus className="w-5 h-5" />
                 Create New
               </button>

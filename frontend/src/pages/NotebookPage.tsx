@@ -477,38 +477,42 @@ export default function NotebookPage() {
             </button>
           </div>
 
-          <div className="p-4 flex-1 overflow-y-auto" onPaste={handlePaste}>
-            <input
-              id="notebook-file-input"
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv,.jpg,.jpeg,.png,.webp,.gif"
-              className="sr-only"
-              onChange={handleFileUpload}
-            />
-            <label
-              htmlFor="notebook-file-input"
-              className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-4"
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (e.dataTransfer.files.length > 0) {
-                  const dt = new DataTransfer();
-                  Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
-                  if (fileInputRef.current) {
-                    fileInputRef.current.files = dt.files;
-                    fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
-                  }
-                }
-              }}
-            >
-              <Plus className="w-4 h-4 text-slate-400" />
-              <span className="text-[13px] font-medium text-slate-600">Add sources</span>
-              <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV, Image</span>
-              <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
-            </label>
+          <div className="p-4 flex-1 overflow-y-auto" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
+            {notebook?.user_role !== "viewer" && (
+              <>
+                <input
+                  id="notebook-file-input"
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv,.jpg,.jpeg,.png,.webp,.gif"
+                  className="sr-only"
+                  onChange={handleFileUpload}
+                />
+                <label
+                  htmlFor="notebook-file-input"
+                  className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-4"
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer.files.length > 0) {
+                      const dt = new DataTransfer();
+                      Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+                      if (fileInputRef.current) {
+                        fileInputRef.current.files = dt.files;
+                        fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+                      }
+                    }
+                  }}
+                >
+                  <Plus className="w-4 h-4 text-slate-400" />
+                  <span className="text-[13px] font-medium text-slate-600">Add sources</span>
+                  <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV, Image</span>
+                  <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
+                </label>
+              </>
+            )}
 
             <div className="flex items-center gap-3 p-2 mb-1">
               <span className="text-[11px] font-medium text-slate-500 flex-1">Select all sources</span>
@@ -554,12 +558,14 @@ export default function NotebookPage() {
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={(e) => handleDeleteSource(e, source.id)}
-                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-0.5 shrink-0"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  {notebook?.user_role !== "viewer" && (
+                    <button
+                      onClick={(e) => handleDeleteSource(e, source.id)}
+                      className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-0.5 shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                   <input
                     type="checkbox"
                     className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 pointer-events-none shrink-0"

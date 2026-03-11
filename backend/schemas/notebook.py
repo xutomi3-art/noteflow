@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class NotebookCreate(BaseModel):
@@ -9,11 +9,29 @@ class NotebookCreate(BaseModel):
     cover_color: str = "#4A90D9"
     is_team: bool = False
 
+    @field_validator('name')
+    @classmethod
+    def name_must_not_be_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError('Notebook name must not be empty or whitespace-only')
+        return stripped
+
 
 class NotebookUpdate(BaseModel):
     name: str | None = None
     emoji: str | None = None
     cover_color: str | None = None
+
+    @field_validator('name')
+    @classmethod
+    def name_must_not_be_blank(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError('Notebook name must not be empty or whitespace-only')
+        return stripped
 
 
 class NotebookResponse(BaseModel):
