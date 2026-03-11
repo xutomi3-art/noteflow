@@ -8,6 +8,11 @@ import RegisterPage from '@/pages/RegisterPage';
 import DashboardPage from '@/pages/DashboardPage';
 import NotebookPage from '@/pages/NotebookPage';
 import JoinPage from '@/pages/JoinPage';
+import AdminLayout from '@/components/admin/AdminLayout';
+import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
+import AdminUsersPage from '@/pages/admin/AdminUsersPage';
+import AdminLLMPage from '@/pages/admin/AdminLLMPage';
+import AdminSystemPage from '@/pages/admin/AdminSystemPage';
 import './index.css';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -23,6 +28,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AdminGuard({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+
+  if (!user?.is_admin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -66,6 +81,12 @@ function App() {
           <Route path="/join/:token" element={<AuthGuard><JoinPage /></AuthGuard>} />
           <Route path="/notebook/:id" element={<AuthGuard><NotebookPage /></AuthGuard>} />
           <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
+          <Route path="/admin" element={<AuthGuard><AdminGuard><AdminLayout /></AdminGuard></AuthGuard>}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="llm" element={<AdminLLMPage />} />
+            <Route path="system" element={<AdminSystemPage />} />
+          </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

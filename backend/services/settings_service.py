@@ -1,0 +1,109 @@
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.core.config import settings
+from backend.models.system_setting import SystemSetting
+
+# Keys that can be configured via admin panel
+CONFIGURABLE_KEYS = {
+    "llm_api_key", "llm_base_url", "llm_model",
+    "qwen_api_key",
+    "ragflow_api_key", "ragflow_base_url",
+    "max_file_size_mb",
+    "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
+    "alibaba_tts_appkey", "alibaba_tts_token",
+}
+
+# Keys that contain sensitive values — mask on read
+SENSITIVE_KEYS = {"llm_api_key", "qwen_api_key", "ragflow_api_key", "smtp_password", "alibaba_tts_token"}
+
+# Mapping from setting key to Settings attribute
+_ENV_MAP = {
+    "llm_api_key": "LLM_API_KEY",
+    "llm_base_url": "LLM_BASE_URL",
+    "llm_model": "LLM_MODEL",
+    "qwen_api_key": "QWEN_API_KEY",
+    "ragflow_api_key": "RAGFLOW_API_KEY",
+    "ragflow_base_url": "RAGFLOW_BASE_URL",
+    "max_file_size_mb": "MAX_FILE_SIZE_MB",
+    "smtp_host": "SMTP_HOST",
+    "smtp_port": "SMTP_PORT",
+    "smtp_user": "SMTP_USER",
+    "smtp_password": "SMTP_PASSWORD",
+    "smtp_from": "SMTP_FROM",
+    "alibaba_tts_appkey": "ALIBABA_TTS_APPKEY",
+    "alibaba_tts_token": "ALIBABA_TTS_TOKEN",
+}
+
+
+def _mask_value(key: str, value: str) -> str:
+    if key in SENSITIVE_KEYS and value and len(value) > 4:
+        return "****" + value[-4:]
+    return value
+
+
+def _get_env_value(key: str) -> str:
+    attr = _ENV_MAP.get(key)
+    if attr:
+        return str(getattr(settings, attr, ""))
+    return ""
+
+
+async def get_setting(db: AsyncSession, key: str) -> str:
+    """Get setting value: DB takes priority, fallback to env."""
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    row = result.scalar_one_or_none()
+    if row:
+        return row.value
+    return _get_env_value(key)
+
+
+async def set_setting(db: AsyncSession, key: str, value: str, user_id: uuid.UUID) -> None:
+    if key not in CONFIGURABLE_KEYS:
+        raise ValueError(f"Unknown setting key: {key}")
+
+    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.value = value
+        existing.updated_at = datetime.now(timezone.utc)
+        existing.updated_by = user_id
+    else:
+        db.add(SystemSetting(
+            key=key,
+            value=value,
+            updated_at=datetime.now(timezone.utc),
+            updated_by=user_id,
+        ))
+
+    await db.commit()
+
+
+async def get_all_settings(db: AsyncSession) -> list[dict]:
+    result = await db.execute(select(SystemSetting))
+    db_settings = {s.key: s for s in result.scalars().all()}
+
+    items = []
+    for key in sorted(CONFIGURABLE_KEYS):
+        if key in db_settings:
+            row = db_settings[key]
+            items.append({
+                "key": key,
+                "value": _mask_value(key, row.value),
+                "source": "db",
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            })
+        else:
+            env_val = _get_env_value(key)
+            items.append({
+                "key": key,
+                "value": _mask_value(key, env_val),
+                "source": "env",
+                "updated_at": None,
+            })
+
+    return items

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Files, Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2 } from 'lucide-react';
+import { Files, Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { api } from '@/services/api';
@@ -191,6 +191,15 @@ export default function DashboardPage() {
             {isProfileMenuOpen && (
               <div className="absolute top-full right-0 pt-2 w-48 z-20">
                 <div className="bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 py-2">
+                  {user?.is_admin && (
+                    <button
+                      onClick={() => { setIsProfileMenuOpen(false); navigate('/admin'); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Admin
+                    </button>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 font-medium transition-colors"

@@ -43,6 +43,7 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-test@noteflow.dev}
     volumes:
       - uploads:/app/uploads
       - ./backend:/app/backend

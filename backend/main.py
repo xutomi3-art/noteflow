@@ -1,8 +1,11 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy import select
 
-from backend.core.database import engine, Base
+from backend.core.config import settings
+from backend.core.database import engine, Base, async_session
 # Import all models to register with Base.metadata before create_all
 from backend.models.user import User  # noqa: F401
 from backend.models.notebook import Notebook  # noqa: F401
@@ -11,7 +14,25 @@ from backend.models.chat_message import ChatMessage  # noqa: F401
 from backend.models.saved_note import SavedNote  # noqa: F401
 from backend.models.notebook_member import NotebookMember  # noqa: F401
 from backend.models.invite_link import InviteLink  # noqa: F401
-from backend.api import auth, notebooks, sources, chat, notes, studio, sharing, overview
+from backend.models.system_setting import SystemSetting  # noqa: F401
+from backend.api import auth, notebooks, sources, chat, notes, studio, sharing, overview, admin
+
+logger = logging.getLogger(__name__)
+
+
+async def bootstrap_admin():
+    """Promote ADMIN_EMAIL user to admin on startup."""
+    if not settings.ADMIN_EMAIL:
+        return
+    async with async_session() as db:
+        result = await db.execute(
+            select(User).where(User.email == settings.ADMIN_EMAIL)
+        )
+        user = result.scalar_one_or_none()
+        if user and not user.is_admin:
+            user.is_admin = True
+            await db.commit()
+            logger.info(f"Promoted {settings.ADMIN_EMAIL} to admin")
 
 
 @asynccontextmanager
@@ -19,6 +40,7 @@ async def lifespan(app: FastAPI):
     # Create tables on startup (dev only; use Alembic in production)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await bootstrap_admin()
     yield
 
 
@@ -32,6 +54,7 @@ app.include_router(notes.router, prefix="/api")
 app.include_router(studio.router, prefix="/api")
 app.include_router(sharing.router, prefix="/api")
 app.include_router(overview.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 
 
 @app.get("/api/health")

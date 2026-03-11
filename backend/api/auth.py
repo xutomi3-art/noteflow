@@ -42,4 +42,5 @@ async def me(user: User = Depends(get_current_user)):
         email=user.email,
         name=user.name,
         avatar=user.avatar,
+        is_admin=user.is_admin,
     )

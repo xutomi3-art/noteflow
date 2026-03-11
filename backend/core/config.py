@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     SMTP_FROM: str = ""
     APP_BASE_URL: str = "http://10.200.0.112"
 
+    # Admin
+    ADMIN_EMAIL: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

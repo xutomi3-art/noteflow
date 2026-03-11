@@ -1,4 +1,5 @@
 import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member } from "@/types/api";
+import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth } from "@/types/admin";
 
 const API_BASE = "/api";
 
@@ -377,6 +378,41 @@ class ApiClient {
       "presentation.pptx";
     a.click();
     URL.revokeObjectURL(url);
+  }
+  // Admin
+  async getAdminDashboard(): Promise<DashboardStats> {
+    return this.request("/admin/dashboard");
+  }
+
+  async getAdminUsers(params?: { search?: string; page?: number; limit?: number }): Promise<UserListResponse> {
+    const q = new URLSearchParams();
+    if (params?.search) q.set("search", params.search);
+    if (params?.page) q.set("page", String(params.page));
+    if (params?.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return this.request(`/admin/users${qs ? `?${qs}` : ""}`);
+  }
+
+  async updateAdminUser(userId: string, updates: { is_disabled?: boolean; is_admin?: boolean; name?: string }): Promise<unknown> {
+    return this.request(`/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async getAdminSettings(): Promise<SystemSettingItem[]> {
+    return this.request("/admin/settings");
+  }
+
+  async updateAdminSettings(settings: Record<string, string>): Promise<unknown> {
+    return this.request("/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify({ settings }),
+    });
+  }
+
+  async getAdminHealth(): Promise<Record<string, ServiceHealth>> {
+    return this.request("/admin/health");
   }
 }
 

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime
+import sqlalchemy as sa
+from sqlalchemy import String, DateTime, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,4 +17,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
+    is_disabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
