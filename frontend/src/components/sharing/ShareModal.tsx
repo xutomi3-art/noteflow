@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, Copy, Link, Users, ChevronDown, Trash2, Check, UserPlus, Mail } from "lucide-react";
+import { X, Copy, Link, ChevronDown, Trash2, Check, UserPlus, Mail, Loader2 } from "lucide-react";
 import { useSharingStore } from "@/stores/sharing-store";
 
 interface ShareModalProps {
@@ -10,8 +10,14 @@ interface ShareModalProps {
   onMemberAdded?: () => void;
 }
 
+interface InvitedEmail {
+  email: string;
+  role: string;
+  status: "sending" | "sent" | "failed";
+}
+
 export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded }: ShareModalProps) {
-  const { members, isLoading, fetchMembers, createInviteLink, sendEmailInvite, removeMember } =
+  const { members, fetchMembers, createInviteLink, sendEmailInvite, removeMember } =
     useSharingStore();
 
   const [emailInput, setEmailInput] = useState("");
@@ -20,8 +26,7 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showLinkSection, setShowLinkSection] = useState(false);
-  const [addStatus, setAddStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const [addError, setAddError] = useState("");
+  const [invitedEmails, setInvitedEmails] = useState<InvitedEmail[]>([]);
 
   useEffect(() => {
     if (isOpen && notebookId) {
@@ -30,39 +35,46 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
       setCopied(false);
       setShowLinkSection(false);
       setEmailInput("");
-      setAddStatus("idle");
+      setInvitedEmails([]);
     }
   }, [isOpen, notebookId, fetchMembers]);
 
   const handleAddByEmail = useCallback(async () => {
-    if (!emailInput.trim()) return;
-    setAddStatus("sending");
-    setAddError("");
+    const email = emailInput.trim();
+    if (!email) return;
+    // Don't add duplicates
+    if (invitedEmails.some((e) => e.email === email)) return;
+
+    const entry: InvitedEmail = { email, role: inviteRole, status: "sending" };
+    setInvitedEmails((prev) => [...prev, entry]);
+    setEmailInput("");
+
     try {
-      // Create an invite link for this email (backend will mark notebook as shared)
-      const link = await createInviteLink(notebookId, inviteRole);
-      const url = `${window.location.origin}/join/${link.token}`;
-
-      // Try to send email invite (may fail if SMTP not configured)
-      try {
-        await sendEmailInvite(notebookId, emailInput.trim(), inviteRole);
-      } catch {
-        // If email fails, still show the link so user can share manually
-      }
-
-      setAddStatus("sent");
-      setGeneratedLink(url);
-      setShowLinkSection(true);
-      setEmailInput("");
+      // Send email invite directly (backend creates invite link + sends email)
+      await sendEmailInvite(notebookId, email, inviteRole);
+      setInvitedEmails((prev) =>
+        prev.map((e) => (e.email === email ? { ...e, status: "sent" } : e)),
+      );
       fetchMembers(notebookId);
       onMemberAdded?.();
-      setTimeout(() => setAddStatus("idle"), 2000);
-    } catch (err) {
-      setAddStatus("error");
-      setAddError(err instanceof Error ? err.message : "Failed to invite");
-      setTimeout(() => setAddStatus("idle"), 3000);
+    } catch {
+      // Email send failed — create invite link as fallback
+      try {
+        const link = await createInviteLink(notebookId, inviteRole);
+        const url = `${window.location.origin}/join/${link.token}`;
+        setGeneratedLink(url);
+        setShowLinkSection(true);
+        setInvitedEmails((prev) =>
+          prev.map((e) => (e.email === email ? { ...e, status: "sent" } : e)),
+        );
+        onMemberAdded?.();
+      } catch {
+        setInvitedEmails((prev) =>
+          prev.map((e) => (e.email === email ? { ...e, status: "failed" } : e)),
+        );
+      }
     }
-  }, [emailInput, inviteRole, notebookId, createInviteLink, sendEmailInvite, fetchMembers, onMemberAdded]);
+  }, [emailInput, inviteRole, notebookId, sendEmailInvite, createInviteLink, fetchMembers, onMemberAdded]);
 
   const handleGenerateLink = useCallback(async () => {
     try {
@@ -82,6 +94,10 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
     setTimeout(() => setCopied(false), 2000);
   }, [generatedLink]);
 
+  const handleRemoveInvited = useCallback((email: string) => {
+    setInvitedEmails((prev) => prev.filter((e) => e.email !== email));
+  }, []);
+
   const handleRemoveMember = useCallback(
     async (userId: string) => {
       await removeMember(notebookId, userId);
@@ -91,7 +107,7 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+      if ((e.key === "Enter" || e.key === ",") && !e.nativeEvent.isComposing) {
         e.preventDefault();
         handleAddByEmail();
       }
@@ -141,6 +157,7 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
                   onChange={(e) => setEmailInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   className="flex-1 text-[13px] text-slate-700 outline-none bg-transparent placeholder:text-slate-400"
+                  autoFocus
                 />
               </div>
 
@@ -176,21 +193,42 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
               {/* Add Button */}
               <button
                 onClick={handleAddByEmail}
-                disabled={!emailInput.trim() || addStatus === "sending"}
+                disabled={!emailInput.trim()}
                 className="px-4 py-2 bg-[#5b8c15] text-white rounded-xl text-[13px] font-medium hover:bg-[#4a7311] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
               >
-                {addStatus === "sending" ? "..." : addStatus === "sent" ? "Sent!" : "Add"}
+                Add
               </button>
             </div>
-
-            {/* Status messages */}
-            {addStatus === "sent" && (
-              <p className="text-[12px] text-green-600 mt-2">Invite link generated. Share the link below with them.</p>
-            )}
-            {addStatus === "error" && (
-              <p className="text-[12px] text-red-500 mt-2">{addError}</p>
-            )}
           </div>
+
+          {/* Invited Emails List */}
+          {invitedEmails.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {invitedEmails.map((entry) => (
+                <div
+                  key={entry.email}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border ${
+                    entry.status === "sending"
+                      ? "bg-slate-50 text-slate-500 border-slate-200"
+                      : entry.status === "sent"
+                        ? "bg-green-50 text-green-700 border-green-200"
+                        : "bg-red-50 text-red-600 border-red-200"
+                  }`}
+                >
+                  {entry.status === "sending" && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {entry.status === "sent" && <Check className="w-3 h-3" />}
+                  {entry.email}
+                  <span className="text-[10px] opacity-60 capitalize">{entry.role}</span>
+                  <button
+                    onClick={() => handleRemoveInvited(entry.email)}
+                    className="text-current opacity-40 hover:opacity-80"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Invite Link Section (toggle) */}
           <div>

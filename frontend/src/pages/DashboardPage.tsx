@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { api } from '@/services/api';
 import type { Notebook } from '@/types/api';
+import ShareModal from '@/components/sharing/ShareModal';
 
 const EMOJIS = ['📝', '🚀', '🔬', '📈', '💡', '💰', '⚡', '🎨', '🏷️', '📋', '⚙️', '📅', '🌟', '🎯', '📚', '🧪', '🔥', '🌈', '🎵', '🧠'];
 const COLORS = ['#ecfccb', '#dbeafe', '#d1fae5', '#fef08a', '#fed7aa', '#f3e8ff', '#cffafe', '#fce7f3', '#e0e7ff', '#ffedd5'];
@@ -53,9 +54,8 @@ export default function DashboardPage() {
   const [showAllPersonal, setShowAllPersonal] = useState(false);
   const [showAllTeam, setShowAllTeam] = useState(false);
   const [createModalType, setCreateModalType] = useState<'personal' | 'team' | null>(null);
-  const [createStep, setCreateStep] = useState<1 | 2>(1);
-  const [memberEmail, setMemberEmail] = useState('');
-  const [emails, setEmails] = useState<string[]>([]);
+  const [teamNotebookId, setTeamNotebookId] = useState<string | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
@@ -98,20 +98,10 @@ export default function DashboardPage() {
 
   const closeModal = () => {
     setCreateModalType(null);
-    setCreateStep(1);
-    setMemberEmail('');
-    setEmails([]);
+    setTeamNotebookId(null);
     setPendingFiles([]);
     setNotebookName('');
     setIsCreating(false);
-  };
-
-  const handleAddEmail = () => {
-    const trimmedEmail = memberEmail.trim();
-    if (trimmedEmail && !emails.includes(trimmedEmail)) {
-      setEmails([...emails, trimmedEmail]);
-      setMemberEmail('');
-    }
   };
 
   const handleOpenNotebook = (notebook: Notebook) => {
@@ -145,8 +135,19 @@ export default function DashboardPage() {
           // Continue with remaining files
         }
       }
-      closeModal();
-      navigate('/notebook/' + notebook.id);
+
+      if (isTeam) {
+        // For team notebooks, close create modal and open ShareModal
+        setTeamNotebookId(notebook.id);
+        setCreateModalType(null);
+        setPendingFiles([]);
+        setNotebookName('');
+        setIsCreating(false);
+        setIsShareModalOpen(true);
+      } else {
+        closeModal();
+        navigate('/notebook/' + notebook.id);
+      }
     } catch {
       setIsCreating(false);
     }
@@ -386,12 +387,8 @@ export default function DashboardPage() {
             </button>
 
             <div className="text-center mb-8">
-              <h2 className="text-[32px] font-bold text-slate-900 leading-tight">
-                {createModalType === 'team' && createStep === 2 ? 'Invite your team members' : 'Create a Notebook from'}
-              </h2>
-              {!(createModalType === 'team' && createStep === 2) && (
-                <h2 className="text-[32px] font-bold text-[#a3e635] leading-tight">your documents</h2>
-              )}
+              <h2 className="text-[32px] font-bold text-slate-900 leading-tight">Create a Notebook from</h2>
+              <h2 className="text-[32px] font-bold text-[#a3e635] leading-tight">your documents</h2>
             </div>
 
             {/* Hidden file input */}
@@ -408,63 +405,7 @@ export default function DashboardPage() {
               }}
             />
 
-            {createModalType === 'team' && createStep === 2 ? (
-              <div className="mb-6 flex flex-col items-center">
-                <div className="w-full max-w-md flex flex-col gap-3">
-                  <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm w-full h-[44px]">
-                    <input
-                      type="email"
-                      placeholder="Enter email address..."
-                      className="flex-1 text-sm px-3 py-1.5 outline-none bg-transparent"
-                      value={memberEmail}
-                      onChange={(e) => setMemberEmail(e.target.value)}
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ',') {
-                          e.preventDefault();
-                          handleAddEmail();
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={handleAddEmail}
-                      className="bg-[#5b8c15] text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-[#4a7311] transition-colors h-full"
-                    >
-                      Add
-                    </button>
-                  </div>
-
-                  {emails.length > 0 && (
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {emails.map((email) => (
-                        <div key={email} className="flex items-center gap-1.5 bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200">
-                          {email}
-                          <button
-                            onClick={() => setEmails(emails.filter((e) => e !== email))}
-                            className="text-slate-400 hover:text-slate-600"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => handleCreateAndUpload(true)}
-                    disabled={isCreating}
-                    className="mt-4 w-full bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-60"
-                  >
-                    {isCreating ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" /> Creating...
-                      </span>
-                    ) : 'Finish & Open Notebook'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
+            <>
                 {/* Notebook name input */}
                 <div className="mb-6">
                   <input
@@ -514,11 +455,15 @@ export default function DashboardPage() {
                 <div className="mt-6 flex flex-col items-center gap-3">
                   {createModalType === 'team' ? (
                     <button
-                      onClick={() => setCreateStep(2)}
-                      disabled={!notebookName.trim()}
+                      onClick={() => handleCreateAndUpload(true)}
+                      disabled={isCreating || !notebookName.trim()}
                       className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      Next: Invite Members
+                      {isCreating ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" /> Creating...
+                        </span>
+                      ) : 'Next: Invite Members'}
                     </button>
                   ) : (
                     <button
@@ -539,10 +484,22 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-center text-xs text-slate-400 mt-4">Up to 50 files, 50 MB each.</p>
               </>
-            )}
           </div>
         </div>
       )}
+
+      {/* Share Modal for team notebook invite */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          if (teamNotebookId) {
+            navigate('/notebook/' + teamNotebookId);
+            setTeamNotebookId(null);
+          }
+        }}
+        notebookId={teamNotebookId || ""}
+      />
     </div>
   );
 }
