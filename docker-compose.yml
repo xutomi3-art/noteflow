@@ -32,6 +32,11 @@ services:
       - RAGFLOW_API_KEY=${RAGFLOW_API_KEY:-}
       - MINERU_BASE_URL=http://host.docker.internal:8010
       - UPLOAD_DIR=/app/uploads
+      - LLM_API_KEY=sk-d6a264ea0ee54726b5927fe05a1d7d04
+      - LLM_BASE_URL=https://api.deepseek.com/v1
+      - LLM_MODEL=deepseek-chat
+      - LANG=zh_CN.UTF-8
+      - LC_ALL=zh_CN.UTF-8
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-465}
       - SMTP_USER=${SMTP_USER:-}

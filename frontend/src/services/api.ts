@@ -186,6 +186,7 @@ class ApiClient {
     onToken: (token: string) => void,
     onDone: (data: { id: string; citations: Citation[] }) => void,
     onError: (error: string) => void,
+    thinking: boolean = false,
   ): Promise<void> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -199,7 +200,7 @@ class ApiClient {
       const response = await fetch(`${API_BASE}/notebooks/${notebookId}/chat`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null }),
+        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null, thinking }),
       });
 
       if (!response.ok) {

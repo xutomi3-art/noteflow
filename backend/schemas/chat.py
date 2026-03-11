@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class ChatRequest(BaseModel):
     message: str
     source_ids: list[str] | None = None
+    thinking: bool = False
 
 
 class CitationSchema(BaseModel):

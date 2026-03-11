@@ -110,6 +110,7 @@ async def stream_chat(
     user_id: uuid.UUID,
     message: str,
     source_ids: list[str] | None = None,
+    thinking: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Stream AI response with citations. Yields SSE-formatted data."""
     # 1. Save user message
@@ -248,14 +249,24 @@ Answer the question ONLY based on the context above. Use [1], [2], etc. to cite 
 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
+    # Fetch conversation history for context (last 10 messages = 5 exchanges)
+    history = await get_chat_history(db, notebook_id, user_id)
+    # Exclude the user message we just saved
+    history = [h for h in history if h.id != user_msg.id]
+    history_messages = [
+        {"role": h.role, "content": h.content}
+        for h in history[-10:]
+    ]
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        *history_messages,
         {"role": "user", "content": user_content},
     ]
 
-    # 4. Stream response from Qwen
+    # 4. Stream response from LLM
     full_response = ""
-    async for token in qwen_client.stream_chat(messages):
+    async for token in qwen_client.stream_chat(messages, thinking=thinking):
         full_response += token
         yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 

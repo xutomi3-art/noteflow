@@ -37,19 +37,31 @@ class QwenClient:
         messages: list[dict],
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        thinking: bool = False,
     ) -> AsyncGenerator[str, None]:
         """Stream chat completion tokens."""
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,  # type: ignore[arg-type]
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-            )
+            # When thinking mode is enabled, use deepseek-reasoner
+            model = self.model
+            kwargs: dict = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "stream": True,
+            }
+            if thinking:
+                kwargs["model"] = "deepseek-reasoner"
+                # R1 doesn't support temperature
+            else:
+                kwargs["temperature"] = temperature
+
+            response = await self.client.chat.completions.create(**kwargs)  # type: ignore[arg-type]
             async for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    # Skip reasoning_content from R1 — only yield final content
+                    if delta.content:
+                        yield delta.content
         except Exception as e:
             logger.error("LLM stream_chat failed: %s", e)
             yield f"\n\n[Error: AI generation failed - {e}]"

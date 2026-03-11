@@ -7,9 +7,11 @@ interface ChatState {
   isStreaming: boolean;
   streamingContent: string;
   isLoading: boolean;
+  thinking: boolean;
 
+  setThinking: (value: boolean) => void;
   fetchHistory: (notebookId: string) => Promise<void>;
-  sendMessage: (notebookId: string, message: string, sourceIds: string[]) => Promise<void>;
+  sendMessage: (notebookId: string, message: string, sourceIds: string[], thinking?: boolean) => Promise<void>;
   clearHistory: (notebookId: string) => Promise<void>;
   reset: () => void;
 }
@@ -19,6 +21,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isStreaming: false,
   streamingContent: "",
   isLoading: false,
+  thinking: false,
+
+  setThinking: (value: boolean) => set({ thinking: value }),
 
   fetchHistory: async (notebookId: string) => {
     set({ isLoading: true });
@@ -30,7 +35,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: async (notebookId: string, message: string, sourceIds: string[]) => {
+  sendMessage: async (notebookId: string, message: string, sourceIds: string[], thinking?: boolean) => {
     // Add optimistic user message
     const tempUserMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
@@ -95,6 +100,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           streamingContent: "",
         }));
       },
+      thinking,
     );
   },
 
