@@ -381,12 +381,19 @@ class ApiClient {
     }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
+    const cd = response.headers.get("content-disposition") || "";
+    const filenameMatch =
+      cd.match(/filename\*=UTF-8''([^;]+)/i)?.[1] ||
+      cd.match(/filename="(.+)"/)?.[1];
+    const filename = filenameMatch
+      ? decodeURIComponent(filenameMatch)
+      : "presentation.pptx";
     const a = document.createElement("a");
     a.href = url;
-    a.download =
-      response.headers.get("content-disposition")?.match(/filename="(.+)"/)?.[1] ||
-      "presentation.pptx";
+    a.download = filename;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
   // Admin

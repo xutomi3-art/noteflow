@@ -257,7 +257,7 @@ async def generate_ppt(
             return StreamingResponse(
                 buf,
                 media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"}
+                headers={"Content-Disposition": f'attachment; filename="presentation.pptx"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'}
             )
 
     # Fallback: basic python-pptx generation
@@ -314,7 +314,7 @@ async def generate_ppt(
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"}
+        headers={"Content-Disposition": f'attachment; filename="{urllib.parse.quote(filename)}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'}
     )
 
 
