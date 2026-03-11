@@ -143,14 +143,14 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     # MinerU
     services["mineru"] = await _check_http(f"{settings.MINERU_BASE_URL}/health")
 
-    # Elasticsearch (RAGFlow's ES on port 1200)
-    services["elasticsearch"] = await _check_http("http://es:1200")
+    # Elasticsearch (RAGFlow's ES on port 9200)
+    services["elasticsearch"] = await _check_http("http://ragflow-es:9200")
 
-    # Redis (RAGFlow's Redis — check via RAGFlow health indirectly; try direct)
+    # Redis (RAGFlow's Redis on port 6379)
     try:
         import socket
         start = datetime.now()
-        sock = socket.create_connection(("redis", 6379), timeout=3)
+        sock = socket.create_connection(("ragflow-redis", 6379), timeout=3)
         sock.close()
         latency = (datetime.now() - start).total_seconds() * 1000
         services["redis"] = {"status": "ok", "latency_ms": round(latency), "message": None}
