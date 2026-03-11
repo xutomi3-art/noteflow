@@ -130,7 +130,7 @@ export default function DashboardPage() {
   const handleCreateAndUpload = async (isTeam: boolean) => {
     setIsCreating(true);
     try {
-      const name = notebookName.trim() || (isTeam ? 'New Team Notebook' : 'New Notebook');
+      const name = notebookName.trim();
       const notebook = await createNotebook({
         name,
         emoji: randomEmoji(),
@@ -469,10 +469,11 @@ export default function DashboardPage() {
                 <div className="mb-6">
                   <input
                     type="text"
-                    placeholder="Notebook name (optional)"
+                    placeholder="Notebook name"
                     value={notebookName}
                     onChange={(e) => setNotebookName(e.target.value)}
                     className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                    autoFocus
                   />
                 </div>
 
@@ -514,15 +515,16 @@ export default function DashboardPage() {
                   {createModalType === 'team' ? (
                     <button
                       onClick={() => setCreateStep(2)}
-                      className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm"
+                      disabled={!notebookName.trim()}
+                      className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Next: Invite Members
                     </button>
                   ) : (
                     <button
                       onClick={() => handleCreateAndUpload(false)}
-                      disabled={isCreating}
-                      className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-60"
+                      disabled={isCreating || !notebookName.trim()}
+                      className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isCreating ? (
                         <span className="flex items-center justify-center gap-2">
