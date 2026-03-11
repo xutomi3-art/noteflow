@@ -102,40 +102,77 @@ async def update_user(db: AsyncSession, user_id: str, updates: dict) -> dict:
     }
 
 
-async def check_service_health() -> dict:
+async def _check_http(url: str, headers: dict | None = None) -> dict:
+    """Check an HTTP endpoint and return status + latency."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            start = datetime.now()
+            resp = await client.get(url, headers=headers or {})
+            latency = (datetime.now() - start).total_seconds() * 1000
+            return {
+                "status": "ok" if resp.status_code < 400 else "error",
+                "latency_ms": round(latency),
+                "message": None if resp.status_code < 400 else f"HTTP {resp.status_code}",
+            }
+    except Exception as e:
+        return {"status": "error", "latency_ms": 0, "message": str(e)}
+
+
+async def check_service_health(db: AsyncSession | None = None) -> dict:
     services = {}
 
-    # RAGFlow
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+    # PostgreSQL — actual query to verify
+    if db:
+        try:
+            from sqlalchemy import text
             start = datetime.now()
-            resp = await client.get(f"{settings.RAGFLOW_BASE_URL}/api/v1/datasets", headers={
-                "Authorization": f"Bearer {settings.RAGFLOW_API_KEY}"
-            })
+            await db.execute(text("SELECT 1"))
             latency = (datetime.now() - start).total_seconds() * 1000
-            services["ragflow"] = {
-                "status": "ok" if resp.status_code == 200 else "error",
-                "latency_ms": round(latency),
-                "message": None if resp.status_code == 200 else f"HTTP {resp.status_code}",
-            }
-    except Exception as e:
-        services["ragflow"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+            services["postgresql"] = {"status": "ok", "latency_ms": round(latency), "message": None}
+        except Exception as e:
+            services["postgresql"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+    else:
+        services["postgresql"] = {"status": "ok", "latency_ms": 0, "message": None}
+
+    # RAGFlow
+    services["ragflow"] = await _check_http(
+        f"{settings.RAGFLOW_BASE_URL}/api/v1/datasets",
+        headers={"Authorization": f"Bearer {settings.RAGFLOW_API_KEY}"},
+    )
 
     # MinerU
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            start = datetime.now()
-            resp = await client.get(f"{settings.MINERU_BASE_URL}/health")
-            latency = (datetime.now() - start).total_seconds() * 1000
-            services["mineru"] = {
-                "status": "ok" if resp.status_code == 200 else "error",
-                "latency_ms": round(latency),
-                "message": None if resp.status_code == 200 else f"HTTP {resp.status_code}",
-            }
-    except Exception as e:
-        services["mineru"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+    services["mineru"] = await _check_http(f"{settings.MINERU_BASE_URL}/health")
 
-    # PostgreSQL — if we got this far, DB is working
-    services["postgresql"] = {"status": "ok", "latency_ms": 0, "message": None}
+    # Elasticsearch (RAGFlow's ES on port 1200)
+    services["elasticsearch"] = await _check_http("http://es:1200")
+
+    # Redis (RAGFlow's Redis — check via RAGFlow health indirectly; try direct)
+    try:
+        import socket
+        start = datetime.now()
+        sock = socket.create_connection(("redis", 6379), timeout=3)
+        sock.close()
+        latency = (datetime.now() - start).total_seconds() * 1000
+        services["redis"] = {"status": "ok", "latency_ms": round(latency), "message": None}
+    except Exception as e:
+        services["redis"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+
+    # DeepSeek LLM API
+    if settings.LLM_API_KEY:
+        services["deepseek"] = await _check_http(
+            f"{settings.LLM_BASE_URL}/models",
+            headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"},
+        )
+    else:
+        services["deepseek"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
+
+    # Qwen API (DashScope)
+    if settings.QWEN_API_KEY:
+        services["qwen"] = await _check_http(
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+            headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"},
+        )
+    else:
+        services["qwen"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
 
     return services

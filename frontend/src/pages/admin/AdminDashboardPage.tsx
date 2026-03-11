@@ -1,6 +1,16 @@
 import { useEffect } from 'react';
-import { Users, BookOpen, FileText, HardDrive, Activity } from 'lucide-react';
+import { Users, BookOpen, FileText, HardDrive, Activity, RefreshCw, Loader2 } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
+
+const SERVICE_LABELS: Record<string, string> = {
+  postgresql: 'PostgreSQL',
+  ragflow: 'RAGFlow',
+  elasticsearch: 'Elasticsearch',
+  redis: 'Redis',
+  mineru: 'MinerU',
+  deepseek: 'DeepSeek',
+  qwen: 'Qwen',
+};
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -11,11 +21,12 @@ function formatBytes(bytes: number): string {
 }
 
 export default function AdminDashboardPage() {
-  const { stats, fetchDashboard, isLoading } = useAdminStore();
+  const { stats, health, fetchDashboard, fetchHealth, isLoading } = useAdminStore();
 
   useEffect(() => {
     fetchDashboard();
-  }, [fetchDashboard]);
+    fetchHealth();
+  }, [fetchDashboard, fetchHealth]);
 
   const cards = [
     { label: 'Total Users', value: stats?.total_users ?? '-', icon: Users, color: '#5b8c15' },
@@ -49,6 +60,37 @@ export default function AdminDashboardPage() {
           ))}
         </div>
       )}
+
+      {/* Service Health Overview */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">Service Status</h3>
+          {Object.keys(health).length > 0 && (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+              Object.values(health).every(h => h.status === 'ok')
+                ? 'bg-green-50 text-green-700'
+                : 'bg-red-50 text-red-700'
+            }`}>
+              {Object.values(health).filter(h => h.status === 'ok').length}/{Object.keys(health).length} healthy
+            </span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {Object.keys(health).length === 0 ? (
+            <p className="text-sm text-gray-400">Loading...</p>
+          ) : (
+            Object.entries(health).map(([key, h]) => (
+              <div key={key} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">
+                <div className={`w-2 h-2 rounded-full ${h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="text-sm text-gray-700">{SERVICE_LABELS[key] || key}</span>
+                {h.status === 'ok' && h.latency_ms > 0 && (
+                  <span className="text-[10px] text-gray-400">{h.latency_ms}ms</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

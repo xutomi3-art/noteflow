@@ -3,9 +3,23 @@ import { RefreshCw, Loader2, Save } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 
 const SERVICE_LABELS: Record<string, string> = {
-  ragflow: 'RAGFlow',
-  mineru: 'MinerU',
   postgresql: 'PostgreSQL',
+  ragflow: 'RAGFlow',
+  elasticsearch: 'Elasticsearch',
+  redis: 'Redis',
+  mineru: 'MinerU',
+  deepseek: 'DeepSeek LLM',
+  qwen: 'Qwen (Embedding)',
+};
+
+const SERVICE_DESCRIPTIONS: Record<string, string> = {
+  postgresql: 'Primary database',
+  ragflow: 'RAG retrieval engine',
+  elasticsearch: 'Full-text search & vector index',
+  redis: 'Cache & session store',
+  mineru: 'Document parsing service',
+  deepseek: 'Chat LLM API',
+  qwen: 'Embedding & vision API',
 };
 
 const SMTP_FIELDS = [
@@ -94,30 +108,77 @@ export default function AdminSystemPage() {
 
       {/* Service Health */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Service Health</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Object.entries(health).map(([key, h]) => (
-            <div key={key} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-              <div
-                className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                  h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'
-                }`}
-              />
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-gray-900">
-                  {SERVICE_LABELS[key] || key}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700">Service Health</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {Object.keys(health).length > 0
+                ? `${Object.values(health).filter(h => h.status === 'ok').length}/${Object.keys(health).length} services healthy`
+                : 'Click Refresh to check'}
+            </p>
+          </div>
+          {Object.keys(health).length > 0 && (
+            <div className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+              Object.values(health).every(h => h.status === 'ok')
+                ? 'bg-green-50 text-green-700'
+                : 'bg-red-50 text-red-700'
+            }`}>
+              {Object.values(health).every(h => h.status === 'ok') ? 'All Healthy' : 'Issues Detected'}
+            </div>
+          )}
+        </div>
+        <div className="space-y-2">
+          {(Object.keys(SERVICE_LABELS) as string[]).map((key) => {
+            const h = health[key];
+            if (!h && Object.keys(health).length === 0) return null;
+            return (
+              <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                      !h ? 'bg-gray-300' : h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'
+                    }`}
+                  />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-900">
+                      {SERVICE_LABELS[key] || key}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {SERVICE_DESCRIPTIONS[key] || ''}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400 truncate">
-                  {h.status === 'ok'
-                    ? `${h.latency_ms}ms`
-                    : h.message || 'Error'}
+                <div className="text-right flex-shrink-0 ml-4">
+                  {h ? (
+                    <>
+                      <div className={`text-xs font-medium ${h.status === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+                        {h.status === 'ok' ? 'Healthy' : 'Error'}
+                      </div>
+                      <div className="text-[10px] text-gray-400">
+                        {h.status === 'ok' ? `${h.latency_ms}ms` : (h.message || 'Unreachable')}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-xs text-gray-400">—</div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
-          {Object.keys(health).length === 0 && !isLoading && (
-            <p className="text-sm text-gray-400 col-span-3">Click Refresh to check services</p>
-          )}
+            );
+          })}
+          {/* Show any extra services not in SERVICE_LABELS */}
+          {Object.entries(health)
+            .filter(([key]) => !(key in SERVICE_LABELS))
+            .map(([key, h]) => (
+              <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <div className="text-sm font-medium text-gray-900">{key}</div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  {h.status === 'ok' ? `${h.latency_ms}ms` : (h.message || 'Error')}
+                </div>
+              </div>
+            ))}
         </div>
       </div>
 

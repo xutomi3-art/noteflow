@@ -74,5 +74,6 @@ async def update_settings(
 @router.get("/health")
 async def health_check(
     _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    return await admin_service.check_service_health()
+    return await admin_service.check_service_health(db)
