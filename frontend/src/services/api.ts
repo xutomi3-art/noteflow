@@ -394,7 +394,8 @@ class ApiClient {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Delay revoke to let the browser start the download
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   // Admin
   async getAdminDashboard(): Promise<DashboardStats> {
