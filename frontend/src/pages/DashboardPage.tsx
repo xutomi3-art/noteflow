@@ -177,7 +177,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-slate-900 pb-12">
       {/* Header */}
-      <header className="flex items-center justify-between px-8 py-5">
+      <header className="flex items-center justify-between px-4 md:px-8 py-5">
         <div className="flex items-center gap-3">
           <div className="bg-[#5b8c15] p-2 rounded-xl">
             <Files className="w-6 h-6 text-white" />
@@ -185,7 +185,7 @@ export default function DashboardPage() {
           <span className="text-2xl font-bold tracking-tight">Noteflow</span>
         </div>
         <div className="flex items-center gap-4">
-          <div className="text-right">
+          <div className="text-right hidden md:block">
             <div className="font-semibold text-sm">{userName}</div>
             <div className="text-xs text-slate-500">{user?.email}</div>
           </div>
@@ -228,11 +228,11 @@ export default function DashboardPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-[1200px] mx-auto px-8 mt-8">
+      <main className="max-w-[1200px] mx-auto px-4 md:px-8 mt-8">
         {/* Personal Notebooks Section */}
         <section className="mb-16">
           <div className="flex items-center justify-between mb-6 relative">
-            <h2 className="text-[28px] font-bold tracking-tight">Personal Notebooks</h2>
+            <h2 className="text-xl md:text-[28px] font-bold tracking-tight">Personal Notebooks</h2>
             <div className="relative" ref={createMenuRef}>
               <button
                 onClick={() => setIsCreateMenuOpen((prev) => !prev)}
@@ -331,7 +331,7 @@ export default function DashboardPage() {
 
         {/* Team Notebooks Section */}
         <section className="mb-16">
-          <h2 className="text-[28px] font-bold tracking-tight mb-6">Team Notebooks</h2>
+          <h2 className="text-xl md:text-[28px] font-bold tracking-tight mb-6">Team Notebooks</h2>
 
           {teamNotebooks.length === 0 ? (
             <div className="text-center py-16 text-slate-400 text-sm font-medium">

@@ -28,6 +28,8 @@ import {
   Brain,
   GripVertical,
   ListChecks,
+  MessageSquare,
+  Sparkles,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -132,6 +134,7 @@ export default function NotebookPage() {
   const [chatInput, setChatInput] = useState("");
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"sources" | "chat" | "studio">("chat");
   const [noteInput, setNoteInput] = useState("");
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [podcastUrl, setPodcastUrl] = useState<string | null>(null);
@@ -143,6 +146,15 @@ export default function NotebookPage() {
   const [leftWidth, setLeftWidth] = useState(300);
   const [rightWidth, setRightWidth] = useState(340);
   const [isDragging, setIsDragging] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
   const isDraggingRef = useRef<"left" | "right" | null>(null);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(0);
@@ -407,7 +419,7 @@ export default function NotebookPage() {
   return (
     <div className="h-screen flex flex-col bg-[#f0f2f5] font-sans text-slate-900 overflow-hidden">
       {/* Header */}
-      <header className="h-14 bg-[#f0f2f5] flex items-center justify-between px-4 shrink-0 select-none">
+      <header className="h-14 bg-[#f0f2f5] flex items-center justify-between px-2 md:px-4 shrink-0 select-none">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/dashboard")}
@@ -428,10 +440,10 @@ export default function NotebookPage() {
               onClick={() => setIsShareModalOpen(true)}
               className="flex items-center gap-2 bg-[#5b8c15] text-white px-4 py-1.5 rounded-full text-[13px] font-medium hover:bg-[#4a7311] transition-colors shadow-sm"
             >
-              <Users className="w-3.5 h-3.5" /> Share with Team
+              <Users className="w-3.5 h-3.5" /> <span className="hidden md:inline">Share with Team</span>
             </button>
           )}
-          <div className="text-right">
+          <div className="text-right hidden md:block">
             <div className="font-semibold text-sm">{user?.name || "User"}</div>
             <div className="text-xs text-slate-500">{user?.email}</div>
           </div>
@@ -460,12 +472,36 @@ export default function NotebookPage() {
         </div>
       </header>
 
+      {/* Mobile Tab Bar */}
+      <div className="md:hidden flex items-center bg-white border-b border-slate-200 shrink-0">
+        {(
+          [
+            { key: "sources" as const, label: "Sources", icon: <Files className="w-4 h-4" /> },
+            { key: "chat" as const, label: "Chat", icon: <MessageSquare className="w-4 h-4" /> },
+            { key: "studio" as const, label: "Studio", icon: <Sparkles className="w-4 h-4" /> },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setMobileTab(tab.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-semibold transition-colors ${
+              mobileTab === tab.key
+                ? "text-[#5b8c15] border-b-2 border-[#5b8c15]"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Main Workspace */}
-      <main className="flex-1 flex overflow-hidden px-4 pb-4 gap-0">
+      <main className="flex-1 flex overflow-hidden px-2 pb-2 md:px-4 md:pb-4 gap-0">
         {/* Left Panel: Sources */}
         <section
-          style={isLeftCollapsed ? undefined : { width: leftWidth }}
-          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed ? "w-0 border-none" : ""}`}
+          style={!isMobile && !isLeftCollapsed ? { width: leftWidth } : undefined}
+          className={`bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shrink-0 shadow-sm ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Sources</h2>
@@ -631,7 +667,7 @@ export default function NotebookPage() {
         </section>
 
         {/* Left Drag Handle */}
-        {!isLeftCollapsed && (
+        {!isLeftCollapsed && !isMobile && (
           <div
             className="w-2 shrink-0 cursor-col-resize flex items-center justify-center group hover:bg-slate-100/50 transition-colors rounded"
             onMouseDown={(e) => handleDragStart("left", e)}
@@ -641,7 +677,7 @@ export default function NotebookPage() {
         )}
 
         {/* Left Toggle */}
-        {isLeftCollapsed && (
+        {isLeftCollapsed && !isMobile && (
           <div className="w-12 flex items-start justify-center pt-4 shrink-0">
             <button
               onClick={() => setIsLeftCollapsed(false)}
@@ -653,7 +689,7 @@ export default function NotebookPage() {
         )}
 
         {/* Center Panel: Chat */}
-        <section className="flex-1 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shadow-sm relative" onPaste={handlePaste}>
+        <section className={`flex-1 bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm relative ${isMobile ? (mobileTab === "chat" ? "flex" : "hidden") : "flex"}`} onPaste={handlePaste}>
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-6 shrink-0">
             <h2 className="text-[13px] font-semibold text-slate-700">Chat</h2>
           </div>
@@ -846,7 +882,7 @@ export default function NotebookPage() {
         </section>
 
         {/* Right Toggle */}
-        {isRightCollapsed && (
+        {isRightCollapsed && !isMobile && (
           <div className="w-12 flex items-start justify-center pt-4 shrink-0">
             <button
               onClick={() => setIsRightCollapsed(false)}
@@ -858,7 +894,7 @@ export default function NotebookPage() {
         )}
 
         {/* Right Drag Handle */}
-        {!isRightCollapsed && (
+        {!isRightCollapsed && !isMobile && (
           <div
             className="w-2 shrink-0 cursor-col-resize flex items-center justify-center group hover:bg-slate-100/50 transition-colors rounded"
             onMouseDown={(e) => handleDragStart("right", e)}
@@ -869,8 +905,8 @@ export default function NotebookPage() {
 
         {/* Right Panel: Studio */}
         <section
-          style={isRightCollapsed ? undefined : { width: rightWidth }}
-          className={`bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shrink-0 shadow-sm relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed ? "w-0 border-none" : ""}`}
+          style={!isMobile && !isRightCollapsed ? { width: rightWidth } : undefined}
+          className={`bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shrink-0 shadow-sm relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "studio" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Studio</h2>
