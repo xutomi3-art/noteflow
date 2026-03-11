@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = "https://api.deepseek.com/v1"
     LLM_MODEL: str = "deepseek-chat"
+    LLM_THINKING_MODEL: str = "deepseek-reasoner"
 
     # Qwen API (kept for embedding + vision, which DeepSeek doesn't offer)
     QWEN_API_KEY: str = ""

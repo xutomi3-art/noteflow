@@ -50,7 +50,7 @@ class QwenClient:
                 "stream": True,
             }
             if thinking:
-                kwargs["model"] = "deepseek-reasoner"
+                kwargs["model"] = settings.LLM_THINKING_MODEL
                 # R1 doesn't support temperature
             else:
                 kwargs["temperature"] = temperature
