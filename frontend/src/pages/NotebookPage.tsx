@@ -394,15 +394,13 @@ export default function NotebookPage() {
       const fileType = citation.file_type?.toLowerCase() || "";
       const page = citation.location?.page || citation.location?.slide || 1;
 
-      if (["pdf", "pptx", "docx"].includes(fileType)) {
-        // Open PDF viewer in Studio panel (PPTX/DOCX are converted to PDF by backend)
-        openPdf(citation.source_id, citation.filename, page);
-        setIsRightCollapsed(false);
-      } else {
-        // For text files, show the excerpt in a simple way — open PDF viewer which will display the excerpt
+      // Only open viewer for file types the browser can render inline
+      const viewableTypes = ["pdf", "pptx", "docx", "txt", "md", "png", "jpg", "jpeg", "webp", "gif"];
+      if (viewableTypes.includes(fileType)) {
         openPdf(citation.source_id, citation.filename, page);
         setIsRightCollapsed(false);
       }
+      // For xlsx/csv and other non-viewable types, do nothing (citation excerpt is already visible in the message)
     },
     [messages, openPdf],
   );
@@ -750,15 +748,9 @@ export default function NotebookPage() {
                 {/* Thinking indicator */}
                 {isStreaming && isThinkingPhase && (
                   <div className="flex justify-start">
-                    <div className="bg-purple-50 border border-purple-100 rounded-2xl px-5 py-3 text-[14px] text-purple-700">
-                      <div className="flex items-center gap-2 mb-2 font-medium">
-                        <Brain className="w-4 h-4" /> Thinking...
-                      </div>
-                      {reasoningContent && (
-                        <div className="text-[12px] text-purple-500/70 max-h-32 overflow-y-auto leading-relaxed">
-                          {reasoningContent}
-                        </div>
-                      )}
+                    <div className="inline-flex items-center gap-1.5 bg-purple-50 border border-purple-100 rounded-full px-3 py-1.5 text-[12px] text-purple-600 font-medium">
+                      <Brain className="w-3.5 h-3.5 animate-pulse" />
+                      Thinking...
                     </div>
                   </div>
                 )}
