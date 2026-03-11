@@ -82,4 +82,5 @@ export interface Member {
   avatar: string | null;
   role: string;
   joined_at: string;
+  status?: "active" | "pending";
 }

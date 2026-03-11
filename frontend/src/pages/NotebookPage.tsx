@@ -593,13 +593,23 @@ export default function NotebookPage() {
                     key={member.user_id}
                     className="flex items-center gap-2 py-1 group"
                   >
-                    <div className="w-6 h-6 rounded-full bg-[#5b8c15] text-white flex items-center justify-center text-[10px] font-semibold shrink-0">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${
+                      member.status === "pending"
+                        ? "bg-slate-200 text-slate-500"
+                        : "bg-[#5b8c15] text-white"
+                    }`}>
                       {(member.name || member.email || "U").charAt(0).toUpperCase()}
                     </div>
-                    <span className="text-[12px] text-slate-700 flex-1 truncate">
+                    <span className={`text-[12px] flex-1 truncate ${
+                      member.status === "pending" ? "text-slate-400 italic" : "text-slate-700"
+                    }`}>
                       {member.name || member.email}
                     </span>
-                    <span className="text-[10px] text-slate-400 capitalize">{member.role}</span>
+                    {member.status === "pending" ? (
+                      <span className="text-[10px] text-amber-500 font-medium">Pending</span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 capitalize">{member.role}</span>
+                    )}
                     {member.role !== "owner" && notebook?.user_role === "owner" && (
                       <button
                         onClick={() => removeMember(id || "", member.user_id)}

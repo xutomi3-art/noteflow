@@ -12,7 +12,8 @@ from backend.models.user import User
 
 
 async def create_invite_link(
-    db: AsyncSession, notebook_id: uuid.UUID, created_by: uuid.UUID, role: str = "viewer"
+    db: AsyncSession, notebook_id: uuid.UUID, created_by: uuid.UUID, role: str = "viewer",
+    email: str | None = None,
 ) -> InviteLink:
     """Create an invite link for a notebook."""
     link = InviteLink(
@@ -21,8 +22,16 @@ async def create_invite_link(
         role=role,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         created_by=created_by,
+        email=email,
     )
     db.add(link)
+
+    # Mark notebook as shared immediately when first invite is created
+    result = await db.execute(select(Notebook).where(Notebook.id == notebook_id))
+    notebook = result.scalar_one()
+    if not notebook.is_shared:
+        notebook.is_shared = True
+
     await db.commit()
     await db.refresh(link)
     return link
@@ -120,6 +129,7 @@ async def get_members(db: AsyncSession, notebook_id: uuid.UUID) -> list[dict]:
             "avatar": owner.avatar,
             "role": "owner",
             "joined_at": notebook.created_at,
+            "status": "active",
         })
 
     # Add other members
@@ -137,6 +147,34 @@ async def get_members(db: AsyncSession, notebook_id: uuid.UUID) -> list[dict]:
             "avatar": user.avatar,
             "role": member.role,
             "joined_at": member.joined_at,
+            "status": "active",
+        })
+
+    # Add pending invites (email invites not yet accepted)
+    accepted_emails = {m["email"] for m in members}
+    result = await db.execute(
+        select(InviteLink)
+        .where(
+            InviteLink.notebook_id == notebook_id,
+            InviteLink.email.isnot(None),
+            InviteLink.expires_at > datetime.now(timezone.utc),
+        )
+        .order_by(InviteLink.created_at.desc())
+    )
+    seen_emails: set[str] = set()
+    for link in result.scalars().all():
+        email = link.email
+        if email in accepted_emails or email in seen_emails:
+            continue
+        seen_emails.add(email)
+        members.append({
+            "user_id": f"invite-{link.id}",
+            "name": email,
+            "email": email,
+            "avatar": None,
+            "role": link.role,
+            "joined_at": link.created_at,
+            "status": "pending",
         })
 
     return members

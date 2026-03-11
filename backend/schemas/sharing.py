@@ -22,6 +22,7 @@ class MemberResponse(BaseModel):
     avatar: str | None = None
     role: str
     joined_at: datetime
+    status: str = "active"  # "active" or "pending"
 
 
 class UpdateMemberRoleRequest(BaseModel):

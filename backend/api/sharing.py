@@ -67,7 +67,7 @@ async def send_email_invite(
         raise HTTPException(status_code=503, detail="Email service not configured on this server")
 
     # Create invite link (reuses existing token logic)
-    link = await sharing_service.create_invite_link(db, nb_uuid, user.id, req.role)
+    link = await sharing_service.create_invite_link(db, nb_uuid, user.id, req.role, email=req.email)
     join_url = f"{settings.APP_BASE_URL}/join/{link.token}"
 
     # Get notebook name
