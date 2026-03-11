@@ -606,9 +606,9 @@ export default function NotebookPage() {
                       {member.name || member.email}
                     </span>
                     {member.status === "pending" ? (
-                      <span className="text-[10px] text-amber-500 font-medium">Pending</span>
+                      <span className="text-[10px] text-amber-500 font-medium w-12 text-right shrink-0">Pending</span>
                     ) : (
-                      <span className="text-[10px] text-slate-400 capitalize">{member.role}</span>
+                      <span className="text-[10px] text-slate-400 capitalize w-12 text-right shrink-0">{member.role}</span>
                     )}
                     {member.role !== "owner" && notebook?.user_role === "owner" && (
                       <button

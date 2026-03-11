@@ -319,9 +319,9 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
                       </p>
                     </div>
                     {member.status === "pending" ? (
-                      <span className="text-[11px] text-amber-500 font-medium">Pending</span>
+                      <span className="text-[11px] text-amber-500 font-medium w-14 text-right shrink-0">Pending</span>
                     ) : (
-                      <span className="text-[11px] text-slate-400 capitalize">{member.role}</span>
+                      <span className="text-[11px] text-slate-400 capitalize w-14 text-right shrink-0">{member.role}</span>
                     )}
                     <button
                       onClick={() => handleRemoveMember(member.user_id)}
