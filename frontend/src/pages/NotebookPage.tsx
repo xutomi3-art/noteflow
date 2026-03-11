@@ -292,25 +292,41 @@ export default function NotebookPage() {
 
           <div className="p-4 flex-1 overflow-y-auto">
             <input
+              id="notebook-file-input"
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv"
-              className="hidden"
+              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv,.jpg,.jpeg,.png,.webp,.gif"
+              className="absolute w-0 h-0 opacity-0 overflow-hidden"
               onChange={handleFileUpload}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 py-2 border border-slate-200 rounded-full text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition-colors mb-4"
+            <label
+              htmlFor="notebook-file-input"
+              className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-4"
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer.files.length > 0) {
+                  const dt = new DataTransfer();
+                  Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+                  if (fileInputRef.current) {
+                    fileInputRef.current.files = dt.files;
+                    fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+                  }
+                }
+              }}
             >
-              <Plus className="w-3.5 h-3.5" /> Add sources
-            </button>
+              <Plus className="w-4 h-4 text-slate-400" />
+              <span className="text-[13px] font-medium text-slate-600">Add sources</span>
+              <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV</span>
+            </label>
 
             <div className="flex items-center justify-between mb-3 px-1">
               <span className="text-[11px] font-medium text-slate-500">Select all sources</span>
               <input
                 type="checkbox"
-                className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 cursor-pointer"
+                className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 cursor-pointer shrink-0"
                 checked={isAllSelected}
                 onChange={handleToggleAll}
               />
@@ -321,10 +337,10 @@ export default function NotebookPage() {
                 <div
                   key={source.id}
                   onClick={() => toggleSelect(source.id)}
-                  className={`flex items-start gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer group transition-colors ${selectedIds.has(source.id) ? "bg-slate-50/50" : ""}`}
+                  className={`flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer group transition-colors ${selectedIds.has(source.id) ? "bg-slate-50/50" : ""}`}
                 >
                   <div
-                    className={`${fileTypeColor(source.file_type)} p-1.5 rounded flex-shrink-0 mt-0.5`}
+                    className={`${fileTypeColor(source.file_type)} p-1.5 rounded flex-shrink-0`}
                   >
                     {isProcessingStatus(source.status) ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -351,13 +367,13 @@ export default function NotebookPage() {
                   </div>
                   <button
                     onClick={(e) => handleDeleteSource(e, source.id)}
-                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all mt-0.5 p-0.5"
+                    className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-0.5 shrink-0"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                   <input
                     type="checkbox"
-                    className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 mt-0.5 pointer-events-none"
+                    className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 pointer-events-none shrink-0"
                     checked={selectedIds.has(source.id)}
                     readOnly
                   />
