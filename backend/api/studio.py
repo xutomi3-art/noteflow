@@ -239,6 +239,14 @@ async def generate_ppt(
     if not context:
         raise HTTPException(status_code=400, detail="No source documents available")
 
+    # Get notebook name for the download filename
+    nb_result = await db.execute(select(Notebook).where(Notebook.id == notebook_id))
+    notebook = nb_result.scalar_one_or_none()
+    nb_name = notebook.name if notebook else "presentation"
+    safe_name = re.sub(r'[^\w\s-]', '', nb_name).strip()
+    safe_name = re.sub(r'[\s]+', '_', safe_name) or 'presentation'
+    filename = f"{safe_name}.pptx"
+
     cfg = config or PptGenerateRequest()
 
     # Try Presenton first, fallback to basic python-pptx
@@ -253,11 +261,10 @@ async def generate_ppt(
         )
         if pptx_bytes:
             buf = io.BytesIO(pptx_bytes)
-            filename = "presentation.pptx"
             return StreamingResponse(
                 buf,
                 media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                headers={"Content-Disposition": f'attachment; filename="presentation.pptx"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'}
+                headers={"Content-Disposition": f'attachment; filename="{urllib.parse.quote(filename)}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'}
             )
 
     # Fallback: basic python-pptx generation
@@ -278,11 +285,6 @@ async def generate_ppt(
 
     if not isinstance(data, dict) or "slides" not in data or not isinstance(data.get("slides"), list):
         raise HTTPException(status_code=500, detail="AI returned unexpected slide structure")
-
-    raw_title = data.get('title', 'presentation')
-    safe_title = re.sub(r'[^\w\s-]', '', raw_title).strip()
-    safe_title = re.sub(r'[\s]+', '_', safe_title) or 'presentation'
-    filename = f"{safe_title}.pptx"
 
     prs = Presentation()
     prs.slide_width = Inches(13.33)
