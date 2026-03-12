@@ -67,7 +67,7 @@ services:
       - CUSTOM_MODEL=deepseek-chat
       - TOOL_CALLS=false
       - DISABLE_THINKING=true
-      - DISABLE_IMAGE_GENERATION=true
+      - DISABLE_IMAGE_GENERATION=false
       - DISABLE_ANONYMOUS_TELEMETRY=true
       - CAN_CHANGE_KEYS=false
     volumes:

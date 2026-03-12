@@ -11,7 +11,9 @@ from pydub import AudioSegment
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pptx import Presentation
-from pptx.util import Inches
+from pptx.util import Inches, Pt, Emu
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -93,24 +95,39 @@ Source content:
 {context}""",
 }
 
-PPT_PROMPT = """You are creating a PowerPoint presentation based on the source documents.
-Generate a JSON structure for a presentation with the following format:
+PPT_PROMPT = """You are creating a professional PowerPoint presentation based on the source documents.
+Generate a JSON structure for a presentation.
+
+Configuration:
+- Number of slides: {n_slides}
+- Tone: {tone}
+- Verbosity: {verbosity}
+- Language: {language}
+
+JSON format:
 {{
   "title": "Presentation Title",
+  "subtitle": "A brief one-line subtitle",
   "slides": [
     {{
       "title": "Slide Title",
-      "bullets": ["Point 1", "Point 2", "Point 3"]
+      "bullets": [
+        {{"main": "Key point", "sub": "Supporting detail or explanation"}},
+        {{"main": "Key point 2", "sub": "More context here"}}
+      ]
     }}
   ]
 }}
 
 Rules:
-1. Generate 5-8 slides maximum
-2. Each slide has 3-5 bullet points
-3. Keep bullets concise (under 15 words each)
-4. First slide is a title/overview slide
-5. Return ONLY valid JSON, no markdown fences
+1. Generate exactly {n_slides} content slides (not counting the title slide)
+2. Each slide has 3-5 bullet points with both "main" and "sub" fields
+3. "main" is a bold headline (under 10 words), "sub" is a supporting sentence
+4. If verbosity is "concise", keep "sub" very short (under 8 words) or empty string
+5. If verbosity is "text-heavy", make "sub" a full explanatory sentence
+6. Match the tone: casual=conversational, professional=formal, funny=witty, educational=instructive
+7. Write in {language}
+8. Return ONLY valid JSON, no markdown fences
 
 Source content:
 {context}"""
@@ -267,8 +284,14 @@ async def generate_ppt(
                 headers={"Content-Disposition": f'attachment; filename="{urllib.parse.quote(filename)}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'}
             )
 
-    # Fallback: basic python-pptx generation
-    prompt = PPT_PROMPT.format(context=context[:8000])
+    # Fallback: styled python-pptx generation
+    prompt = PPT_PROMPT.format(
+        context=context[:8000],
+        n_slides=cfg.n_slides,
+        tone=cfg.tone,
+        verbosity=cfg.verbosity,
+        language=cfg.language,
+    )
     raw = await qwen_client.generate(
         [{"role": "system", "content": "Return only valid JSON."},
          {"role": "user", "content": prompt}]
@@ -286,28 +309,175 @@ async def generate_ppt(
     if not isinstance(data, dict) or "slides" not in data or not isinstance(data.get("slides"), list):
         raise HTTPException(status_code=500, detail="AI returned unexpected slide structure")
 
+    # Template color schemes
+    TEMPLATES = {
+        "general": {
+            "bg": RGBColor(0xFF, 0xFF, 0xFF),
+            "title_bg": RGBColor(0x1A, 0x1A, 0x2E),
+            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
+            "accent": RGBColor(0x00, 0x7A, 0xFF),
+            "heading": RGBColor(0x1A, 0x1A, 0x2E),
+            "body": RGBColor(0x33, 0x33, 0x33),
+            "sub": RGBColor(0x66, 0x66, 0x66),
+            "bar": RGBColor(0x00, 0x7A, 0xFF),
+            "bullet_dot": RGBColor(0x00, 0x7A, 0xFF),
+        },
+        "modern": {
+            "bg": RGBColor(0x0F, 0x0F, 0x23),
+            "title_bg": RGBColor(0x0F, 0x0F, 0x23),
+            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
+            "accent": RGBColor(0x6C, 0x5C, 0xE7),
+            "heading": RGBColor(0xFF, 0xFF, 0xFF),
+            "body": RGBColor(0xDD, 0xDD, 0xDD),
+            "sub": RGBColor(0x99, 0x99, 0xAA),
+            "bar": RGBColor(0x6C, 0x5C, 0xE7),
+            "bullet_dot": RGBColor(0xA2, 0x9B, 0xFE),
+        },
+        "standard": {
+            "bg": RGBColor(0xF8, 0xF9, 0xFA),
+            "title_bg": RGBColor(0x2C, 0x3E, 0x50),
+            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
+            "accent": RGBColor(0x27, 0xAE, 0x60),
+            "heading": RGBColor(0x2C, 0x3E, 0x50),
+            "body": RGBColor(0x2C, 0x3E, 0x50),
+            "sub": RGBColor(0x7F, 0x8C, 0x8D),
+            "bar": RGBColor(0x27, 0xAE, 0x60),
+            "bullet_dot": RGBColor(0x27, 0xAE, 0x60),
+        },
+        "swift": {
+            "bg": RGBColor(0xFF, 0xFF, 0xFF),
+            "title_bg": RGBColor(0xE7, 0x4C, 0x3C),
+            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
+            "accent": RGBColor(0xE7, 0x4C, 0x3C),
+            "heading": RGBColor(0x2C, 0x2C, 0x2C),
+            "body": RGBColor(0x33, 0x33, 0x33),
+            "sub": RGBColor(0x88, 0x88, 0x88),
+            "bar": RGBColor(0xE7, 0x4C, 0x3C),
+            "bullet_dot": RGBColor(0xE7, 0x4C, 0x3C),
+        },
+    }
+    theme = TEMPLATES.get(cfg.template, TEMPLATES["general"])
+
+    SLIDE_W = Inches(13.33)
+    SLIDE_H = Inches(7.5)
     prs = Presentation()
-    prs.slide_width = Inches(13.33)
-    prs.slide_height = Inches(7.5)
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
 
-    title_slide = prs.slides.add_slide(prs.slide_layouts[0])
-    title_slide.shapes.title.text = data.get("title", "Presentation")
-    title_slide.placeholders[1].text = "Generated by Noteflow AI"
+    def _add_bg(slide, color):
+        bg = slide.background
+        fill = bg.fill
+        fill.solid()
+        fill.fore_color.rgb = color
 
-    content_layout = prs.slide_layouts[1]
-    for slide_data in data.get("slides", []):
-        slide = prs.slides.add_slide(content_layout)
-        slide.shapes.title.text = slide_data.get("title", "")
-        tf = slide.placeholders[1].text_frame
-        tf.clear()
+    def _add_shape(slide, left, top, width, height, fill_color):
+        from pptx.enum.shapes import MSO_SHAPE
+        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, height)
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = fill_color
+        shape.line.fill.background()
+        return shape
+
+    def _add_text(slide, left, top, width, height, text, font_size, color, bold=False, alignment=PP_ALIGN.LEFT):
+        txBox = slide.shapes.add_textbox(left, top, width, height)
+        tf = txBox.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = text
+        p.font.size = Pt(font_size)
+        p.font.color.rgb = color
+        p.font.bold = bold
+        p.alignment = alignment
+        return txBox
+
+    # --- Title Slide ---
+    title_slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
+    _add_bg(title_slide, theme["title_bg"])
+    # Accent bar at top
+    _add_shape(title_slide, Inches(0), Inches(0), SLIDE_W, Inches(0.08), theme["accent"])
+    # Title
+    _add_text(
+        title_slide, Inches(1.2), Inches(2.0), Inches(10.9), Inches(1.8),
+        data.get("title", "Presentation"), 44, theme["title_text"], bold=True, alignment=PP_ALIGN.LEFT,
+    )
+    # Subtitle
+    subtitle = data.get("subtitle", "Generated by Noteflow AI")
+    _add_text(
+        title_slide, Inches(1.2), Inches(3.8), Inches(10.9), Inches(0.8),
+        subtitle, 20, theme["sub"], alignment=PP_ALIGN.LEFT,
+    )
+    # Bottom accent bar
+    _add_shape(title_slide, Inches(1.2), Inches(5.2), Inches(2.5), Inches(0.06), theme["accent"])
+    # Branding
+    _add_text(
+        title_slide, Inches(1.2), Inches(6.2), Inches(4), Inches(0.5),
+        "Generated by Noteflow AI", 12, theme["sub"],
+    )
+
+    # --- Content Slides ---
+    for idx, slide_data in enumerate(data.get("slides", [])):
+        slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank
+        _add_bg(slide, theme["bg"])
+
+        # Top colored bar
+        _add_shape(slide, Inches(0), Inches(0), SLIDE_W, Inches(0.06), theme["bar"])
+
+        # Slide number
+        _add_text(
+            slide, Inches(11.5), Inches(0.3), Inches(1.5), Inches(0.4),
+            f"{idx + 1:02d}", 14, theme["sub"], alignment=PP_ALIGN.RIGHT,
+        )
+
+        # Left accent stripe
+        _add_shape(slide, Inches(0.8), Inches(0.9), Inches(0.06), Inches(0.7), theme["accent"])
+
+        # Slide title
+        _add_text(
+            slide, Inches(1.1), Inches(0.8), Inches(10), Inches(0.9),
+            slide_data.get("title", ""), 32, theme["heading"], bold=True,
+        )
+
+        # Bullets
         bullets = slide_data.get("bullets", [])
-        for i, bullet in enumerate(bullets):
-            if i == 0:
-                tf.paragraphs[0].text = bullet
+        y_offset = 2.0
+        for bullet in bullets:
+            # Support both old format (string) and new format (dict with main/sub)
+            if isinstance(bullet, dict):
+                main_text = bullet.get("main", "")
+                sub_text = bullet.get("sub", "")
             else:
-                p = tf.add_paragraph()
-                p.text = bullet
-                p.level = 0
+                main_text = str(bullet)
+                sub_text = ""
+
+            # Bullet dot
+            _add_shape(
+                slide,
+                Inches(1.2), Inches(y_offset + 0.12),
+                Inches(0.12), Inches(0.12),
+                theme["bullet_dot"],
+            )
+
+            # Main text (bold)
+            _add_text(
+                slide, Inches(1.6), Inches(y_offset - 0.05), Inches(10), Inches(0.5),
+                main_text, 20, theme["body"], bold=True,
+            )
+            y_offset += 0.45
+
+            # Sub text (lighter, smaller)
+            if sub_text:
+                _add_text(
+                    slide, Inches(1.6), Inches(y_offset - 0.08), Inches(10), Inches(0.4),
+                    sub_text, 15, theme["sub"],
+                )
+                y_offset += 0.38
+
+        # Footer line
+        _add_shape(slide, Inches(0.8), Inches(6.8), Inches(11.7), Inches(0.01), theme["sub"])
+        _add_text(
+            slide, Inches(0.8), Inches(6.85), Inches(4), Inches(0.35),
+            data.get("title", ""), 10, theme["sub"],
+        )
 
     buf = io.BytesIO()
     prs.save(buf)
