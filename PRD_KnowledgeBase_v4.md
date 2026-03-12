@@ -927,6 +927,7 @@ PATCH  /api/notebooks/{id}/owner                Transfer ownership
 | Vanna.ai integration | Self-learning SQL for Excel/CSV queries — trains on user corrections to improve accuracy over time |
 | Chart/diagram understanding | Vision LLM (Qwen-VL) extracts structured data from charts, diagrams, and visual content in uploaded images |
 | Presenton PPT with GPU | Deploy Presenton on GPU server for AI-generated images, rich layouts, and professional slide design (current CPU-only server causes Ollama crash) |
+| Google SSO (OAuth 2.0) | Requires public domain (Google rejects IP-only redirect URIs). Code ready in backend/services/google_auth_service.py + frontend login/register pages. Need: domain → Google Cloud OAuth credentials → Admin Panel config |
 | Subscription plans | Free / Pro / Business tiers with usage limits |
 | Private deployment package | Documented Docker Compose one-click deployment for enterprises |
 | Open API | External REST API for programmatic notebook queries |
