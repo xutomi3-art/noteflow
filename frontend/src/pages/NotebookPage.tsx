@@ -433,7 +433,7 @@ export default function NotebookPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          {notebook && !notebook.is_shared && (
+          {notebook && !notebook.is_shared && notebook.user_role === 'owner' && (
             <button
               onClick={() => setIsShareModalOpen(true)}
               className="flex items-center gap-2 bg-[#5b8c15] text-white px-4 py-1.5 rounded-full text-[13px] font-medium hover:bg-[#4a7311] transition-colors shadow-sm"
@@ -618,13 +618,15 @@ export default function NotebookPage() {
                 <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
                   Team ({members.length})
                 </h3>
-                <button
-                  onClick={() => setIsShareModalOpen(true)}
-                  className="text-[12px] text-[#5b8c15] hover:text-[#4a7311] font-medium transition-colors flex items-center gap-1"
-                >
-                  <Plus className="w-3 h-3" />
-                  Invite
-                </button>
+                {notebook?.user_role === 'owner' && (
+                  <button
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="text-[12px] text-[#5b8c15] hover:text-[#4a7311] font-medium transition-colors flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Invite
+                  </button>
+                )}
               </div>
               <div className="space-y-1 max-h-[120px] overflow-y-auto">
                 {members.map((member) => (
