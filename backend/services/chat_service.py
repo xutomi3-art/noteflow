@@ -160,7 +160,10 @@ async def stream_chat(
     # Send user message event
     yield f"data: {json.dumps({'type': 'user_message', 'id': str(user_msg.id)})}\n\n"
 
-    # 2. Retrieve from RAGFlow
+    # 2. Send heartbeat before slow RAGFlow retrieval
+    yield ": keepalive\n\n"
+
+    # Retrieve from RAGFlow
     dataset_ids, document_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
     # Get Excel sources with duckdb paths (filtered by source_ids if provided)
@@ -299,7 +302,8 @@ The uploaded documents do not contain information relevant to this question. Ple
         {"role": "user", "content": user_content},
     ]
 
-    # 4. Stream response from LLM
+    # 4. Stream response from LLM — send heartbeat before slow LLM call
+    yield ": keepalive\n\n"
     full_response = ""
     if thinking:
         yield f"data: {json.dumps({'type': 'thinking_start'})}\n\n"

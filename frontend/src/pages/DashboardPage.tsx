@@ -47,7 +47,7 @@ function formatRelativeDate(dateStr: string): string {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { notebooks, fetchNotebooks, createNotebook, deleteNotebook } = useNotebookStore();
+  const { notebooks, isLoading, fetchNotebooks, createNotebook, deleteNotebook } = useNotebookStore();
 
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -290,7 +290,19 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {personalNotebooks.length === 0 ? (
+          {isLoading && personalNotebooks.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm animate-pulse">
+                  <div className="h-36 bg-slate-100" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-4 bg-slate-100 rounded w-3/4" />
+                    <div className="h-3 bg-slate-50 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : personalNotebooks.length === 0 ? (
             <div className="text-center py-16 text-slate-400 text-sm font-medium">
               No personal notebooks yet. Create one to get started.
             </div>
@@ -350,7 +362,19 @@ export default function DashboardPage() {
         <section className="mb-16">
           <h2 className="text-xl md:text-[28px] font-bold tracking-tight mb-6">Team Notebooks</h2>
 
-          {teamNotebooks.length === 0 ? (
+          {isLoading && teamNotebooks.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2].map((i) => (
+                <div key={i} className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm animate-pulse">
+                  <div className="h-36 bg-slate-100" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-4 bg-slate-100 rounded w-3/4" />
+                    <div className="h-3 bg-slate-50 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : teamNotebooks.length === 0 ? (
             <div className="text-center py-16 text-slate-400 text-sm font-medium">
               No team notebooks yet. Create one or get invited to join.
             </div>
