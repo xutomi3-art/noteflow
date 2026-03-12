@@ -120,6 +120,70 @@ docker compose exec postgres psql -U noteflow -d noteflow
 
 ## Phase Boundaries
 
-- **Phase 1** (current): Personal notebooks, PDF/DOCX/PPTX/TXT/MD upload, AI Q&A with citations, Studio (Summary/FAQ/Study Guide/Saved Notes). No Excel, no sharing.
-- **Phase 2**: Excel support (DuckDB + dual-track RAG + query router), notebook sharing with Owner/Editor/Viewer roles
-- **Phase 3+**: Mind Map, Podcast, PPT generation, mobile responsive
+- **Phase 1** ✅: Personal notebooks, PDF/DOCX/PPTX/TXT/MD upload, AI Q&A with citations, Studio (Summary/FAQ/Study Guide/Saved Notes)
+- **Phase 2** ✅: Excel/CSV support (DuckDB + dual-track RAG), notebook sharing (Owner/Editor/Viewer roles, invite links)
+- **Phase 3** ✅: Mind Map, Podcast, PPT generation (python-pptx + Presenton), mobile responsive, inline PDF viewer
+- **Phase 4** ✅: Admin Panel (dashboard/users/LLM config/system/logs/usage), DeepSeek R1 thinking mode, conversation memory, resizable panels, paste image, delete notebook UI
+- **Phase 5** (planned): Google SSO (needs domain), Presenton GPU PPT, Vanna.ai, Chart Understanding, Subscription plans, Private deployment, Open API
+
+## 🔄 Autonomous Workflow（自主工作流 — 核心）
+
+### 工作循环
+
+执行任务时遵循以下循环，**不要停下来问我**：
+
+1. **理解**: 读取相关代码、测试、SCRATCHPAD.md，理解当前状态
+2. **计划**: 在思考过程中制定方案（不需要写出来给我看）
+3. **实现**: 写代码，完整实现，不留 TODO
+4. **验证**: 依次运行 → lint → type check → tests
+5. **修复**: 如果任何检查失败，自行分析和修复，回到步骤 4
+6. **重复步骤 4-5**，直到全部通过（最多 5 轮，超过则换方案）
+7. **更新 SCRATCHPAD.md**（重写，不是追加）
+8. **Git commit**，commit message 格式: `feat|fix|refactor|test: 简要描述`
+9. **继续下一个任务**
+
+### ⚡ 行为规则
+
+- **不要问我是否继续** — 直接继续
+- **不要问我确认方案** — 用你的判断力，做完后告诉我做了什么
+- **不要停在错误前面等我** — 自己调试、自己修复
+- **不要一次只做一小步然后等反馈** — 一口气完成整个功能
+- **不要输出大段解释再开始写代码** — 直接写代码
+- **遇到设计选择** — 选更简单的方案，在 DECISIONS.md 记录理由
+- **只有以下情况才来问我**:
+  - 两种方案会导致完全不同的用户体验
+  - 需要新的 API key 或外部服务配置
+  - 架构级变更（影响 3+ 模块的接口改动）
+
+### 🔧 故障恢复流程
+
+**测试失败时:**
+1. 读完整的 error traceback
+2. 定位失败的具体代码行
+3. 判断是新代码引起的还是已有代码的问题
+4. 修复代码（不是修改测试来绕过）
+5. 重新运行**全部测试**（不只是失败的那个）
+6. 如果循环 3 次还没修好，换一个实现方案，在 DECISIONS.md 记录
+
+**Lint / Type check 失败时:**
+- 直接修复，不要问我
+- 不要用 `# type: ignore` 或 `# noqa` 除非有写在 DECISIONS.md 里的技术原因
+
+**依赖问题时:**
+- 检查版本兼容性，尝试 pin 版本
+- 如果需要替代依赖，在 DECISIONS.md 记录
+- 不要降级核心依赖来解决兼容问题
+
+**编译/构建失败时:**
+- 读错误信息，不要猜
+- 检查最近的改动是否引入了循环导入或类型冲突
+- 修复后跑完整测试
+
+### 🔍 自我检查（每完成 3 个任务执行一次）
+
+1. 重新读一遍上面的 Mission，确认当前方向正确
+2. 运行完整测试套件 + lint + type check
+3. 重写 SCRATCHPAD.md
+4. 扫描代码中是否有 TODO / FIXME / placeholder — 如果有，立即修复
+5. 检查最近 3 次 commit 是否引入了不必要的复杂度
+6. 每次做完比对要上传 github
