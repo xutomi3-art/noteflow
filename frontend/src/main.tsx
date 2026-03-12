@@ -13,6 +13,7 @@ import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminLLMPage from '@/pages/admin/AdminLLMPage';
 import AdminSystemPage from '@/pages/admin/AdminSystemPage';
+import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import './index.css';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -76,6 +77,7 @@ function App() {
     <BrowserRouter>
       <AppInit>
         <Routes>
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/login" element={<GuestGuard><LoginPage /></GuestGuard>} />
           <Route path="/register" element={<GuestGuard><RegisterPage /></GuestGuard>} />
           <Route path="/join/:token" element={<AuthGuard><JoinPage /></AuthGuard>} />
