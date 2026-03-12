@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield } from 'lucide-react';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { api } from '@/services/api';
@@ -47,7 +47,7 @@ function formatRelativeDate(dateStr: string): string {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { notebooks, fetchNotebooks, createNotebook } = useNotebookStore();
+  const { notebooks, fetchNotebooks, createNotebook, deleteNotebook } = useNotebookStore();
 
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -107,6 +107,16 @@ export default function DashboardPage() {
       }
       return next;
     });
+  };
+
+  const handleDeleteNotebook = async (notebook: Notebook, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${notebook.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteNotebook(notebook.id);
+    } catch {
+      // silently fail
+    }
   };
 
   const closeModal = () => {
@@ -296,12 +306,21 @@ export default function DashboardPage() {
                     className="h-36 flex items-center justify-center text-5xl group-hover:opacity-90 transition-opacity relative"
                     style={{ backgroundColor: cardColor(notebook) }}
                   >
-                    <button
-                      onClick={(e) => toggleStarred(notebook.id, e)}
-                      className="absolute top-3 right-3 bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors z-10"
-                    >
-                      <Star className={`w-3.5 h-3.5 ${starredIds.has(notebook.id) ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
-                    </button>
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                      <button
+                        onClick={(e) => handleDeleteNotebook(notebook, e)}
+                        className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Delete notebook"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500" />
+                      </button>
+                      <button
+                        onClick={(e) => toggleStarred(notebook.id, e)}
+                        className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
+                      >
+                        <Star className={`w-3.5 h-3.5 ${starredIds.has(notebook.id) ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                      </button>
+                    </div>
                     <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
                   <div className="p-5">
@@ -352,12 +371,23 @@ export default function DashboardPage() {
                         <Users className="w-3.5 h-3.5" /> {notebook.member_count}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => toggleStarred(notebook.id, e)}
-                      className="absolute top-3 right-3 bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors z-10"
-                    >
-                      <Star className={`w-3.5 h-3.5 ${starredIds.has(notebook.id) ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
-                    </button>
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                      {notebook.user_role === 'owner' && (
+                        <button
+                          onClick={(e) => handleDeleteNotebook(notebook, e)}
+                          className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete notebook"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => toggleStarred(notebook.id, e)}
+                        className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
+                      >
+                        <Star className={`w-3.5 h-3.5 ${starredIds.has(notebook.id) ? 'text-amber-500 fill-amber-500' : 'text-slate-400'}`} />
+                      </button>
+                    </div>
                     <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
                   <div className="p-5">
