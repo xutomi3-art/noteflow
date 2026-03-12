@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, BrainCircuit, Settings, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, Users, BrainCircuit, Settings, ArrowLeft, BarChart3 } from 'lucide-react';
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/llm', label: 'LLM Config', icon: BrainCircuit },
   { to: '/admin/system', label: 'System', icon: Settings },
+  { to: '/admin/usage', label: 'Usage', icon: BarChart3 },
 ];
 
 export default function AdminLayout() {

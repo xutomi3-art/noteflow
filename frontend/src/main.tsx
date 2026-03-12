@@ -13,6 +13,7 @@ import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminLLMPage from '@/pages/admin/AdminLLMPage';
 import AdminSystemPage from '@/pages/admin/AdminSystemPage';
+import AdminUsagePage from '@/pages/admin/AdminUsagePage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import './index.css';
 
@@ -88,6 +89,7 @@ function App() {
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="llm" element={<AdminLLMPage />} />
             <Route path="system" element={<AdminSystemPage />} />
+            <Route path="usage" element={<AdminUsagePage />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
