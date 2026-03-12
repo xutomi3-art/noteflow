@@ -39,6 +39,28 @@ export interface ServiceHealth {
   message?: string;
 }
 
+export interface ChatLogItem {
+  id: string;
+  user_email: string;
+  user_name: string;
+  notebook_name: string;
+  message_preview: string;
+  total_duration: number | null;
+  ragflow_duration: number | null;
+  excel_duration: number | null;
+  llm_duration: number | null;
+  llm_first_token: number | null;
+  source_count: number | null;
+  chunk_count: number | null;
+  thinking_mode: boolean;
+  has_excel: boolean;
+  llm_model: string | null;
+  token_count: number | null;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+}
+
 export interface UsageStats {
   period_days: number;
   total_queries: number;

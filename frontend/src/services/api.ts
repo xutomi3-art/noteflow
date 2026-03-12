@@ -1,5 +1,5 @@
 import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member } from "@/types/api";
-import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth, UsageStats } from "@/types/admin";
+import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth, UsageStats, ChatLogItem } from "@/types/admin";
 
 const API_BASE = "/api";
 
@@ -435,6 +435,19 @@ class ApiClient {
 
   async getAdminUsage(period: number = 7): Promise<UsageStats> {
     return this.request(`/admin/usage?period=${period}`);
+  }
+
+  async getAdminLogs(params: { page?: number; limit?: number; status?: string }): Promise<{
+    items: ChatLogItem[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', String(params.page));
+    if (params.limit) searchParams.set('limit', String(params.limit));
+    if (params.status) searchParams.set('status', params.status);
+    return this.request(`/admin/logs?${searchParams}`);
   }
 }
 

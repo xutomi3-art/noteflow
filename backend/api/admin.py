@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
@@ -90,3 +91,67 @@ async def get_usage(
     if period not in (7, 30):
         period = 7
     return await get_usage_stats(db, period)
+
+
+@router.get("/logs")
+async def get_logs(
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    status: str | None = Query(None),
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get chat operation logs for diagnostics."""
+    from backend.models.chat_log import ChatLog
+    from backend.models.user import User as UserModel
+    from backend.models.notebook import Notebook
+
+    query = select(
+        ChatLog,
+        UserModel.email,
+        UserModel.name.label("user_name"),
+        Notebook.name.label("notebook_name"),
+    ).join(UserModel, ChatLog.user_id == UserModel.id).join(
+        Notebook, ChatLog.notebook_id == Notebook.id
+    )
+
+    if status:
+        query = query.where(ChatLog.status == status)
+
+    # Count total
+    count_query = select(func.count()).select_from(ChatLog)
+    if status:
+        count_query = count_query.where(ChatLog.status == status)
+    total = (await db.execute(count_query)).scalar() or 0
+
+    # Paginated results
+    query = query.order_by(desc(ChatLog.created_at)).offset((page - 1) * limit).limit(limit)
+    result = await db.execute(query)
+    rows = result.all()
+
+    items = []
+    for row in rows:
+        log = row[0]
+        items.append({
+            "id": str(log.id),
+            "user_email": row[1],
+            "user_name": row[2],
+            "notebook_name": row[3],
+            "message_preview": log.message_preview,
+            "total_duration": log.total_duration,
+            "ragflow_duration": log.ragflow_duration,
+            "excel_duration": log.excel_duration,
+            "llm_duration": log.llm_duration,
+            "llm_first_token": log.llm_first_token,
+            "source_count": log.source_count,
+            "chunk_count": log.chunk_count,
+            "thinking_mode": log.thinking_mode,
+            "has_excel": log.has_excel,
+            "llm_model": log.llm_model,
+            "token_count": log.token_count,
+            "status": log.status,
+            "error_message": log.error_message,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        })
+
+    return {"items": items, "total": total, "page": page, "limit": limit}

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/services/api";
-import type { DashboardStats, AdminUser, SystemSettingItem, ServiceHealth, UsageStats } from "@/types/admin";
+import type { DashboardStats, AdminUser, SystemSettingItem, ServiceHealth, UsageStats, ChatLogItem } from "@/types/admin";
 
 interface AdminState {
   stats: DashboardStats | null;
@@ -22,6 +22,12 @@ interface AdminState {
   saveSettings: (settings: Record<string, string>) => Promise<void>;
   fetchHealth: () => Promise<void>;
   fetchUsage: (period?: number) => Promise<void>;
+
+  logs: ChatLogItem[];
+  logsTotal: number;
+  logsPage: number;
+  logsStatus: string;
+  fetchLogs: (params?: { page?: number; status?: string }) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -107,6 +113,23 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     try {
       const usage = await api.getAdminUsage(p);
       set({ usage });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  logs: [],
+  logsTotal: 0,
+  logsPage: 1,
+  logsStatus: "",
+
+  fetchLogs: async (params) => {
+    const status = params?.status ?? get().logsStatus;
+    const page = params?.page ?? get().logsPage;
+    set({ isLoading: true, logsStatus: status, logsPage: page });
+    try {
+      const data = await api.getAdminLogs({ page, limit: 50, status: status || undefined });
+      set({ logs: data.items, logsTotal: data.total, logsPage: data.page });
     } finally {
       set({ isLoading: false });
     }
