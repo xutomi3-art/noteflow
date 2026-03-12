@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/services/api";
-import type { DashboardStats, AdminUser, SystemSettingItem, ServiceHealth } from "@/types/admin";
+import type { DashboardStats, AdminUser, SystemSettingItem, ServiceHealth, UsageStats } from "@/types/admin";
 
 interface AdminState {
   stats: DashboardStats | null;
@@ -10,6 +10,8 @@ interface AdminState {
   usersSearch: string;
   settings: SystemSettingItem[];
   health: Record<string, ServiceHealth>;
+  usage: UsageStats | null;
+  usagePeriod: number;
   isLoading: boolean;
 
   fetchDashboard: () => Promise<void>;
@@ -19,6 +21,7 @@ interface AdminState {
   fetchSettings: () => Promise<void>;
   saveSettings: (settings: Record<string, string>) => Promise<void>;
   fetchHealth: () => Promise<void>;
+  fetchUsage: (period?: number) => Promise<void>;
 }
 
 export const useAdminStore = create<AdminState>((set, get) => ({
@@ -29,6 +32,8 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   usersSearch: "",
   settings: [],
   health: {},
+  usage: null,
+  usagePeriod: 7,
   isLoading: false,
 
   fetchDashboard: async () => {
@@ -91,6 +96,17 @@ export const useAdminStore = create<AdminState>((set, get) => ({
     try {
       const health = await api.getAdminHealth();
       set({ health });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchUsage: async (period) => {
+    const p = period ?? get().usagePeriod;
+    set({ isLoading: true, usagePeriod: p });
+    try {
+      const usage = await api.getAdminUsage(p);
+      set({ usage });
     } finally {
       set({ isLoading: false });
     }

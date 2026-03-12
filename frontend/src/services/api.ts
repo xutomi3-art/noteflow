@@ -1,5 +1,5 @@
 import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member } from "@/types/api";
-import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth } from "@/types/admin";
+import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth, UsageStats } from "@/types/admin";
 
 const API_BASE = "/api";
 
@@ -431,6 +431,10 @@ class ApiClient {
 
   async getAdminHealth(): Promise<Record<string, ServiceHealth>> {
     return this.request("/admin/health");
+  }
+
+  async getAdminUsage(period: number = 7): Promise<UsageStats> {
+    return this.request(`/admin/usage?period=${period}`);
   }
 }
 

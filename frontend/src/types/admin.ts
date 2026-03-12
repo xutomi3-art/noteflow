@@ -38,3 +38,16 @@ export interface ServiceHealth {
   latency_ms: number;
   message?: string;
 }
+
+export interface UsageStats {
+  period_days: number;
+  total_queries: number;
+  docs_ready: number;
+  docs_failed: number;
+  total_storage_bytes: number;
+  success_rate: number;
+  queries_per_day: { date: string; count: number }[];
+  active_users_per_day: { date: string; count: number }[];
+  top_users: { name: string; email: string; query_count: number }[];
+  top_notebooks: { name: string; emoji: string; source_count: number }[];
+}
