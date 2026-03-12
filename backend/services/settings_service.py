@@ -15,10 +15,11 @@ CONFIGURABLE_KEYS = {
     "max_file_size_mb",
     "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
     "alibaba_tts_appkey", "alibaba_tts_token",
+    "google_client_id", "google_client_secret", "google_redirect_uri",
 }
 
 # Keys that contain sensitive values — mask on read
-SENSITIVE_KEYS = {"llm_api_key", "qwen_api_key", "ragflow_api_key", "smtp_password", "alibaba_tts_token"}
+SENSITIVE_KEYS = {"llm_api_key", "qwen_api_key", "ragflow_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret"}
 
 # Mapping from setting key to Settings attribute
 _ENV_MAP = {
@@ -36,6 +37,9 @@ _ENV_MAP = {
     "smtp_from": "SMTP_FROM",
     "alibaba_tts_appkey": "ALIBABA_TTS_APPKEY",
     "alibaba_tts_token": "ALIBABA_TTS_TOKEN",
+    "google_client_id": "GOOGLE_CLIENT_ID",
+    "google_client_secret": "GOOGLE_CLIENT_SECRET",
+    "google_redirect_uri": "GOOGLE_REDIRECT_URI",
 }
 
 

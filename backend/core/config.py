@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # Admin
     ADMIN_EMAIL: str = ""
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
