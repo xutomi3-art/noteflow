@@ -12,6 +12,7 @@ from backend.schemas.admin import (
     UpdateSettingsRequest,
 )
 from backend.services import admin_service, settings_service
+from backend.services.usage_service import get_usage_stats
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -77,3 +78,15 @@ async def health_check(
     db: AsyncSession = Depends(get_db),
 ):
     return await admin_service.check_service_health(db)
+
+
+@router.get("/usage")
+async def get_usage(
+    period: int = 7,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_admin_user),
+):
+    """Get usage statistics. period=7 or period=30."""
+    if period not in (7, 30):
+        period = 7
+    return await get_usage_stats(db, period)
