@@ -1,6 +1,6 @@
 # PRD · Noteflow
 **Product Requirements Document**
-Version 4.4 | Date 2026-03-08 | Author Tommy
+Version 5.0 | Date 2026-03-10 | Author Tommy
 
 ---
 
@@ -27,7 +27,7 @@ An AI-powered knowledge base tool for individuals and teams, inspired by Google 
 
 ### 1.2 Core Concepts
 
-There is only **one notebook type**. Every notebook starts as personal and private. The owner can share it at any time via the **[Share]** button inside the notebook. Once shared, it moves to the "Shared Notebooks" section on the Home Page automatically.
+There is only **one notebook type**. Every notebook starts as personal and private. The owner can share it at any time via the **[Share]** button inside the notebook. Once shared, it moves to the "Shared with Me" section on the dashboard for other members.
 
 > No "team" entity exists. No "create shared notebook" flow. You always create a notebook first, then optionally share it from inside.
 
@@ -39,20 +39,33 @@ There is only **one notebook type**. Every notebook starts as personal and priva
 | **Frictionless Sharing** | Share any notebook with one click — no team setup overhead |
 | **Meeting Intelligence** | Upload meeting minutes and let AI surface decisions, action items, and context across sessions |
 | **Citation Traceability** | Every AI answer traces back to the exact source paragraph — no hallucinations |
-| **Enterprise Formats** | Full support for PDF, Word, PPT, and Excel including table semantics |
+| **Enterprise Formats** | Full support for PDF, Word, PPT, Excel/CSV including table semantics |
+| **Studio Outputs** | AI-generated summaries, FAQs, study guides, mind maps, podcasts, and PPT exports |
+| **Inline PDF Viewer** | Click any citation to jump directly to the referenced page in an inline PDF viewer |
 | **China-Optimized** | Powered by Qwen (通义千问) for superior Chinese language understanding |
 
 ### 1.4 Key Differentiators from NotebookLM
 
-| Feature | This Product | NotebookLM |
-|---------|:------------:|:----------:|
+| Feature | Noteflow | NotebookLM |
+|---------|:--------:|:----------:|
 | Notebook-level sharing (no team setup) | ✅ | ❌ |
 | Member list per shared notebook | ✅ | ❌ |
 | Meeting minutes Q&A | ✅ | Limited |
-| Excel semantic understanding | ✅ | ❌ |
+| Excel/CSV semantic understanding | ✅ | ❌ |
+| Mind Map generation | ✅ | ❌ |
+| PPT generation & export | ✅ | ❌ |
+| Inline PDF viewer with citation navigation | ✅ | ❌ |
 | Private deployment | ✅ | ❌ |
 | Chinese LLM (Qwen) | ✅ | ❌ |
 | Citation traceability | ✅ | ✅ |
+| Podcast generation | ✅ | ✅ |
+
+### 1.5 Current Status
+
+All three development phases are **complete and deployed** at http://10.200.0.112:
+- **Phase 1**: Core knowledge base (auth, notebooks, document upload, AI Q&A with citations, Studio basics)
+- **Phase 2**: Notebook sharing (invite links, roles, member management, ownership transfer)
+- **Phase 3**: Advanced Studio (Mind Map, Podcast, PPT generation), Excel/CSV support, Inline PDF viewer
 
 ---
 
@@ -69,40 +82,41 @@ There is only **one notebook type**. Every notebook starts as personal and priva
 ### 2.2 Core Use Cases
 
 **Use Case A — Personal Research Assistant**
-> A user uploads 20 industry reports and asks "What are the AI healthcare trends across these reports?" The AI synthesizes a structured answer with every claim linked to the exact page of the source document.
+> A user uploads 20 industry reports and asks "What are the AI healthcare trends across these reports?" The AI synthesizes a structured answer with every claim linked to the exact page of the source document. Clicking a citation [1] opens the PDF inline at the cited page.
 
 **Use Case B — Meeting Minutes Intelligence**
-> A product team uploads meeting minutes from the past 6 months into a shared notebook. Any member can ask: "What did we decide about the pricing model in Q4?" or "What action items are still unresolved?" The AI retrieves answers across all sessions with source attribution to the specific meeting date and document.
+> A product team uploads meeting minutes from the past 6 months into a shared notebook. Any member can ask: "What did we decide about the pricing model in Q4?" The AI retrieves answers across all sessions with source attribution.
 
 **Use Case C — Team Knowledge Hub**
 > A sales team uploads client case studies, product manuals, and competitive analyses into a shared notebook. New hires ask the AI anything without interrupting senior colleagues.
 
-**Use Case D — Excel Data Q&A**
-> A finance team uploads a quarterly report (.xlsx) and asks "What is the revenue breakdown by region in Q3?" The AI understands the table structure and returns accurate, data-grounded answers.
+**Use Case D — Excel/CSV Data Q&A**
+> A finance team uploads a quarterly report (.xlsx) and asks "What is the revenue breakdown by region in Q3?" The AI understands the table structure and returns accurate, data-grounded answers via LLM-native markdown parsing or SQL-based DuckDB execution.
 
-**Use Case E — Project Document Center**
-> A consulting team shares one notebook per engagement. All project docs — proposals, research, deliverables — live together. Anyone can ask "What constraints did the client mention in the kickoff?" and get a cited answer.
+**Use Case E — Presentation Generation**
+> After uploading research documents, a user clicks "PPT" in Studio and downloads a ready-to-edit PowerPoint summarizing key findings. They also generate a mind map for visual concept overview.
 
 ---
 
 ## 3. Information Architecture
 
-### 3.1 Home Page Layout
+### 3.1 Dashboard Layout
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  🔵 Logo                                    [Settings]  [Avatar]     │
+│  📒 Noteflow                                        [User] [Sign out] │
 ├──────────────────────────────────────────────────────────────────────┤
 │                                                                       │
-│  Personal Notebooks                                 [+ Create new]   │
+│  My Notebooks                                                        │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────────┐   │
-│  │ 📒       │ │ 🤖       │ │ 🛡        │ │         +            │   │
-│  │ Research │ │ AI Notes │ │ Security │ │   Create notebook    │   │
+│  │ 📒       │ │ 🤖       │ │ 🛡        │ │  Create notebook     │   │
+│  │ Research │ │ AI Notes │ │ Security │ │         +            │   │
 │  │ 8 Mar    │ │ 16 Oct   │ │ 17 Feb   │ │                      │   │
 │  │ 3 sources│ │ 1 source │ │14 sources│ │                      │   │
+│  │  [⋮]     │ │  [⋮]     │ │  [⋮]     │ │                      │   │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────────────────┘   │
 │                                                                       │
-│  Shared Notebooks                                                     │
+│  Shared with Me                                                       │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐                             │
 │  │ 📁       │ │ 📊       │ │ 🏫        │                             │
 │  │ JOTO AI  │ │ Harrow   │ │ Q1 Mtgs  │                             │
@@ -110,16 +124,19 @@ There is only **one notebook type**. Every notebook starts as personal and priva
 │  │ 5 Mar    │ │ 1 Mar    │ │ 3 Mar    │                             │
 │  │ 8 sources│ │ 4 sources│ │12 sources│                             │
 │  │ 👤 6     │ │ 👤 3     │ │ 👤 4     │                             │
+│  │ Editor   │ │ Viewer   │ │ Editor   │                             │
 │  └──────────┘ └──────────┘ └──────────┘                             │
 │                                                                       │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 **Section rules:**
-- **Personal Notebooks** — notebooks not yet shared with anyone. Has [+ Create new] shortcut.
-- **Shared Notebooks** — notebooks the user has shared OR been invited to. No [+ Create new] here. You always create first, then share from inside.
-- Shared notebook cards show a `👤 N` member count badge. Personal cards do not.
-- Both sections are auto-populated by the system; the user never chooses "create shared notebook."
+- **My Notebooks** — notebooks owned by the current user. Has "Create notebook" card.
+- **Shared with Me** — notebooks the user has been invited to (not owned by them). Shows role badge (Editor/Viewer).
+- Shared notebook cards show a `👤 N` member count badge and role label.
+- Both sections auto-populated by the system.
+- Own notebook `⋮` menu: Rename / Delete
+- Shared notebook `⋮` menu: Leave
 
 ### 3.2 Notebook Interior — Three-Panel Layout
 
@@ -128,33 +145,46 @@ There is only **one notebook type**. Every notebook starts as personal and priva
 │   SOURCES           │           CHAT                   │   STUDIO        │
 │   (Left Panel)      │       (Center Panel)             │ (Right Panel)   │
 │                     │                                  │                 │
-│  [+ Add sources]    │  📒 Notebook Name    [Share] ✦  │ 📝 Summary      │
-│                     │                                  │ 🗂 FAQ          │
-│  ───────────────    │  Auto-generated overview...      │ 📖 Study Guide  │
-│  ☑ Select all       │  [Save to note]  📋  👍  👎     │ 📌 Saved Notes  │
-│                     │  ──────────────────────────      │                 │
-│  📄 minutes_jan.pdf │  Suggested questions:            │ ── if shared ── │
-│  📄 minutes_feb.pdf │  • What was decided in ...?      │                 │
-│  📊 roadmap.xlsx    │  • Who owns action item X?       │ 👥 Members (4)  │
-│  📊 Q1_report.xlsx  │                                  │ ┌─────────────┐ │
-│  📑 proposal.pptx   │  ──────────────────────────      │ │🟢 Tommy(You)│ │
-│                     │                                  │ │   Owner     │ │
-│                     │  👤 [User question]              │ │🟢 Alice     │ │
-│                     │                                  │ │   Editor    │ │
-│                     │  🤖 [AI answer... [1][2]]        │ │⚪ Bob       │ │
-│                     │  ▸ [1] minutes_jan.pdf · p.4    │ │   Viewer    │ │
-│                     │  ▸ [2] minutes_feb.pdf · p.2    │ │⚪ Carol     │ │
-│                     │  [Save to note]  📋  👍  👎     │ │   Viewer    │ │
-│                     ├──────────────────────────────────┤ └─────────────┘ │
-│                     │ [Type here...]    4 sources  [→] │ [+ Invite]      │
-│                     │                      [🗑 Clear]  │                 │
+│  Sources            │  📒 Notebook Name  👤N  [Share]  │ Studio          │
+│  N files            │                                  │                 │
+│  ┌───────────────┐  │  AI-generated overview...        │ 📝 Summary      │
+│  │ Drop files or  │  │                                  │ 🗂 FAQ          │
+│  │ click to upload│  │  Suggested questions:            │ 📖 Study Guide  │
+│  └───────────────┘  │  • What was decided in ...?      │ 📊 PPT          │
+│                     │  • Who owns action item X?       │ 🧠 Mind Map     │
+│  ☑ Select all       │                                  │ 🎧 Podcast      │
+│  ☑ Deselect all     │  ──────────────────────────      │ 📌 Saved Notes  │
+│                     │                                  │                 │
+│  📄 report.pdf   ✅ │  👤 [User question]              │                 │
+│  📊 data.pptx    ✅ │                                  │                 │
+│  📊 budget.xlsx  ✅ │  🤖 [AI answer... [1][2]]        │                 │
+│                     │  ▸ [1] report.pdf · p.4          │                 │
+│                     │  ▸ [2] data.pptx · slide 2      │                 │
+│                     │  [Copy]  [Save to note]          │                 │
+│                     ├──────────────────────────────────┤                 │
+│                     │ [Ask about your N documents...]  │                 │
 └─────────────────────┴──────────────────────────────────┴─────────────────┘
 ```
 
 **Panel rules:**
-- **Sources panel (left)** — documents only. No members section here.
-- **Chat panel (center)** — contains the **[Share]** button in the header, always visible regardless of notebook type.
-- **Studio panel (right)** — shows the Members section at the bottom **only when the notebook has been shared**. Personal notebooks show nothing in that area.
+- **Sources panel (left)** — documents only. Upload area, file list with checkboxes, status badges.
+- **Chat panel (center)** — header shows notebook name, member count, and [Share] button.
+- **Studio panel (right)** — AI output tabs. When PDF viewer is active, it replaces the entire Studio panel.
+
+**PDF Viewer mode (replaces Studio panel):**
+```
+┌─────────────────────┐
+│ [✕] filename.pdf    │
+│ [◀] 3 / 70 [▶] [+][-]│
+│                     │
+│  ┌───────────────┐  │
+│  │               │  │
+│  │   PDF Page    │  │
+│  │   Rendered    │  │
+│  │               │  │
+│  └───────────────┘  │
+└─────────────────────┘
+```
 
 ---
 
@@ -163,19 +193,19 @@ There is only **one notebook type**. Every notebook starts as personal and priva
 ### 4.1 Create a Notebook
 
 ```
-Home Page → [+ Create new] (under Personal Notebooks)
+Dashboard → [Create notebook] card
       │
       ▼
-Enter notebook name + choose emoji + cover color
+Modal: Enter notebook name + choose emoji + cover color
       │
       ▼
-Notebook opens → Add Sources modal appears
+Notebook opens in three-panel layout
       │
       ▼
 Upload files → Processing pipeline → Chat ready
       │
       ▼
-Notebook lives in "Personal Notebooks" on Home Page
+Notebook listed under "My Notebooks" on Dashboard
 ```
 
 ### 4.2 Share a Notebook
@@ -185,101 +215,123 @@ Inside any notebook → click [Share] in Chat panel header
       │
       ▼
 Share modal opens:
-  ├── Generate invite link  (expiry: 24h / 7 days / permanent)
-  └── Enter emails to invite directly  (set role: Editor / Viewer)
+  ├── Select role for invite link (Editor / Viewer)
+  └── Click "Generate Link" → copy invite URL
       │
       ▼
-First member added → notebook moves to "Shared Notebooks" on Home Page
-Members section appears in Studio panel (right)
+Share the link with collaborators
+Notebook appears under "Shared with Me" on their Dashboard
 ```
 
 ### 4.3 Joining a Shared Notebook via Invite
 
 ```
-Receive invite link / email
+Receive invite link
       │
       ├── Not logged in → Register / Login → Auto-join
-      └── Already logged in → Confirm join
+      └── Already logged in → Auto-join → Redirected to notebook
       │
       ▼
-Notebook appears under "Shared Notebooks" on their Home Page
+Notebook appears under "Shared with Me" on their Dashboard
 ```
 
 ### 4.4 Revert Shared → Personal
 
 ```
-Inside shared notebook → [Share] → "Manage sharing"
+Inside shared notebook → [Share] → modal
       │
       ▼
-Remove all members (or click "Stop sharing")
+Click "Stop sharing and remove all members"
       │
       ▼
-Notebook reverts to Personal, moves back to Personal section on Home Page
+All members removed; notebook remains in owner's "My Notebooks"
+```
+
+### 4.5 View PDF from Citation
+
+```
+AI response contains inline citation [1]
+      │
+      ├── Click [1] in response text → Opens PDF viewer at cited page
+      └── Click source name in citation list → Opens PDF viewer at cited page
+      │
+      ▼
+PDF viewer replaces Studio panel
+User can navigate pages, zoom in/out
+Click [✕] to close and return to Studio
 ```
 
 ---
 
 ## 5. Feature Specifications
 
-### 5.1 Home Page
+### 5.1 Dashboard
 
-#### 5.1.1 "Personal Notebooks" Section
+#### 5.1.1 "My Notebooks" Section
 
-- Always shown at the top of the Home Page
-- Card grid: 4 columns desktop, 2 columns mobile
-- Each card: emoji cover, notebook name, last updated date, source count
-- Last card is always the [+ Create new] shortcut
-- Hover `⋮` menu: Rename / Share / Duplicate / Delete
+- Always shown at the top of the Dashboard
+- Card grid layout, responsive
+- Each card: emoji cover + color, notebook name, date, source count
+- Last card is always the "Create notebook" shortcut
+- Hover reveals `⋮` menu: Rename / Delete
 
-#### 5.1.2 "Shared Notebooks" Section
+#### 5.1.2 "Shared with Me" Section
 
-- Shown below Personal Notebooks
+- Shown below My Notebooks
 - Same card grid layout
-- Cards additionally show: `👤 N` member count badge
-- Section is hidden if user has no shared notebooks
-- Hover `⋮` menu: Rename / Manage members / Duplicate / Leave / Delete (Owner only)
-- Sorted by most recently active
+- Cards additionally show: `👤 N` member count badge and role label (Editor/Viewer)
+- Section hidden if user has no shared notebooks
+- Hover `⋮` menu: Leave
 
 #### 5.1.3 Notebook Card
 
-| Element | Personal | Shared |
-|---------|----------|--------|
+| Element | My Notebooks | Shared with Me |
+|---------|:------------:|:--------------:|
 | Cover (emoji + color) | ✅ | ✅ |
 | Notebook name | ✅ | ✅ |
-| Last updated + source count | ✅ | ✅ |
+| Date + source count | ✅ | ✅ |
 | `👤 N` member count | ❌ | ✅ |
-| `⋮` overflow menu | ✅ | ✅ |
+| Role badge (Editor/Viewer) | ❌ | ✅ |
+| `⋮` menu | Rename, Delete | Leave |
 
 ---
 
 ### 5.2 [Share] Button & Modal
 
-The [Share] button sits in the Chat panel header, always visible.
+The [Share] button sits in the Chat panel header, visible to Owner and Editor.
 
-**When notebook is personal (not yet shared):**
+**Share modal:**
 
 ```
 ┌────────────────────────────────────────────────┐
 │  Share "Research Notes"                    [×] │
 │                                                │
-│  Invite link                                   │
-│  ┌──────────────────────────────┐ [Copy link]  │
-│  │ https://app.xyz/join/abc123  │              │
+│  Invite Link                                   │
+│  Role: [Viewer ▾] [Editor]                     │
+│  [Generate Link]                               │
+│                                                │
+│  ┌──────────────────────────────┐ [📋 Copy]   │
+│  │ https://app/join/abc123...   │              │
 │  └──────────────────────────────┘              │
-│  Expiry: [7 days ▾]   [Revoke]                 │
 │                                                │
-│  Or invite by email                            │
+│  Members (3)                                   │
 │  ┌──────────────────────────────────────────┐  │
-│  │ alice@company.com, bob@company.com       │  │
+│  │ T  Test User (you)     Owner             │  │
+│  │ T  Test User 2         [Editor ▾]        │  │
+│  │    test2@noteflow.dev  [Transfer][Remove]│  │
 │  └──────────────────────────────────────────┘  │
-│  Role for invitees: [Editor ▾]                 │
 │                                                │
-│  [Send invites]                                │
+│  [Stop sharing and remove all members]         │
 └────────────────────────────────────────────────┘
 ```
 
-**When notebook is already shared:**
-Clicking [Share] opens the Member Management modal (see §5.6).
+**Modal features:**
+- Generate invite link with selectable role (Viewer/Editor)
+- Copy link to clipboard
+- Member list with role dropdown (Owner only can change)
+- Transfer ownership button per member
+- Remove member button
+- "Stop sharing" to remove all members at once
 
 ---
 
@@ -287,31 +339,44 @@ Clicking [Share] opens the Member Management modal (see §5.6).
 
 - Lists all knowledge sources in the current notebook
 - Checkbox per source — select/deselect to scope AI queries to specific files
-- "Select all sources" toggle at top
-- Each source: type icon, file name, status badge, `⋮` (Rename / Delete)
-- Click source name → inline preview or download
-- **No members section here** — Sources panel is documents only
+- "Select all" / "Deselect all" toggle at top
+- Shows file count and selected count
+- Each source: type icon (📄 PDF, 📊 PPTX/XLSX, etc.), file name, status badge, file size
+- Click source name → opens inline PDF viewer (for PDF/PPTX/DOCX sources)
+- Delete button per source (hidden for Viewer role, backend-enforced for all non-owner/editor)
+- Upload area: drag-and-drop or click to browse files
 
 **Upload behavior:**
-- Users can select and upload **multiple files at once** via the file picker or drag-and-drop
+- Multiple files can be uploaded at once
 - All files enter the processing queue simultaneously
 - Each file shows its own independent status badge
-- Mixed formats supported in a single upload batch (e.g. PDF + XLSX + PPTX together)
+- Mixed formats supported in a single upload batch
 
-**Upload limits (Phase 1):**
+**Supported formats:**
+
+| Format | Processing Route |
+|--------|-----------------|
+| PDF | MinerU → Markdown → RAGFlow |
+| DOCX | MinerU → Markdown → RAGFlow |
+| PPTX | MinerU → Markdown → RAGFlow |
+| TXT / MD | Direct read → RAGFlow |
+| XLSX / XLS | DuckDB (numerical) + RAGFlow (text) |
+| CSV | DuckDB (numerical) + RAGFlow (text) |
+| Images (PNG, JPG, etc.) | MinerU OCR → RAGFlow |
+
+**Upload limits:**
 
 | Constraint | Limit |
 |-----------|-------|
 | Max file size per file | 50 MB |
 | Max files per notebook | 50 |
-| Max files per upload batch | 20 |
-| Supported formats | PDF, DOCX, PPTX, XLSX, XLS, TXT, MD |
+| Supported formats | PDF, DOCX, PPTX, XLSX, XLS, CSV, TXT, MD, PNG, JPG |
 
 **Source status badges:**
 
 ```
-⏳ Uploading → 🔄 Parsing → ⚡ Vectorizing → ✅ Ready
-                                             ❌ Failed  [Retry]
+⏳ Uploading → 🔄 Processing → ✅ Ready
+                              → ❌ Failed
 ```
 
 ---
@@ -320,144 +385,149 @@ Clicking [Share] opens the Member Management modal (see §5.6).
 
 #### 5.4.1 Initial State
 
-After all sources reach "Ready," the Chat panel auto-shows:
+When sources are ready, the Chat panel shows:
 
-1. **Notebook Overview** — AI-generated summary of all source content
-2. **Suggested Questions** — 3 context-aware starter questions
-   - For meeting minutes: "What action items came out of the last session?"
-   - For research docs: "What is the central argument across these papers?"
-3. `[Save to note]` + 📋 + 👍 👎 under the overview
+1. **Notebook Overview** — AI-generated summary of all source content (auto-generated on first load)
+2. **Suggested Questions** — 3 context-aware starter questions (clickable)
+3. **[Clear conversation]** button
 
 #### 5.4.2 Conversation Layout
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  📒 Notebook Name                  [Share] ✦  [⚙ Menu]  │
+│  📒 Notebook Name                 👤N  [Share]            │
 ├──────────────────────────────────────────────────────────┤
 │                                                          │
-│  🤖  [Auto-generated notebook overview]                  │
-│      [Save to note]  📋  👍  👎                         │
+│  [AI-generated notebook overview]                        │
 │                                                          │
 │  Suggested questions:                                    │
 │  ┌───────────────────────────────────────┐              │
 │  │  What action items came out of Feb?   │              │
 │  └───────────────────────────────────────┘              │
 │                                                          │
-│  ── conversation history scrolls upward ──               │
+│  ── conversation history scrolls ──                      │
 │                                                          │
 │  👤  What was agreed on pricing in Q4?                  │
 │                                                          │
 │  🤖  In the October meeting, the team agreed to...      │
 │      [1][2]                                              │
-│      ▸ [1] minutes_oct.pdf · Oct 15 · p.3              │
-│      ▸ [2] minutes_nov.pdf · Nov 2 · p.1               │
-│      [Save to note]  📋  👍  👎                         │
+│      ▸ [1] minutes_oct.pdf · p.3                        │
+│      ▸ [2] minutes_nov.pdf · p.1                        │
+│      [Copy]  [Save to note]                              │
 │                                                          │
 ├──────────────────────────────────────────────────────────┤
-│  [Start typing...]                4 sources   [→]        │
-│                                           [🗑 Clear]     │
+│  [Ask about your N documents...]                    [→]  │
 └──────────────────────────────────────────────────────────┘
 ```
 
 #### 5.4.3 Conversation Rules
 
-- No separate history sidebar — all messages inline, scrolling upward
-- History persists across sessions and page refreshes
-- **[🗑 Clear]** bottom-right → confirmation dialog → irreversible
-- Input bar shows how many sources are currently selected (reflects checkboxes)
-- Full Markdown rendering in AI responses
+- All messages inline, scrolling
+- History persists across sessions and page refreshes (stored in database, per-user per-notebook)
+- **Chat history is per-user** — each user in a shared notebook has their own independent chat history
+- **[Clear conversation]** clears current user's history only
+- Input bar shows how many documents are available
+- Full Markdown rendering in AI responses (headers, bold, lists, tables, code blocks)
+- Streaming token-by-token via SSE
 
 #### 5.4.4 Citation Traceability
 
-Inline markers `[1]` `[2]` appear in AI responses. Each expands to show:
-- Source file name
-- Location: page number (PDF/Word) · slide number (PPT) · Sheet + row (Excel) · meeting date (if detected)
-- Verbatim excerpt from the source
+Inline markers `[1]` `[2]` appear as superscript in AI responses. Below each AI response, a citation list shows:
+- Source file name (clickable → opens PDF viewer for supported types)
+- File type badge
+- Excerpt from the source
 
-**Meeting-specific citation format:**
-`minutes_2026-01-15.pdf · Jan 15 · p.2`
+**Clicking a citation:**
+- For PDF/DOCX/PPTX sources: opens the inline PDF viewer at the cited page/slide
+- The citation marker `[1]` in the response text is also clickable
+
+**Citation data structure:**
+```typescript
+interface Citation {
+  index: number;
+  source_id: string;
+  filename: string;
+  file_type: 'pdf' | 'docx' | 'pptx' | 'txt' | 'md' | 'xlsx' | 'csv';
+  location: { page?: number; slide?: number; paragraph?: number };
+  excerpt: string;
+}
+```
 
 ---
 
 ### 5.5 Studio Panel (Right)
 
-The Studio panel provides AI-generated outputs and artifacts from the notebook's knowledge sources. Features are triggered on-demand by clicking the corresponding card.
+The Studio panel provides AI-generated outputs from the notebook's knowledge sources. Features are triggered by clicking the corresponding tab button.
 
-**Phase 1 — Core outputs (all notebooks):**
+**Available tabs:**
 
-| Feature | Description |
-|---------|-------------|
-| 📝 Summary | Structured summary of all selected sources |
-| 🗂 FAQ | Auto-generated Q&A list |
-| 📖 Study Guide | Outline / key concepts list |
-| 📌 Saved Notes | Notes pinned from chat via [Save to note] |
-| 🗺 Mind Map | Visual concept map of the notebook's key topics and relationships, rendered interactively |
-| 🎙 Podcast | AI-generated conversational audio overview — two AI voices discuss the notebook content in a podcast format |
-| 📊 Generate PPT | Export a ready-to-present PowerPoint deck summarizing the notebook's key findings, structured by topic |
+| Tab | Description | Status |
+|-----|-------------|--------|
+| 📝 Summary | Structured summary of all sources | ✅ Implemented |
+| 🗂 FAQ | Auto-generated Q&A list | ✅ Implemented |
+| 📖 Study Guide | Key concepts and outline | ✅ Implemented |
+| 📊 PPT | Export PowerPoint deck | ✅ Implemented |
+| 🧠 Mind Map | Interactive visual concept map (React Flow) | ✅ Implemented |
+| 🎧 Podcast | AI two-voice audio overview (TTS required) | ✅ Implemented |
+| 📌 Saved Notes | Notes saved from chat via [Save to note] | ✅ Implemented |
 
-**Output generation flow:**
+**Tab behavior:**
+- Click tab → auto-generates content if not yet generated (for Summary/FAQ/Study Guide/Mind Map)
+- Click active tab → collapses/hides content area
+- Spinner shown during generation
+- Saved Notes tab shows count badge
+- Tabs disabled when no ready sources (except Saved Notes)
 
-```
-User clicks output card (e.g. 🗺 Mind Map)
-      │
-      ▼
-Studio card shows loading spinner
-      │
-      ▼
-AI generates output based on currently selected sources
-      │
-      ▼
-Output renders inline in Studio panel
-Options: [Regenerate] [Download] [Save to Notes]
-```
+**Studio output details:**
 
-**Podcast generation detail:**
-- Qwen scripts a two-voice conversation covering the notebook's key topics
+**Summary / FAQ / Study Guide:**
+- Generated by Qwen based on RAGFlow-retrieved context from all sources
+- Rendered as Markdown in the Studio panel
+- [Regenerate] button available
+
+**PPT Generation:**
+- Qwen generates structured slide outline (title, sections, bullet points)
+- Rendered as .pptx using `python-pptx`
+- One-click download
+- Users can edit in PowerPoint or Google Slides
+
+**Mind Map:**
+- Qwen generates JSON with nodes and parent relationships
+- Rendered interactively using React Flow
+- Drag, zoom, and pan support
+- Auto-layout with hierarchical structure
+
+**Podcast:**
+- Qwen scripts a two-voice conversation
 - Text-to-speech via Alibaba Cloud TTS
-- Output: MP3 file, playable inline with a mini audio player in Studio
-- Duration: ~5–10 minutes depending on source volume
+- Output: MP3, playable inline with audio player
+- Requires `ALIBABA_TTS_APPKEY` and `ALIBABA_TTS_TOKEN` env vars
+- Returns HTTP 501 with graceful error when TTS not configured
 
-**Generate PPT detail:**
-- Qwen generates a structured slide outline from the notebook content (title, key sections, bullet points, conclusion)
-- Rendered as a .pptx file using `python-pptx`
-- Slide structure: Title → Overview → Key Topics (1 slide per major theme) → Summary
-- Download triggered immediately; also saved to notebook for re-download
-- Users can open the .pptx in PowerPoint or Google Slides for further editing
-
-**Visible only for Shared Notebooks (bottom of Studio panel):**
-
-```
-── Members (4) ──────────────────────────
-🟢 Tommy (You)               Owner
-🟢 Alice                     Editor
-⚪ Bob                        Viewer
-⚪ Carol                      Viewer
-
-[+ Invite]    [Manage]
-```
-
-- 🟢 = active within 7 days · ⚪ = inactive
-- **[+ Invite]** → opens the Share modal
-- **[Manage]** → opens Member Management modal (Owner only)
-- Personal notebooks: this section does not appear
+**Inline PDF Viewer (replaces Studio panel):**
+- Triggered by clicking a source name or citation
+- Uses `react-pdf` (PDF.js) for rendering
+- Page navigation (prev/next), page indicator
+- Zoom in/out controls
+- Close button returns to Studio
+- When a new citation is clicked, viewer navigates to the cited page without reloading
 
 ---
 
-### 5.6 Member Management Modal (Owner only)
+### 5.6 Member Management
 
-| Column | Description |
-|--------|-------------|
-| Avatar + Name | User profile |
-| Email | Contact |
-| Role | Owner / Editor / Viewer — editable inline |
-| Joined | Date joined |
-| Last active | Last time accessed this notebook |
-| Actions | Change role ▾ / Remove |
+Member management is handled within the Share modal (accessible via [Share] button).
 
-Additional actions:
-- **Transfer Ownership** — Owner can assign ownership to another Editor
-- **Stop Sharing** — removes all members; notebook reverts to Personal
-- **Leave Notebook** — available to non-owners from `⋮` menu on card
+**Owner capabilities:**
+- Generate/revoke invite links with role selection
+- View member list with roles
+- Change member roles (Editor ↔ Viewer)
+- Remove individual members
+- Transfer ownership to another member
+- Stop sharing (remove all members)
+
+**Non-owner actions:**
+- Leave notebook (via dashboard card `⋮` menu or API)
 
 ---
 
@@ -466,215 +536,62 @@ Additional actions:
 #### 5.7.1 Processing Pipeline
 
 ```
-Upload
+Upload → FastAPI stores file locally
   │
-  ├─ PDF / DOCX / PPTX ──► MinerU ──────────────────────► Markdown + Images
+  ├─ PDF / DOCX / PPTX ──► MinerU ──────────────────────► Markdown
+  │                                                            │
+  ├─ XLSX / XLS / CSV ───► DuckDB registration ────────────► Ready (for SQL queries)
+  │                     └► Markdown conversion ─────────────► RAGFlow (for RAG queries)
   │
-  ├─ XLSX / XLS ──────────► Excel Specialist Pipeline ──► Dual-track output
-  │                         (openpyxl + pandas)
+  ├─ Images (PNG/JPG) ──► MinerU OCR ──────────────────────► Markdown
   │
-  └─ TXT / MD ────────────► Direct read
-                                   │
-                             RAGFlow Chunking
-                                   │
-                             Qwen Embedding (text-embedding-v3)
-                                   │
-                          Elasticsearch (Vector + BM25)
-                                   │
-                               Ready ✅
+  └─ TXT / MD ──────────► Direct read
+                                │
+                          RAGFlow Chunking
+                                │
+                          Qwen Embedding (text-embedding-v3)
+                                │
+                       Elasticsearch (Vector + BM25)
+                                │
+                            Ready ✅
 ```
 
-#### 5.7.2 Excel Processing — Technical Approach
+**SSE status updates:** The frontend polls source status via API. Status transitions:
+`uploading` → `processing` → `ready` (or `failed`)
 
-Excel is the hardest document format to handle accurately in a RAG system. Research shows that **pure RAG is insufficient** — a dual-route architecture is required depending on the question type.
+#### 5.7.2 Excel/CSV Processing
 
-**Two question types, two routes:**
+Excel and CSV files use a **dual-route architecture** depending on file size and question type:
 
-| Question Type | Example | Route |
-|--------------|---------|-------|
-| Numerical / aggregation | "Total Q1 revenue?" "Which region grew fastest?" | Text-to-SQL → DuckDB |
-| Text / description | "What does the status column mean?" "List all pending items" | RAG → RAGFlow |
-
-A **custom lightweight router** built in FastAPI (not Dify — see §7.3) classifies each question and dispatches to the correct engine.
-
----
-
-**Custom Router — Why not Dify?**
-
-Dify is a full orchestration platform and is too heavy to embed here. Since we already have a FastAPI backend, the router is simply a Python function (~80 lines) that calls Qwen-Turbo with a classification prompt:
-
-```python
-# router.py — simplified
-ROUTER_PROMPT = """
-Classify this question as either:
-- "sql"   : requires counting, summing, filtering, ranking, or comparing numbers
-- "rag"   : requires understanding text, descriptions, or context
-
-Question: {question}
-Answer with only "sql" or "rag".
-"""
-
-async def route_excel_query(question: str, notebook_id: str) -> str:
-    response = await qwen_turbo.chat(ROUTER_PROMPT.format(question=question))
-    return response.strip()  # "sql" or "rag"
+**Route 1 — LLM-Native (preferred for files ≤ 60K chars as Markdown):**
+```
+Excel/CSV → convert to Markdown table
+  │
+  ▼
+Entire table injected into Qwen context window (128K context)
+  │
+  ▼
+Qwen answers directly from the data — no SQL needed
 ```
 
-This keeps full control in our codebase, adds no external dependencies, and costs ~0.001 RMB per classification call with Qwen-Turbo.
+This approach is simpler and handles most spreadsheets (up to ~300 rows × 10 columns).
 
----
-
-**Cross-Excel Queries — Multiple Files in One Notebook**
-
-A notebook may contain many Excel files (personal research, team reports, multi-period data). DuckDB handles this natively — all Excel files in a notebook are registered as **named tables in a single isolated DuckDB session** at query time.
-
-```python
-# Each notebook gets its own DuckDB connection
-conn = duckdb.connect()  # in-memory, isolated per notebook
-
-# Register all Excel files in this notebook as tables
-for source in notebook.excel_sources:
-    table_name = slugify(source.filename)   # e.g. "sales_q1", "sales_q2"
-    conn.execute(f"""
-        CREATE TABLE {table_name} AS 
-        SELECT * FROM read_xlsx('{source.local_path}')
-    """)
+**Route 2 — SQL via DuckDB (fallback for large files):**
+```
+User question
+  │
+  ▼
+Query Router classifies as "sql" or "rag" (Qwen-Turbo, ~80 lines)
+  │
+  ├── "sql" → Qwen generates SQL → DuckDB executes → formatted answer
+  └── "rag" → RAGFlow retrieval → Qwen generates answer with citations
 ```
 
-Users can then ask questions that span multiple files naturally:
-
-```
-"Compare Q1 and Q2 revenue by region"
-→ SQL: SELECT q1.region, q1.revenue AS q1_rev, q2.revenue AS q2_rev
-        FROM sales_q1 q1 JOIN sales_q2 q2 ON q1.region = q2.region
-
-"Which product appears in both the inventory and the sales report?"
-→ SQL: SELECT product FROM inventory
-        INTERSECT
-        SELECT product FROM sales_report
-
-"Total headcount across all team rosters"
-→ SQL: SELECT SUM(headcount) FROM (
-          SELECT headcount FROM team_roster_eng
-          UNION ALL SELECT headcount FROM team_roster_sales
-        )
-```
-
-**Schema awareness**: Before generating SQL, Qwen is given a schema summary of all tables in the notebook — table names, column names, and data types. This allows it to write accurate cross-table queries even without seeing the raw data.
-
-```python
-schema_context = "\n".join([
-    f"Table `{t.name}`: columns {t.columns}"
-    for t in notebook.excel_tables
-])
-# Injected into SQL generation prompt
-```
-
----
-
-**Route A — Text-to-SQL via DuckDB (numerical queries)**
-
-```
-User question (numerical / cross-file OK)
-      │
-      ▼
-FastAPI router: classifies as "sql"
-      │
-      ▼
-Schema context of all Excel tables in notebook injected into prompt
-      │
-      ▼
-Qwen-Plus generates SQL (single or multi-table)
-      │
-      ▼
-DuckDB executes SQL → verified result
-      │
-      ▼
-Qwen formats result as natural language + cites source file(s) + row(s)
-```
-
-**Route B — RAG via RAGFlow (text/description queries)**
-
-```
-User question (descriptive)
-      │
-      ▼
-FastAPI router: classifies as "rag"
-      │
-      ▼
-Each Excel row stored as dual-track chunks in RAGFlow:
-
-  Track A (Natural Language → vector search):
-    "In Q1, East China region achieved ¥1,200,000 revenue, +12% YoY"
-
-  Track B (Markdown Table → citation display):
-    | Region | Quarter | Revenue   | YoY  |
-    | 华东区  |   Q1    | 1,200,000 | +12% |
-      │
-      ▼
-Hybrid retrieval: 70% vector + 30% BM25, across all Excel chunks in notebook
-      │
-      ▼
-Retrieved rows + full sheet header → Qwen generates answer with citation
-```
-
----
-
-**Pre-processing (shared by both routes):**
-
-```
-openpyxl reads .xlsx:
-  → Expands merged cells (forward-fill)
-  → Identifies header row (first row / bold row; LLM fallback)
-  → Strips empty rows/columns
-  → Splits each Sheet as independent table
-  → Tags every chunk with: filename + Sheet name + row index
-```
-
-**Error recovery (SQL route):**
-```
-SQL fails → Qwen reads error + retries (up to 3x)
-Still failing → fall back to RAG route + surface warning to user
-```
-
----
-
-**Tools evaluated:**
-
-| Tool | Decision | Reason |
-|------|----------|--------|
-| **DuckDB** | ✅ Adopt | In-process, cross-file queries, no server, reads .xlsx natively |
-| **openpyxl** | ✅ Adopt | Best structural parser for .xlsx |
-| **pandas** | ✅ Adopt | Backup for transforms DuckDB can't handle |
-| **xlrd** | ✅ Adopt | Legacy .xls support |
-| **Custom FastAPI router** | ✅ Adopt | Replaces Dify — 80 lines, full control, near-zero cost |
-| **DB-GPT** | 🔍 Monitor | Full ChatBI; too heavy to embed, good for standalone deployments |
-| **Vanna.ai** | 🔍 Phase 3 | Self-learning SQL accuracy; evaluate after MVP |
-| **Chat2DB** | 🔍 Monitor | Strong UX but overkill for embedded use case |
-| **TableGPT2** (Zhejiang Univ + Qwen) | 🔭 Phase 4 | Native table encoder; evaluate when production-stable |
-
-**Phased approach:**
-- **Phase 1**: openpyxl + DuckDB + RAGFlow + custom FastAPI router (no Dify)
-- **Phase 3**: Evaluate Vanna.ai for self-learning SQL improvement
-- **Phase 4**: Evaluate TableGPT2 for native table semantic understanding
-
-**Challenge → Solution:**
-
-| Challenge | Solution |
-|-----------|----------|
-| Merged cells lose semantics | `openpyxl` forward-fill |
-| Multi-sheet / multi-file context | Sheet name + filename tagged on every chunk and SQL table |
-| Header row not identified | Bold/first row rule + LLM fallback |
-| Numerical computation unreliable | DuckDB SQL execution — verified, not guessed |
-| Cross-file queries | All Excel files in notebook registered as DuckDB tables in one session |
-| SQL generation errors | Auto-retry up to 3x, fallback to RAG |
-| Empty rows/columns | Pre-processing strip pass |
-| Charts / pivot tables | Phase 1: skip. Phase 4: chart model |
-
-#### 5.7.4 PPT Processing
-
-- `python-pptx` extracts: text per slide, speaker notes, shape labels
-- Embedded images → MinerU OCR
-- Each slide = one chunk; slide number preserved for citation
+**Pre-processing:**
+- Merged cells forward-filled
+- Header row identified
+- DuckDB table registered with `duckdb_path` on Source model
+- CSV/XLSX → Markdown conversion for RAGFlow indexing
 
 ---
 
@@ -686,31 +603,41 @@ Still failing → fall back to RAG route + surface warning to user
 |--------|:-----:|:------:|:------:|
 | View notebook & sources | ✅ | ✅ | ✅ |
 | Ask AI questions | ✅ | ✅ | ✅ |
+| View own chat history | ✅ | ✅ | ✅ |
 | Clear own chat history | ✅ | ✅ | ✅ |
+| Use Studio features | ✅ | ✅ | ✅ |
 | Upload sources | ✅ | ✅ | ❌ |
 | Delete sources | ✅ | ✅ | ❌ |
 | Rename notebook | ✅ | ✅ | ❌ |
 | Delete notebook | ✅ | ❌ | ❌ |
-| Share notebook / invite members | ✅ | ✅ | ❌ |
+| Share notebook / generate invite | ✅ | ❌ | ❌ |
 | View member list | ✅ | ✅ | ✅ |
 | Change member roles | ✅ | ❌ | ❌ |
 | Remove members | ✅ | ❌ | ❌ |
 | Transfer ownership | ✅ | ❌ | ❌ |
-| Stop sharing (revert to personal) | ✅ | ❌ | ❌ |
+| Stop sharing | ✅ | ❌ | ❌ |
+| Leave notebook | ❌ | ✅ | ✅ |
 
 ### 6.2 Notebook State Transitions
 
 ```
-Personal Notebook
+Personal Notebook (owner only)
       │
-      │  Owner clicks [Share] → adds first member
+      │  Owner clicks [Share] → generates invite link → someone joins
       ▼
-Shared Notebook   ←──── invited members join here
+Shared Notebook   ←──── invited members join via link
       │
       │  Owner clicks "Stop sharing" / removes all members
       ▼
-Personal Notebook (reverted)
+Personal Notebook (reverted, owner only)
 ```
+
+### 6.3 Chat Isolation
+
+Each user's chat history is **independent per notebook**. In a shared notebook:
+- User A's questions and answers are only visible to User A
+- User B has their own separate conversation thread
+- Clearing chat only affects the current user
 
 ---
 
@@ -720,25 +647,23 @@ Personal Notebook (reverted)
 
 | Layer | Choice | Rationale |
 |-------|--------|-----------|
-| **Frontend** | Next.js + Tailwind CSS | SSR, responsive |
-| **Backend** | Python FastAPI | AI-ecosystem-native, async-first |
-| **RAG Engine** | RAGFlow (open-source) | Built-in hybrid retrieval + citation tracing |
-| **Document Parsing** | MinerU (Magic-PDF, Alibaba) | Best-in-class open-source PDF/Word parser |
-| **LLM** | Qwen-Plus / Qwen-Max (Tongyi) | Best Chinese comprehension, cost-effective |
-| **LLM Router** | Custom FastAPI function + Qwen-Turbo | ~80 lines, classifies Excel queries as "sql" vs "rag"; no Dify needed |
+| **Frontend** | Next.js 15 (App Router) + Tailwind CSS + Zustand | SSR, responsive, minimal state management |
+| **Backend** | Python FastAPI + SQLAlchemy + Alembic | AI-ecosystem-native, async-first, ORM |
+| **RAG Engine** | RAGFlow (self-hosted, Docker) | Built-in hybrid retrieval + Elasticsearch |
+| **Document Parsing** | MinerU (CPU mode) | Best open-source PDF/Word/PPT parser |
+| **LLM** | Qwen-Plus (Tongyi Qianwen, Alibaba Cloud) | Best Chinese comprehension, 128K context |
 | **Embedding** | text-embedding-v3 (Alibaba Cloud) | Same ecosystem as Qwen |
-| **Vector Store** | Elasticsearch (bundled with RAGFlow) | No extra deployment needed |
+| **Vector + Text Search** | Elasticsearch (bundled with RAGFlow) | Hybrid: 70% vector + 30% BM25 |
 | **Relational DB** | PostgreSQL | Users, notebooks, permissions, metadata |
-| **Object Storage** | Alibaba Cloud OSS | Co-located with Qwen/RAGFlow, low latency |
-| **Excel — Structural Parse** | openpyxl + xlrd | Merged cells, multi-sheet, header detection |
-| **Excel — Numerical Queries** | DuckDB (in-process) | Text-to-SQL execution, no server required |
-| **Excel — Text Queries** | RAGFlow dual-track | Natural language + Markdown table chunks |
-| **PPT Input Parsing** | python-pptx + MinerU OCR | Text + image extraction per slide |
-| **PPT Output Generation** | python-pptx | Generate .pptx from Qwen-structured outline |
-| **Podcast Generation** | Alibaba Cloud TTS | Text-to-speech for two-voice podcast output |
-| **Containerization** | Docker Compose | One-command deployment, private-deploy ready |
-
----
+| **File Storage** | Local filesystem (Docker volume) | Simple, no cloud dependency |
+| **Excel/CSV Queries** | DuckDB (in-process) + LLM-native Markdown | Dual approach: small files via LLM, large via SQL |
+| **Excel Router** | Custom FastAPI function + Qwen-Turbo | ~80 lines, classifies queries as "sql" vs "rag" |
+| **PPT Generation** | python-pptx | Generate .pptx from Qwen-structured outline |
+| **Mind Map** | React Flow (frontend) | Interactive node graph visualization |
+| **PDF Viewer** | react-pdf (PDF.js) | Inline document viewing with page navigation |
+| **Podcast** | Alibaba Cloud TTS + pydub | Two-voice MP3 generation |
+| **Reverse Proxy** | Nginx | Routes `/api/*` → FastAPI:8000, `/*` → Next.js:3000 |
+| **Containerization** | Docker Compose | One-command deployment |
 
 ### 7.2 Data Model
 
@@ -748,127 +673,155 @@ User
 
 Notebook
   id, name, emoji, cover_color, owner_id
-  is_shared: BOOLEAN  (false = personal, true = shared)
+  is_shared: BOOLEAN
   created_at, updated_at
 
-NotebookMember              ← only exists when is_shared = true
+NotebookMember              ← created when notebook is shared
   notebook_id, user_id
   role: ENUM(owner, editor, viewer)
-  joined_at, last_active_at
+  joined_at
+
+InviteLink
+  id, notebook_id, token (unique)
+  role: ENUM(editor, viewer)
+  created_by
+  expires_at, created_at
 
 Source
   id, notebook_id, uploaded_by
-  filename, file_type, file_size, storage_url
-  status: ENUM(uploading, parsing, vectorizing, ready, failed)
+  filename, file_type, file_size
+  storage_url (local path)
+  status: ENUM(uploading, processing, ready, failed)
+  error_message (nullable)
   ragflow_dataset_id, ragflow_doc_id
-  meeting_date  (nullable — extracted for meeting minutes)
+  duckdb_path (nullable — for Excel/CSV files)
   created_at
 
 ChatMessage
   id, notebook_id, user_id
   role: ENUM(user, assistant)
-  content, citations (JSON)
+  content: TEXT
+  citations: JSON (array of Citation objects)
   created_at
 
 SavedNote
-  id, notebook_id, source_message_id
-  content, created_at
+  id, notebook_id, user_id
+  source_message_id (nullable FK → ChatMessage)
+  content: TEXT
+  created_at
 ```
-
----
 
 ### 7.3 System Architecture
 
 ```
                   ┌──────────────────────────────────────┐
-                  │        Next.js Frontend               │
+                  │           Nginx (port 80)             │
+                  │   /api/* → FastAPI:8000               │
+                  │   /*     → Next.js:3000               │
                   └──────────────────┬────────────────────┘
-                                     │  REST API + SSE
-                  ┌──────────────────▼────────────────────┐
-                  │           FastAPI Backend              │
-                  │                                        │
-                  │  Auth · Notebook CRUD                  │
-                  │  Member Management                     │
-                  │  Source Upload & Queue                 │
-                  │  Chat History                          │
-                  │                                        │
-                  │  ┌─────────────────────────────────┐  │
-                  │  │   Excel Query Router (~80 lines) │  │
-                  │  │   Qwen-Turbo classifier:         │  │
-                  │  │   "sql" → DuckDB                 │  │
-                  │  │   "rag" → RAGFlow                │  │
-                  │  └──────────┬──────────────┬────────┘  │
-                  └─────────────┼──────────────┼───────────┘
-         ┌──────────────────────┘              └────────────────────┐
-         │                                                           │
-┌────────▼───────────────────────────┐          ┌───────────────────▼──────────┐
-│  DuckDB (in-process, per notebook) │          │        RAGFlow               │
-│                                    │          │  Chunking · Qwen Embedding   │
-│  All Excel files in notebook       │          │  Elasticsearch (Vec + BM25)  │
-│  registered as named tables:       │          │  Reranker · Qwen LLM Q&A     │
-│    sales_q1, sales_q2, roster...   │          │                              │
-│                                    │          │  (PDF/Word/PPT/Excel text    │
-│  Cross-file SQL supported:         │          │   chunks live here)          │
-│  SELECT * FROM sales_q1            │          └──────────────────────────────┘
-│  JOIN sales_q2 USING (region)      │
-└────────────────────────────────────┘
+                                     │
+              ┌──────────────────────┼────────────────────────┐
+              │                      │                        │
+┌─────────────▼──────────┐  ┌───────▼────────────────┐      │
+│   Next.js Frontend      │  │   FastAPI Backend       │      │
+│   (Docker container)    │  │   (Docker container)    │      │
+│                         │  │                         │      │
+│   Zustand stores:       │  │   Auth (JWT)            │      │
+│   - authStore           │  │   Notebook CRUD         │      │
+│   - notebookStore       │  │   Source Management     │      │
+│   - chatStore           │  │   Chat (SSE streaming)  │      │
+│   - studioStore         │  │   Studio Generation     │      │
+│   - sourceStore         │  │   Sharing & Permissions │      │
+│   - sharingStore        │  │   Excel Query Router    │      │
+│                         │  │   Document Pipeline     │      │
+└─────────────────────────┘  └──┬────────┬────────┬───┘      │
+                                │        │        │           │
+         ┌──────────────────────┘        │        └───────────┤
+         │                               │                    │
+┌────────▼────────┐  ┌──────────────────▼──────┐  ┌──────────▼──────────┐
+│  RAGFlow        │  │  PostgreSQL              │  │  MinerU Service     │
+│  (Docker)       │  │  (Docker)                │  │  (Docker)           │
+│                 │  │                          │  │                     │
+│  Elasticsearch  │  │  Users, Notebooks        │  │  PDF/DOCX/PPTX     │
+│  Chunking       │  │  Members, Sources        │  │  → Markdown         │
+│  Qwen Embedding │  │  Chat, Notes             │  │  OCR for images     │
+│  Hybrid Search  │  │  Invite Links            │  │                     │
+└─────────────────┘  └──────────────────────────┘  └─────────────────────┘
 
-           ┌──────────────┐  ┌───────────┐  ┌─────────────────┐
-           │  PostgreSQL   │  │  Ali OSS  │  │  MinerU Service  │
-           │  Users/NBs    │  │  Raw      │  │  PDF/Word/PPT   │
-           │  Members/Meta │  │  Files    │  │  Parsing + OCR  │
-           └──────────────┘  └───────────┘  └─────────────────┘
+         ┌──────────────────────────────────────┐
+         │  DuckDB (in-process, per-query)       │
+         │  Excel/CSV → SQL execution            │
+         │  No persistent server needed          │
+         └──────────────────────────────────────┘
 ```
-
-**No Dify in the stack.** Orchestration logic lives entirely in FastAPI. The Excel router is a plain Python function — lightweight, fully controllable, near-zero latency overhead.
 
 ### 7.4 Notebook Isolation in RAGFlow
 
-Each notebook maps to one RAGFlow **dataset**. Access control lives entirely in FastAPI + PostgreSQL — RAGFlow is used as a pure retrieval engine.
+Each notebook maps to one RAGFlow **dataset**. Access control lives in FastAPI + PostgreSQL — RAGFlow is a pure retrieval engine.
 
 ```
-Notebook A (personal, user X)  →  RAGFlow dataset: nb_001  (user X only)
-Notebook B (shared, users X+Y) →  RAGFlow dataset: nb_002  (users X, Y)
-Notebook C (personal, user Y)  →  RAGFlow dataset: nb_003  (user Y only)
+Notebook A (user X)       →  RAGFlow dataset: nb_<uuid_a>
+Notebook B (shared X+Y)   →  RAGFlow dataset: nb_<uuid_b>
 ```
 
-### 7.5 API Design (Summary)
+### 7.5 API Design
+
+**Auth APIs:**
+```
+POST   /api/auth/register              Register new user
+POST   /api/auth/login                 Login (returns JWT)
+POST   /api/auth/refresh               Refresh access token
+GET    /api/auth/profile               Get current user profile
+```
 
 **Notebook APIs:**
 ```
-POST   /api/notebooks                    Create notebook
-GET    /api/notebooks                    List all notebooks for current user
-GET    /api/notebooks/{id}               Get notebook detail
-PATCH  /api/notebooks/{id}               Rename / update emoji / cover
-DELETE /api/notebooks/{id}               Delete notebook
-```
-
-**Sharing APIs:**
-```
-POST   /api/notebooks/{id}/share         Generate invite link / send email invites
-DELETE /api/notebooks/{id}/share         Stop sharing (revert to personal)
-GET    /api/notebooks/{id}/members       Get member list
-PATCH  /api/notebooks/{id}/members/{uid} Change member role
-DELETE /api/notebooks/{id}/members/{uid} Remove member
-POST   /api/notebooks/{id}/leave         Current user leaves notebook
-PATCH  /api/notebooks/{id}/owner         Transfer ownership
+POST   /api/notebooks                  Create notebook
+GET    /api/notebooks                  List all notebooks for current user
+GET    /api/notebooks/{id}             Get notebook detail
+PATCH  /api/notebooks/{id}             Rename / update emoji / cover
+DELETE /api/notebooks/{id}             Delete notebook
 ```
 
 **Source APIs:**
 ```
-POST   /api/notebooks/{id}/sources                 Upload file(s)
-GET    /api/notebooks/{id}/sources                 List sources + status
-DELETE /api/notebooks/{id}/sources/{sid}           Delete source
-GET    /api/notebooks/{id}/sources/{sid}/status    Poll status (WebSocket)
+POST   /api/notebooks/{id}/sources              Upload file(s)
+GET    /api/notebooks/{id}/sources              List sources + status
+DELETE /api/notebooks/{id}/sources/{sid}        Delete source
+GET    /api/notebooks/{id}/sources/{sid}/file   Download/view source file
 ```
 
 **Chat APIs:**
 ```
-POST   /api/notebooks/{id}/chat          Send message (SSE streaming)
-GET    /api/notebooks/{id}/chat/history  Get full chat history
-DELETE /api/notebooks/{id}/chat/history  Clear chat history
-POST   /api/notebooks/{id}/notes         Save AI message as note
-GET    /api/notebooks/{id}/notes         List saved notes
+POST   /api/notebooks/{id}/chat                 Send message (SSE streaming response)
+GET    /api/notebooks/{id}/chat/history          Get full chat history
+DELETE /api/notebooks/{id}/chat/history          Clear chat history
+```
+
+**Notes APIs:**
+```
+POST   /api/notebooks/{id}/notes                Save note from chat
+GET    /api/notebooks/{id}/notes                List saved notes
+DELETE /api/notebooks/{id}/notes/{nid}          Delete saved note
+```
+
+**Studio APIs:**
+```
+POST   /api/notebooks/{id}/studio/{type}        Generate content (summary/faq/study_guide/mindmap)
+POST   /api/notebooks/{id}/studio/ppt           Generate and download PPT
+POST   /api/notebooks/{id}/studio/podcast        Generate podcast audio
+```
+
+**Sharing APIs:**
+```
+POST   /api/notebooks/{id}/share                Generate invite link
+DELETE /api/notebooks/{id}/share                Stop sharing (remove all members)
+POST   /api/join/{token}                         Join via invite link
+GET    /api/notebooks/{id}/members              Get member list
+PATCH  /api/notebooks/{id}/members/{uid}        Change member role
+DELETE /api/notebooks/{id}/members/{uid}        Remove member
+POST   /api/notebooks/{id}/leave                Leave notebook
+PATCH  /api/notebooks/{id}/owner                Transfer ownership
 ```
 
 ---
@@ -877,99 +830,105 @@ GET    /api/notebooks/{id}/notes         List saved notes
 
 ### 8.1 Performance
 
-| Metric | Target |
-|--------|--------|
-| Page first contentful paint | < 2s |
-| AI first token (streaming) | < 3s |
-| PDF parsing (20 MB) | < 60s |
-| Excel processing (1,000 rows) | < 10s |
-| Meeting minutes (10-page PDF) | < 30s |
-| Vector search latency | < 1s |
-| System availability | ≥ 99.5% |
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Page first contentful paint | < 2s | ✅ |
+| AI first token (streaming) | < 3s | ✅ |
+| PDF parsing (20 MB) | < 60s | ✅ |
+| Excel/CSV processing | < 15s | ✅ (typically < 10s) |
+| Vector search latency | < 1s | ✅ |
+| PPT generation | < 90s | ✅ |
+| Mind map generation | < 60s | ✅ |
 
 ### 8.2 Security
 
-- All traffic HTTPS / TLS 1.2+
-- Document storage encrypted at rest (OSS AES-256)
-- Notebook access enforced at API layer — no cross-notebook data leakage
-- File access via signed URLs (15-min expiry)
-- JWT 24h expiry + refresh token rotation
-- Audit logs retained 90 days
+- Nginx reverse proxy — no direct backend exposure
+- JWT access tokens (24h expiry) + refresh token rotation
+- All file access requires valid JWT token (passed as query parameter for PDF viewer)
+- Notebook access enforced at API layer — permission checks on every endpoint
+- Chinese filenames handled via RFC 5987 URL encoding in Content-Disposition headers
 
-### 8.3 Scalability
+### 8.3 Deployment
 
 - All services containerized via Docker Compose
-- MinerU and RAGFlow fully self-hostable — no cloud dependency
-- LLM is pluggable: swap Qwen for any OpenAI-compatible endpoint via config
-- OSS replaceable with MinIO for air-gapped deployments
+- Server: Ubuntu 24.04, 16 cores, 16GB RAM, no GPU
+- RAGFlow runs in separate Docker Compose stack (`/opt/ragflow/`)
+- Noteflow stack at `/opt/noteflow/` with volume mount for backend code
+- MinerU runs in CPU mode (no GPU required)
 
 ---
 
 ## 9. Milestone Roadmap
 
-### Phase 1 · Document Knowledge Base MVP (6 weeks)
-**Goal: Personal notebooks with AI Q&A end-to-end**
+### Phase 1 · Core Knowledge Base ✅ COMPLETE
 
-| Feature | Priority |
-|---------|----------|
-| User registration / login (JWT) | P0 |
-| Home page: Personal + Shared Notebooks sections | P0 |
-| Create notebook (name + emoji + color) | P0 |
-| Upload PDF / DOCX → MinerU parsing | P0 |
-| Upload PPTX → python-pptx + MinerU | P0 |
-| Upload XLSX / XLS → Excel specialist pipeline | P0 |
-| RAGFlow integration (chunking + Qwen embedding) | P0 |
-| AI Q&A with Qwen-Plus (streaming SSE) | P0 |
-| Citation traceability (file + page/slide/row) | P0 |
-| Source checkbox selection | P1 |
-| Auto-generated notebook overview | P1 |
-| AI-suggested starter questions | P1 |
-| [Save to note] → Studio panel | P1 |
-| In-line chat history + [Clear] button | P1 |
-| Processing status WebSocket push | P1 |
-| Studio: Summary / FAQ / Study Guide | P2 |
+| Feature | Status |
+|---------|--------|
+| User registration / login (JWT) | ✅ Done |
+| Dashboard: My Notebooks + Shared with Me sections | ✅ Done |
+| Create notebook (name + emoji + color) | ✅ Done |
+| Upload PDF / DOCX / PPTX / TXT / MD | ✅ Done |
+| MinerU parsing pipeline | ✅ Done |
+| RAGFlow integration (chunking + Qwen embedding) | ✅ Done |
+| AI Q&A with Qwen-Plus (SSE streaming) | ✅ Done |
+| Citation traceability (file + page/slide) | ✅ Done |
+| Source checkbox selection (scope queries) | ✅ Done |
+| Auto-generated notebook overview | ✅ Done |
+| AI-suggested starter questions (clickable) | ✅ Done |
+| Save to note → Studio panel | ✅ Done |
+| Chat history (per-user, persistent) + Clear | ✅ Done |
+| Studio: Summary / FAQ / Study Guide | ✅ Done |
 
----
+### Phase 2 · Notebook Sharing ✅ COMPLETE
 
-### Phase 2 · Notebook Sharing (4 weeks)
-**Goal: Any notebook can be shared with one click**
+| Feature | Status |
+|---------|--------|
+| [Share] button in header | ✅ Done |
+| Invite link generation with role selection | ✅ Done |
+| Join via invite link (auto-redirect) | ✅ Done |
+| Owner / Editor / Viewer permissions (backend-enforced) | ✅ Done |
+| Member list in Share modal | ✅ Done |
+| Change member roles | ✅ Done |
+| Remove member | ✅ Done |
+| Member count badge on notebook cards | ✅ Done |
+| Role badge on shared notebook cards | ✅ Done |
+| Leave notebook | ✅ Done |
+| Transfer ownership | ✅ Done |
+| Stop sharing (revert to personal) | ✅ Done |
 
-| Feature | Priority |
-|---------|----------|
-| [Share] button in Chat panel header | P0 |
-| Invite via link + email | P0 |
-| Owner / Editor / Viewer permissions | P0 |
-| Members section in Studio panel (shared notebooks only) | P0 |
-| `👤 N` badge on Shared Notebook cards | P0 |
-| Notebook auto-moves to "Shared" section on first share | P0 |
-| Leave notebook / Transfer ownership | P1 |
-| Stop sharing (revert to Personal) | P1 |
-| Revoke invite link | P1 |
+### Phase 3 · Advanced Features ✅ COMPLETE
 
----
+| Feature | Status |
+|---------|--------|
+| Excel/CSV upload + DuckDB processing | ✅ Done |
+| Excel LLM-native query (Markdown in context) | ✅ Done |
+| Excel SQL query (DuckDB fallback for large files) | ✅ Done |
+| Query router (sql vs rag classification) | ✅ Done |
+| Inline PDF viewer (react-pdf) | ✅ Done |
+| Citation click → PDF viewer at cited page | ✅ Done |
+| PPT generation (python-pptx) | ✅ Done |
+| Mind Map (React Flow, interactive) | ✅ Done |
+| Podcast (Alibaba TTS, two-voice) | ✅ Done (requires TTS config) |
+| Image upload support (OCR via MinerU) | ✅ Done |
 
-### Phase 3 · Experience Enhancement (4 weeks)
-**Goal: Richer outputs, better viewing, mobile support**
-
-| Feature | Priority |
-|---------|----------|
-| Inline PDF viewer (PDF.js) | P0 |
-| Excel structured table preview | P1 |
-| Mobile responsive layout | P1 |
-| Code Interpreter for Excel calculations (pandas) | P1 |
-| Chart / diagram understanding (PPT, PDF) | P2 |
-
----
-
-### Phase 4 · Monetization (future)
+### Phase 4 · Future Enhancements (Planned)
 
 | Feature | Description |
 |---------|-------------|
-| Subscription plans (Free / Pro / Business) | Billing system |
-| Usage Dashboard | Storage, queries, members |
-| SSO integration (SAML / OIDC) | Enterprise IdP |
-| Private deployment package | Docker Compose one-click |
-| Open API | Notebook query API for integrations |
+| Mobile responsive layout | Optimize for 375px viewport |
+| Subscription plans | Free / Pro / Business tiers |
+| Usage Dashboard | Storage, queries, member analytics |
+| SSO integration (SAML / OIDC) | Enterprise IdP support |
+
+### Phase 5 · Intelligence Enhancements (Planned)
+
+| Feature | Description |
+|---------|-------------|
+| Vanna.ai integration | Self-learning SQL for Excel/CSV queries — trains on user corrections to improve accuracy over time |
+| Chart/diagram understanding | Vision LLM (Qwen-VL) extracts structured data from charts, diagrams, and visual content in uploaded images |
+| Subscription plans | Free / Pro / Business tiers with usage limits |
+| Private deployment package | Documented Docker Compose one-click deployment for enterprises |
+| Open API | External REST API for programmatic notebook queries |
 
 ---
 
@@ -983,7 +942,7 @@ GET    /api/notebooks/{id}/notes         List saved notes
 | Notebooks created | 200 |
 | AI queries / user / day | ≥ 5 |
 | Document parse success rate | ≥ 92% |
-| AI answer thumbs-up rate | ≥ 65% |
+| AI answer quality (user satisfaction) | ≥ 65% |
 
 ### 10.2 Phase 2 KPIs
 
@@ -992,15 +951,14 @@ GET    /api/notebooks/{id}/notes         List saved notes
 | % of users with ≥1 shared notebook | ≥ 30% |
 | Avg. members per shared notebook | ≥ 2.5 |
 | D7 retention | ≥ 40% |
-| NPS | ≥ 40 |
 
 ### 10.3 Phase 3 KPIs
 
 | Metric | Target |
 |--------|--------|
-| Studio output generation rate (% users who generate ≥1 output) | ≥ 40% |
+| Studio output generation rate | ≥ 40% of users |
 | PPT export downloads per active user / week | ≥ 2 |
-| Mobile DAU share | ≥ 20% |
+| PDF viewer usage (citation clicks) | ≥ 50% of chat sessions |
 
 ---
 
@@ -1013,11 +971,12 @@ GET    /api/notebooks/{id}/notes         List saved notes
 | One-click notebook sharing | ✅ | ❌ | ✅ | Limited |
 | Member list per notebook | ✅ | ❌ | ✅ | ❌ |
 | Citation traceability | ✅ | ✅ | ❌ | ❌ |
-| Excel semantic understanding | ✅ | ❌ | ❌ | ❌ |
-| PPT support | ✅ | ✅ | ❌ | ❌ |
+| Inline PDF viewer | ✅ | ❌ | ❌ | ❌ |
+| Excel/CSV understanding | ✅ | ❌ | ❌ | ❌ |
+| PPT support (input) | ✅ | ✅ | ❌ | ❌ |
+| PPT generation (output) | ✅ | ❌ | ✅ | ❌ |
 | Mind Map generation | ✅ | ❌ | ❌ | ❌ |
 | Podcast generation | ✅ | ✅ | ❌ | ❌ |
-| PPT generation | ✅ | ❌ | ✅ | ❌ |
 | Chinese LLM optimization | ✅ | ❌ | ❌ | ✅ |
 | Private deployment | ✅ | ❌ | ❌ | ❌ |
 
@@ -1026,17 +985,24 @@ GET    /api/notebooks/{id}/notes         List saved notes
 | Term | Definition |
 |------|-----------|
 | **Notebook** | A knowledge container holding one or more source documents |
-| **Personal Notebook** | A notebook not shared with anyone (is_shared = false) |
-| **Shared Notebook** | A notebook with at least one member besides the owner (is_shared = true) |
-| **Source** | A single uploaded document or pasted text snippet |
-| **RAGFlow** | Open-source RAG framework: chunking, embedding, retrieval, generation |
-| **MinerU** | Alibaba open-source document parser (Magic-PDF) |
-| **Chunk** | The minimum unit a document is split into for vector search |
-| **Qwen** | Tongyi Qianwen (通义千问) — Alibaba LLM powering all AI responses |
-| **Dual-track** | Excel processing: natural language + structured Markdown stored in parallel |
+| **Source** | A single uploaded document (PDF, DOCX, PPTX, XLSX, CSV, TXT, MD, image) |
+| **RAGFlow** | Open-source RAG framework: chunking, embedding, hybrid retrieval |
+| **MinerU** | Alibaba open-source document parser (Magic-PDF) for PDF/Word/PPT/image OCR |
+| **DuckDB** | In-process SQL engine for Excel/CSV analytical queries |
+| **Qwen** | Tongyi Qianwen (通义千问) — Alibaba LLM powering all AI features |
 | **SSE** | Server-Sent Events — streaming AI responses token-by-token |
-| **Code Interpreter** | Mode where LLM writes pandas code to execute numerical calculations reliably |
+| **Dual-route** | Excel query approach: LLM-native for small files, SQL+DuckDB for large files |
+| **Studio** | Right panel with AI-generated outputs (Summary, FAQ, Mind Map, PPT, Podcast, etc.) |
+| **Citation** | Reference linking AI answer text to specific source document and location |
+
+### C. Known Limitations
+
+| Item | Description | Planned Fix |
+|------|-------------|-------------|
+| Delete button visible to Viewers | UI shows delete button but backend blocks the action | Hide button for Viewer role in frontend |
+| Share button visible to Editors | UI shows Share button but backend enforces owner-only | Hide button for non-owner roles |
+| Podcast requires TTS config | Returns HTTP 501 without Alibaba TTS credentials | Document setup process |
 
 ---
 
-*Document Version: v4.4 | Last Updated: 2026-03-08*
+*Document Version: v5.0 | Last Updated: 2026-03-10*
