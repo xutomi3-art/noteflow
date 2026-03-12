@@ -28,5 +28,6 @@ class UserResponse(BaseModel):
     name: str
     avatar: str | None = None
     is_admin: bool = False
+    auth_provider: str = "local"
 
     model_config = {"from_attributes": True}
