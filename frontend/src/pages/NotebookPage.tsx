@@ -155,6 +155,27 @@ export default function NotebookPage() {
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
   }, []);
+
+  // Auto-collapse/expand panels based on window width
+  useEffect(() => {
+    const handleResize = () => {
+      const w = window.innerWidth;
+      if (w >= 768 && w < 900) {
+        setIsLeftCollapsed(true);
+        setIsRightCollapsed(true);
+      } else if (w >= 900 && w < 1100) {
+        setIsLeftCollapsed(true);
+        setIsRightCollapsed(false);
+      } else if (w >= 1100) {
+        setIsLeftCollapsed(false);
+        setIsRightCollapsed(false);
+      }
+    };
+    handleResize(); // Run on mount
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const isDraggingRef = useRef<"left" | "right" | null>(null);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(0);

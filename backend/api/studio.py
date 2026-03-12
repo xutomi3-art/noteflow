@@ -121,13 +121,14 @@ JSON format:
 
 Rules:
 1. Generate exactly {n_slides} content slides (not counting the title slide)
-2. Each slide has 3-5 bullet points with both "main" and "sub" fields
+2. IMPORTANT: Vary the number of bullet points per slide to look natural and human-made. Some slides should have 2 bullets, some 3, some 4, and occasionally 5. Do NOT give every slide the same number of bullets.
 3. "main" is a bold headline (under 10 words), "sub" is a supporting sentence
 4. If verbosity is "concise", keep "sub" very short (under 8 words) or empty string
 5. If verbosity is "text-heavy", make "sub" a full explanatory sentence
 6. Match the tone: casual=conversational, professional=formal, funny=witty, educational=instructive
 7. Write in {language}
-8. Return ONLY valid JSON, no markdown fences
+8. Make the presentation feel like a real human created it — vary structure, emphasis, and depth across slides
+9. Return ONLY valid JSON, no markdown fences
 
 Source content:
 {context}"""
