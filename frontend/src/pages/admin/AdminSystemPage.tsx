@@ -32,6 +32,12 @@ const SMTP_FIELDS = [
   { key: 'smtp_from', label: 'From Address', placeholder: 'noreply@example.com' },
 ];
 
+const GOOGLE_OAUTH_FIELDS = [
+  { key: 'google_client_id', label: 'Google Client ID', placeholder: 'your-client-id.apps.googleusercontent.com' },
+  { key: 'google_client_secret', label: 'Google Client Secret', placeholder: 'GOCSPX-...', secret: true },
+  { key: 'google_redirect_uri', label: 'Redirect URI', placeholder: 'http://10.200.0.112/api/auth/google/callback' },
+];
+
 export default function AdminSystemPage() {
   const { health, settings, fetchHealth, fetchSettings, saveSettings, isLoading } = useAdminStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -39,6 +45,9 @@ export default function AdminSystemPage() {
   const [smtpForm, setSmtpForm] = useState<Record<string, string>>({});
   const [smtpSaving, setSmtpSaving] = useState(false);
   const [smtpMessage, setSmtpMessage] = useState('');
+  const [googleForm, setGoogleForm] = useState<Record<string, string>>({});
+  const [googleSaving, setGoogleSaving] = useState(false);
+  const [googleMessage, setGoogleMessage] = useState('');
 
   useEffect(() => {
     fetchHealth();
@@ -55,6 +64,13 @@ export default function AdminSystemPage() {
       smtp[f.key] = found?.value ?? '';
     }
     setSmtpForm(smtp);
+
+    const google: Record<string, string> = {};
+    for (const f of GOOGLE_OAUTH_FIELDS) {
+      const found = settings.find((s) => s.key === f.key);
+      google[f.key] = found?.value ?? '';
+    }
+    setGoogleForm(google);
   }, [settings]);
 
   const handleRefresh = async () => {
@@ -86,6 +102,26 @@ export default function AdminSystemPage() {
       setTimeout(() => setSmtpMessage(''), 3000);
     } finally {
       setSmtpSaving(false);
+    }
+  };
+
+  const handleSaveGoogle = async () => {
+    setGoogleSaving(true);
+    setGoogleMessage('');
+    try {
+      const changed: Record<string, string> = {};
+      for (const [key, value] of Object.entries(googleForm)) {
+        if (!value.startsWith('****')) {
+          changed[key] = value;
+        }
+      }
+      if (Object.keys(changed).length > 0) {
+        await saveSettings(changed);
+      }
+      setGoogleMessage('Google OAuth settings saved');
+      setTimeout(() => setGoogleMessage(''), 3000);
+    } finally {
+      setGoogleSaving(false);
     }
   };
 
@@ -242,6 +278,46 @@ export default function AdminSystemPage() {
               Save SMTP
             </button>
             {smtpMessage && <span className="text-sm text-green-600">{smtpMessage}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Google OAuth Settings */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-0.5">Google OAuth</h3>
+        <p className="text-xs text-gray-400 mb-4">Configure Google Sign-In for users</p>
+        <div className="space-y-4">
+          {GOOGLE_OAUTH_FIELDS.map(({ key, label, placeholder, secret }) => (
+            <div key={key}>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-gray-700">{label}</label>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                  getSource(key) === 'db'
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {getSource(key) === 'db' ? 'DB override' : 'env default'}
+                </span>
+              </div>
+              <input
+                type={secret ? 'password' : 'text'}
+                value={googleForm[key] ?? ''}
+                onChange={(e) => setGoogleForm({ ...googleForm, [key]: e.target.value })}
+                placeholder={placeholder}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+              />
+            </div>
+          ))}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handleSaveGoogle}
+              disabled={googleSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
+            >
+              {googleSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Save Google OAuth
+            </button>
+            {googleMessage && <span className="text-sm text-green-600">{googleMessage}</span>}
           </div>
         </div>
       </div>
