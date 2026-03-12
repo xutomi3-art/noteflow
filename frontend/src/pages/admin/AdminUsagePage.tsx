@@ -55,7 +55,7 @@ export default function AdminUsagePage() {
     },
     {
       label: 'Success Rate',
-      value: usage ? `${(usage.success_rate * 100).toFixed(1)}%` : '-',
+      value: usage ? `${usage.success_rate.toFixed(1)}%` : '-',
       icon: CheckCircle,
       color: '#10b981',
     },
