@@ -267,6 +267,17 @@ export default function NotebookPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Re-fetch overview when first source becomes ready (for newly created notebooks)
+  const readyCount = sources.filter(s => s.status === "ready").length;
+  const prevReadyRef = useRef(0);
+  useEffect(() => {
+    if (!id) return;
+    if (readyCount > 0 && prevReadyRef.current === 0 && !overview) {
+      api.getOverview(id).then(setOverview).catch(() => {});
+    }
+    prevReadyRef.current = readyCount;
+  }, [id, readyCount, overview]);
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
