@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     ALIBABA_TTS_APPKEY: str = os.getenv("ALIBABA_TTS_APPKEY", "")
     ALIBABA_TTS_TOKEN: str = os.getenv("ALIBABA_TTS_TOKEN", "")
 
+    # Volcengine ASR
+    VOLCENGINE_ASR_APPID: str = ""
+    VOLCENGINE_ASR_ACCESS_KEY: str = ""
+
     # SMTP Email
     SMTP_HOST: str = ""
     SMTP_PORT: int = 465

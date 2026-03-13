@@ -11,10 +11,20 @@ from backend.services.event_bus import event_bus
 from backend.services.excel_service import ingest_excel, excel_to_markdown
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
+from backend.services.asr_service import asr_service, AUDIO_EXTENSIONS
 from backend.services.qwen_client import qwen_client, IMAGE_EXTENSIONS
 from backend.services.source_service import get_source, update_source_status
 
 logger = logging.getLogger(__name__)
+
+
+def _save_parsed_content(file_path: str, content: str) -> str:
+    """Save parsed markdown content alongside the source file."""
+    md_path = os.path.splitext(file_path)[0] + "_parsed.md"
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    logger.info("Saved parsed content to %s (%d chars)", md_path, len(content))
+    return md_path
 
 
 def _convert_to_pdf(file_path: str) -> str | None:
@@ -106,9 +116,26 @@ async def process_document(
                 # Track 2: Convert to markdown for RAGFlow semantic search
                 content = excel_to_markdown(file_path)
                 logger.info("Excel to markdown: %s (%d chars)", filename, len(content))
+                _save_parsed_content(file_path, content)
                 # Fall through to RAGFlow upload below
 
-            # Step 2b: Route images to Qwen-VL pipeline
+            # Step 2b: Route audio to ASR pipeline
+            elif file_type in AUDIO_EXTENSIONS:
+                logger.info("Processing audio via ASR: %s", filename)
+                transcript = await asr_service.transcribe_file(file_path)
+
+                # Save transcript as markdown
+                md_path = file_path.rsplit(".", 1)[0] + ".md"
+                header = f"# Audio Transcript: {filename}\n\n"
+                with open(md_path, "w", encoding="utf-8") as f:
+                    f.write(header + transcript)
+
+                content = header + transcript
+                logger.info(
+                    "ASR transcription complete: %s (%d chars)", filename, len(content)
+                )
+
+            # Step 2c: Route images to Qwen-VL pipeline
             elif file_type in IMAGE_EXTENSIONS:
                 logger.info("Processing image via Qwen-VL: %s", filename)
                 content = await qwen_client.analyze_image(file_path, filename)
@@ -123,9 +150,12 @@ async def process_document(
             # Step 3: Parse document to markdown/text
             elif file_type in ("txt", "md"):
                 content = await _read_text_file(file_path)
+                _save_parsed_content(file_path, content)
             else:
                 # Use MinerU for PDF, DOCX, PPTX
                 content = await mineru_client.parse_document(file_path, filename)
+                if content is not None:
+                    _save_parsed_content(file_path, content)
                 if content is None:
                     # Fallback: upload raw file to RAGFlow (it has built-in parsers)
                     logger.warning(

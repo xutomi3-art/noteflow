@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelRightClose,
   BookmarkPlus,
+  Check,
   Copy,
   ThumbsUp,
   ThumbsDown,
@@ -50,6 +51,7 @@ function fileTypeColor(fileType: string): string {
   if (t === "pptx") return "bg-amber-100 text-amber-600";
   if (t === "docx" || t === "doc") return "bg-blue-100 text-blue-600";
   if (t === "xlsx" || t === "csv") return "bg-green-100 text-green-600";
+  if (["mp3", "wav", "m4a", "flac", "ogg", "webm"].includes(t)) return "bg-purple-100 text-purple-600";
   return "bg-slate-100 text-slate-600"; // txt, md, etc.
 }
 
@@ -61,6 +63,7 @@ function fileTypeIcon(fileType: string): React.ReactNode {
   if (t === "docx" || t === "doc") return <FileText className={cls} />;
   if (t === "xlsx" || t === "xls" || t === "csv") return <Table2 className={cls} />;
   if (["jpg", "jpeg", "png", "webp", "gif"].includes(t)) return <ImageIcon className={cls} />;
+  if (["mp3", "wav", "m4a", "flac", "ogg", "webm"].includes(t)) return <Mic className={cls} />;
   if (t === "txt" || t === "md") return <AlignLeft className={cls} />;
   return <FileText className={cls} />;
 }
@@ -147,6 +150,11 @@ export default function NotebookPage() {
   const [rightWidth, setRightWidth] = useState(340);
   const [isDragging, setIsDragging] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
+  const [overviewSaved, setOverviewSaved] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [isAddingUrl, setIsAddingUrl] = useState(false);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
@@ -182,7 +190,7 @@ export default function NotebookPage() {
 
   // Stores
   const { user, logout } = useAuthStore();
-  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup } =
+  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource } =
     useSourceStore();
   const { messages, isStreaming, streamingContent, thinking, setThinking, reasoningContent, isThinkingPhase, fetchHistory, sendMessage, reset: resetChat } = useChatStore();
   const {
@@ -193,7 +201,6 @@ export default function NotebookPage() {
     generateContent,
     fetchNotes,
     deleteNote,
-    openPdf,
     closePdf,
     reset: resetStudio,
   } = useStudioStore();
@@ -228,6 +235,8 @@ export default function NotebookPage() {
       cleanup();
       resetChat();
       resetStudio();
+      setSavedMessageIds(new Set());
+      setOverviewSaved(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -254,17 +263,46 @@ export default function NotebookPage() {
     [handleSend],
   );
 
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!id || !e.target.files) return;
       const files = Array.from(e.target.files);
+      const rejected: string[] = [];
+      const accepted: File[] = [];
       for (const file of files) {
+        if (file.size > MAX_FILE_SIZE) {
+          rejected.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
+        } else {
+          accepted.push(file);
+        }
+      }
+      if (rejected.length > 0) {
+        alert(`The following files exceed the 50 MB limit and were skipped:\n\n${rejected.join('\n')}`);
+      }
+      for (const file of accepted) {
         await uploadSource(id, file);
       }
       e.target.value = "";
     },
     [id, uploadSource],
   );
+
+  const handleAddUrl = useCallback(async () => {
+    if (!urlInput.trim() || !id) return;
+    setIsAddingUrl(true);
+    try {
+      await api.addUrlSource(id, urlInput.trim());
+      setUrlInput("");
+      setShowUrlInput(false);
+      fetchSources(id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add URL");
+    } finally {
+      setIsAddingUrl(false);
+    }
+  }, [id, urlInput, fetchSources]);
 
   const handleSuggestedQuestion = useCallback(
     (q: string) => {
@@ -286,8 +324,9 @@ export default function NotebookPage() {
   );
 
   const handleSaveMessageAsNote = useCallback(
-    (msg: ChatMessage) => {
-      handleSaveNote(msg.content);
+    async (msg: ChatMessage) => {
+      await handleSaveNote(msg.content);
+      setSavedMessageIds((prev) => new Set(prev).add(msg.id));
     },
     [handleSaveNote],
   );
@@ -351,6 +390,10 @@ export default function NotebookPage() {
           e.preventDefault();
           const file = item.getAsFile();
           if (file) {
+            if (file.size > MAX_FILE_SIZE) {
+              alert(`Pasted image (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the 50 MB limit.`);
+              return;
+            }
             const ext = file.type.split("/")[1] || "png";
             const namedFile = new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type });
             await uploadSource(id, namedFile);
@@ -398,7 +441,7 @@ export default function NotebookPage() {
     [leftWidth, rightWidth],
   );
 
-  /** Handle citation badge click — find citation data and open source viewer */
+  /** Handle citation badge click — open source content viewer in left panel with highlighted excerpt */
   const handleCitationClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
@@ -422,19 +465,13 @@ export default function NotebookPage() {
       const citation = msg.citations.find((c) => c.index === citationIndex);
       if (!citation || !citation.source_id) return;
 
-      // Open the source file viewer
-      const fileType = citation.file_type?.toLowerCase() || "";
-      const page = citation.location?.page || citation.location?.slide || 1;
-
-      // Only open viewer for file types the browser can render inline
-      const viewableTypes = ["pdf", "pptx", "docx", "txt", "md", "png", "jpg", "jpeg", "webp", "gif"];
-      if (viewableTypes.includes(fileType)) {
-        openPdf(citation.source_id, citation.filename, page);
-        setIsRightCollapsed(false);
+      // Open source content in left panel with excerpt highlight
+      if (id) {
+        setActiveSource(id, citation.source_id, citation.excerpt || null);
+        setIsLeftCollapsed(false);
       }
-      // For xlsx/csv and other non-viewable types, do nothing (citation excerpt is already visible in the message)
     },
-    [messages, openPdf],
+    [messages, id, setActiveSource],
   );
 
   return (
@@ -532,6 +569,48 @@ export default function NotebookPage() {
             </button>
           </div>
 
+          {activeSourceId ? (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 shrink-0">
+                <button
+                  onClick={() => clearActiveSource()}
+                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4 text-slate-500" />
+                </button>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {(() => {
+                    const activeSource = sources.find((s) => s.id === activeSourceId);
+                    if (!activeSource) return null;
+                    return (
+                      <>
+                        <span className={`${fileTypeColor(activeSource.file_type)} text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase shrink-0`}>
+                          {activeSource.file_type}
+                        </span>
+                        <span className="text-[13px] font-semibold text-slate-700 truncate">
+                          {activeSource.filename}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto px-4 py-3">
+                {isLoadingContent ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                  </div>
+                ) : activeSourceContent ? (
+                  <div
+                    className="prose prose-sm prose-slate max-w-none text-[13px] leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: renderContent(activeSourceContent) }}
+                  />
+                ) : (
+                  <p className="text-sm text-slate-400 text-center py-8">Content not available</p>
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="p-4 flex-1 overflow-y-auto" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
             {notebook?.user_role !== "viewer" && (
               <>
@@ -540,32 +619,83 @@ export default function NotebookPage() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv,.jpg,.jpeg,.png,.webp,.gif"
+                  accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.webm"
                   className="sr-only"
                   onChange={handleFileUpload}
                 />
-                <label
-                  htmlFor="notebook-file-input"
-                  className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-4"
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (e.dataTransfer.files.length > 0) {
-                      const dt = new DataTransfer();
-                      Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
-                      if (fileInputRef.current) {
-                        fileInputRef.current.files = dt.files;
-                        fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+                {!showUrlInput ? (
+                  <label
+                    htmlFor="notebook-file-input"
+                    className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-2"
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (e.dataTransfer.files.length > 0) {
+                        const dt = new DataTransfer();
+                        Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+                        if (fileInputRef.current) {
+                          fileInputRef.current.files = dt.files;
+                          fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
                       }
-                    }
-                  }}
+                    }}
+                  >
+                    <Plus className="w-4 h-4 text-slate-400" />
+                    <span className="text-[13px] font-medium text-slate-600">Add sources</span>
+                    <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV, Image, Audio</span>
+                    <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
+                  </label>
+                ) : (
+                  <div className="w-full flex flex-col gap-2 p-3 border-2 border-dashed border-[#5b8c15]/30 bg-slate-50/50 rounded-2xl mb-2">
+                    <div className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-slate-400 shrink-0" />
+                      <input
+                        type="text"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAddUrl(); }}
+                        placeholder="https://example.com/article"
+                        className="flex-1 text-[13px] bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#5b8c15]/40 focus:border-[#5b8c15]/40"
+                        autoFocus
+                        disabled={isAddingUrl}
+                      />
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => { setShowUrlInput(false); setUrlInput(""); }}
+                        className="text-[12px] text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
+                        disabled={isAddingUrl}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleAddUrl}
+                        disabled={!urlInput.trim() || isAddingUrl}
+                        className="text-[12px] font-medium text-white bg-[#5b8c15] hover:bg-[#4a7312] disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5"
+                      >
+                        {isAddingUrl ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowUrlInput(!showUrlInput)}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[12px] text-slate-500 hover:text-[#5b8c15] hover:bg-slate-50 rounded-xl transition-colors mb-4"
                 >
-                  <Plus className="w-4 h-4 text-slate-400" />
-                  <span className="text-[13px] font-medium text-slate-600">Add sources</span>
-                  <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV, Image</span>
-                  <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
-                </label>
+                  {showUrlInput ? (
+                    <>
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Upload file instead</span>
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Add URL</span>
+                    </>
+                  )}
+                </button>
               </>
             )}
 
@@ -584,11 +714,16 @@ export default function NotebookPage() {
               {sources.map((source) => (
                 <div
                   key={source.id}
-                  onClick={() => toggleSelect(source.id)}
                   className={`flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer group transition-colors ${selectedIds.has(source.id) ? "bg-slate-50/50" : ""}`}
                 >
                   <div
                     className={`${fileTypeColor(source.file_type)} p-1.5 rounded flex-shrink-0`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (source.status === "ready" && id) {
+                        setActiveSource(id, source.id);
+                      }
+                    }}
                   >
                     {isProcessingStatus(source.status) ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -596,9 +731,19 @@ export default function NotebookPage() {
                       fileTypeIcon(source.file_type)
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div
+                    className="flex-1 min-w-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (source.status === "ready" && id) {
+                        setActiveSource(id, source.id);
+                      } else {
+                        toggleSelect(source.id);
+                      }
+                    }}
+                  >
                     <p
-                      className={`text-[13px] truncate ${isProcessingStatus(source.status) ? "text-slate-400 italic" : source.status === "failed" ? "text-red-500" : "text-slate-700"}`}
+                      className={`text-[13px] truncate ${isProcessingStatus(source.status) ? "text-slate-400 italic" : source.status === "failed" ? "text-red-500" : "text-slate-700 hover:text-[#5b8c15]"}`}
                     >
                       {source.filename}
                     </p>
@@ -623,14 +768,16 @@ export default function NotebookPage() {
                   )}
                   <input
                     type="checkbox"
-                    className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 pointer-events-none shrink-0"
+                    className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 cursor-pointer shrink-0"
                     checked={selectedIds.has(source.id)}
-                    readOnly
+                    onChange={() => toggleSelect(source.id)}
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </div>
               ))}
             </div>
           </div>
+          )}
 
           {/* Team Members (shown for team notebooks) */}
           {notebook?.is_shared && (
@@ -737,12 +884,21 @@ export default function NotebookPage() {
 
                 {overview?.overview && (
                   <div className="flex items-center justify-center gap-3 mt-6">
-                    <button
-                      onClick={() => handleSaveNote(overview.overview)}
-                      className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-slate-200 text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                    >
-                      <BookmarkPlus className="w-3.5 h-3.5" /> Save to note
-                    </button>
+                    {overviewSaved ? (
+                      <span className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-green-200 bg-green-50 text-[13px] font-medium text-green-600">
+                        <Check className="w-3.5 h-3.5" /> Saved
+                      </span>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          await handleSaveNote(overview.overview);
+                          setOverviewSaved(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-1.5 rounded-full border border-slate-200 text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5" /> Save to note
+                      </button>
+                    )}
                     <button
                       onClick={() => handleCopyToClipboard(overview.overview)}
                       className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
@@ -783,12 +939,18 @@ export default function NotebookPage() {
                         <div className="text-slate-800 text-[14px] leading-relaxed max-w-full">
                           <div dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }} />
                           <div className="flex items-center gap-2 mt-4">
-                            <button
-                              onClick={() => handleSaveMessageAsNote(msg)}
-                              className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-200 text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors"
-                            >
-                              <BookmarkPlus className="w-3 h-3" /> Save to note
-                            </button>
+                            {savedMessageIds.has(msg.id) ? (
+                              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-green-200 bg-green-50 text-[11px] font-medium text-green-600">
+                                <Check className="w-3 h-3" /> Saved
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleSaveMessageAsNote(msg)}
+                                className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-200 text-[11px] font-medium text-slate-500 hover:bg-slate-50 transition-colors"
+                              >
+                                <BookmarkPlus className="w-3 h-3" /> Save to note
+                              </button>
+                            )}
                             <button
                               onClick={() => handleCopyToClipboard(msg.content)}
                               className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"

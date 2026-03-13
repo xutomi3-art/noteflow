@@ -60,6 +60,8 @@ export default function DashboardPage() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<number, 'waiting' | 'uploading' | 'done' | 'error'>>({});
+  const [currentUploadIndex, setCurrentUploadIndex] = useState(-1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
 
@@ -125,15 +127,36 @@ export default function DashboardPage() {
     setPendingFiles([]);
     setNotebookName('');
     setIsCreating(false);
+    setUploadProgress({});
+    setCurrentUploadIndex(-1);
   };
 
   const handleOpenNotebook = (notebook: Notebook) => {
     navigate('/notebook/' + notebook.id);
   };
 
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
   const handleFilesSelected = (files: FileList | null) => {
     if (!files) return;
-    setPendingFiles(prev => [...prev, ...Array.from(files)]);
+    const newFiles = Array.from(files);
+    const rejected: string[] = [];
+    const accepted: File[] = [];
+    for (const file of newFiles) {
+      if (file.size > MAX_FILE_SIZE) {
+        rejected.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
+      } else {
+        accepted.push(file);
+      }
+    }
+    if (rejected.length > 0) {
+      alert(`The following files exceed the 50 MB limit and were skipped:\n\n${rejected.join('\n')}`);
+    }
+    if (pendingFiles.length + accepted.length > 50) {
+      alert('Maximum 50 files allowed per notebook.');
+      return;
+    }
+    setPendingFiles(prev => [...prev, ...accepted]);
   };
 
   const removePendingFile = (index: number) => {
@@ -150,14 +173,24 @@ export default function DashboardPage() {
         cover_color: randomColor(),
         is_team: isTeam,
       });
-      // Upload all pending files
-      for (const file of pendingFiles) {
+      // Upload all pending files with progress tracking
+      const progress: Record<number, 'waiting' | 'uploading' | 'done' | 'error'> = {};
+      pendingFiles.forEach((_, i) => { progress[i] = 'waiting'; });
+      setUploadProgress({...progress});
+
+      for (let i = 0; i < pendingFiles.length; i++) {
+        setCurrentUploadIndex(i);
+        progress[i] = 'uploading';
+        setUploadProgress({...progress});
         try {
-          await api.uploadSource(notebook.id, file);
+          await api.uploadSource(notebook.id, pendingFiles[i]);
+          progress[i] = 'done';
         } catch {
-          // Continue with remaining files
+          progress[i] = 'error';
         }
+        setUploadProgress({...progress});
       }
+      setCurrentUploadIndex(-1);
 
       if (isTeam) {
         // For team notebooks, close create modal and open ShareModal
@@ -439,7 +472,7 @@ export default function DashboardPage() {
 
         {/* Footer */}
         <footer className="pt-8 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between text-[13px] font-medium text-slate-500">
-          <div>&copy; 2026 AVACA AI. All rights reserved.</div>
+          <div>上海聚托信息科技有限公司©2026 <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 transition-colors">沪ICP备15056478号-5</a></div>
           <div className="flex items-center gap-8 mt-4 md:mt-0">
             <a href="#" className="hover:text-slate-900 transition-colors">Privacy Policy</a>
             <a href="#" className="hover:text-slate-900 transition-colors">Terms of Service</a>
@@ -470,14 +503,10 @@ export default function DashboardPage() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif"
+              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.webm"
               className="sr-only"
               onChange={(e) => {
-                const files = e.target.files;
-                if (files && files.length > 0) {
-                  const cloned = Array.from(files);
-                  setPendingFiles(prev => [...prev, ...cloned]);
-                }
+                handleFilesSelected(e.target.files);
                 e.target.value = '';
               }}
             />
@@ -508,23 +537,41 @@ export default function DashboardPage() {
                 >
                   <Upload className="w-10 h-10 text-slate-300 mb-4" />
                   <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
-                  <p className="text-sm text-slate-500 mb-1">PDF, DOCX, PPTX, TXT, MD, EXCEL, CSV, Image</p>
+                  <p className="text-sm text-slate-500 mb-1">PDF, DOCX, PPTX, TXT, MD, EXCEL, CSV, Image, Audio</p>
                   <p className="text-sm text-[#5b8c15] font-medium">or click to browse</p>
                 </label>
 
                 {/* Selected files list */}
                 {pendingFiles.length > 0 && (
                   <div className="mt-4 max-h-40 overflow-y-auto space-y-1.5">
-                    {pendingFiles.map((file, i) => (
-                      <div key={i} className="flex items-center gap-3 px-3 py-2 bg-slate-50 rounded-xl text-sm">
-                        <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                        <span className="flex-1 truncate text-slate-700">{file.name}</span>
-                        <span className="text-xs text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
-                        <button onClick={() => removePendingFile(i)} className="text-slate-400 hover:text-slate-600 shrink-0">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                    {pendingFiles.map((file, i) => {
+                      const status = uploadProgress[i];
+                      return (
+                        <div key={i} className="px-3 py-2 bg-slate-50 rounded-xl text-sm">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="flex-1 truncate text-slate-700">{file.name}</span>
+                            <span className="text-xs text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+                            {status === 'done' ? (
+                              <span className="text-green-500 text-xs font-medium">&#10003;</span>
+                            ) : status === 'error' ? (
+                              <span className="text-red-500 text-xs font-medium">&#10007;</span>
+                            ) : status === 'uploading' ? (
+                              <Loader2 className="w-3.5 h-3.5 text-[#5b8c15] animate-spin shrink-0" />
+                            ) : !isCreating ? (
+                              <button onClick={() => removePendingFile(i)} className="text-slate-400 hover:text-slate-600 shrink-0">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            ) : null}
+                          </div>
+                          {status === 'uploading' && (
+                            <div className="mt-1.5 h-1 bg-slate-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-[#5b8c15] rounded-full animate-pulse" style={{ width: '60%' }} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -551,7 +598,9 @@ export default function DashboardPage() {
                       {isCreating ? (
                         <span className="flex items-center justify-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          {pendingFiles.length > 0 ? 'Creating & Uploading...' : 'Creating...'}
+                          {currentUploadIndex >= 0
+                            ? `Uploading ${currentUploadIndex + 1}/${pendingFiles.length}...`
+                            : pendingFiles.length > 0 ? 'Creating & Uploading...' : 'Creating...'}
                         </span>
                       ) : (
                         pendingFiles.length > 0 ? `Create Notebook & Upload ${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : 'Create Notebook'

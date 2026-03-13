@@ -1,6 +1,7 @@
 import os
 import uuid
 
+from pydantic import BaseModel
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +31,14 @@ ALLOWED_TYPES = {
     'image/webp': 'webp',
     'image/gif': 'gif',
     'image/bmp': 'bmp',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/mp4': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/flac': 'flac',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'webm',
 }
 
 EXT_MAP = {
@@ -47,6 +56,12 @@ EXT_MAP = {
     '.webp': 'webp',
     '.gif': 'gif',
     '.bmp': 'bmp',
+    '.mp3': 'mp3',
+    '.wav': 'wav',
+    '.m4a': 'm4a',
+    '.flac': 'flac',
+    '.ogg': 'ogg',
+    '.webm': 'webm',
 }
 
 
@@ -70,7 +85,7 @@ async def upload_source(
 
     file_type = _detect_file_type(file.filename or '', file.content_type)
     if file_type is None:
-        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV, JPG, PNG, WEBP')
+        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV, JPG, PNG, WEBP, MP3, WAV, M4A, FLAC, OGG, WEBM')
 
     content = await file.read()
     file_size = len(content)
@@ -107,6 +122,84 @@ async def upload_source(
         file_path=file_path,
         filename=file.filename or 'document',
         file_type=file_type,
+    )
+
+    return SourceResponse(
+        id=str(source.id),
+        notebook_id=str(source.notebook_id),
+        filename=source.filename,
+        file_type=source.file_type,
+        file_size=source.file_size,
+        status=source.status,
+        error_message=source.error_message,
+        created_at=source.created_at,
+    )
+
+
+class UrlSourceRequest(BaseModel):
+    url: str
+
+
+@router.post('/url', response_model=SourceResponse)
+async def add_url_source(
+    notebook_id: str,
+    body: UrlSourceRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SourceResponse:
+    """Add a webpage URL as a source by scraping its content."""
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'upload'):
+        raise HTTPException(status_code=403, detail='No permission to upload sources')
+
+    from backend.services.web_scraper import scrape_url
+    from urllib.parse import urlparse
+
+    url = body.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail='URL is required')
+
+    # Basic URL validation
+    parsed = urlparse(url if '://' in url else 'https://' + url)
+    if not parsed.netloc:
+        raise HTTPException(status_code=400, detail='Invalid URL')
+
+    try:
+        title, content = await scrape_url(url)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f'Failed to fetch URL: {str(e)}')
+
+    # Save content as a .md file
+    upload_dir = os.path.join(settings.UPLOAD_DIR, notebook_id)
+    os.makedirs(upload_dir, exist_ok=True)
+
+    source_id = str(uuid.uuid4())
+    local_filename = f'{source_id}.md'
+    file_path = os.path.join(upload_dir, local_filename)
+
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    file_size = len(content.encode('utf-8'))
+    display_name = f'{title[:60]}.md' if len(title) > 60 else f'{title}.md'
+
+    source = await source_service.create_source(
+        db,
+        notebook_id=uuid.UUID(notebook_id),
+        uploaded_by=user.id,
+        filename=display_name,
+        file_type='md',
+        file_size=file_size,
+        storage_url=file_path,
+    )
+
+    background_tasks.add_task(
+        process_document,
+        source_id=str(source.id),
+        notebook_id=notebook_id,
+        file_path=file_path,
+        filename=display_name,
+        file_type='md',
     )
 
     return SourceResponse(
@@ -245,6 +338,50 @@ async def get_source_file(
         media_type=media_type,
         headers={'Content-Disposition': f"inline; filename*=UTF-8''{encoded_name}"},
     )
+
+
+@router.get('/{source_id}/content')
+async def get_source_content(
+    notebook_id: str,
+    source_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return the parsed markdown content of a source."""
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'view'):
+        raise HTTPException(status_code=403, detail='No access to this notebook')
+
+    source = await source_service.get_source(db, uuid.UUID(source_id))
+    if source is None or str(source.notebook_id) != notebook_id:
+        raise HTTPException(status_code=404, detail='Source not found')
+
+    if not source.storage_url:
+        raise HTTPException(status_code=404, detail='Source file not found')
+
+    # Try to find parsed content file
+    base_path = os.path.splitext(source.storage_url)[0]
+
+    # Check various parsed content locations
+    parsed_paths = [
+        base_path + "_parsed.md",  # Standard parsed content
+        base_path + ".md",          # Image-extracted or original md
+    ]
+
+    # For txt/md files, the original file IS the content
+    if source.file_type in ('txt', 'md'):
+        parsed_paths.insert(0, source.storage_url)
+
+    content = None
+    for path in parsed_paths:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+            break
+
+    if content is None:
+        return {'content': None, 'message': 'Parsed content not available yet'}
+
+    return {'content': content, 'filename': source.filename, 'file_type': source.file_type}
 
 
 @router.get('/status')

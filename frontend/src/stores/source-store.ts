@@ -7,6 +7,10 @@ interface SourceState {
   selectedIds: Set<string>;
   isLoading: boolean;
   unsubscribe: (() => void) | null;
+  activeSourceId: string | null;
+  activeSourceContent: string | null;
+  isLoadingContent: boolean;
+  highlightExcerpt: string | null;
 
   fetchSources: (notebookId: string) => Promise<void>;
   uploadSource: (notebookId: string, file: File) => Promise<Source>;
@@ -15,6 +19,9 @@ interface SourceState {
   selectAll: () => void;
   deselectAll: () => void;
   subscribeStatus: (notebookId: string) => void;
+  setActiveSource: (notebookId: string, sourceId: string | null, excerpt?: string | null) => Promise<void>;
+  clearActiveSource: () => void;
+  setHighlightExcerpt: (excerpt: string | null) => void;
   cleanup: () => void;
 }
 
@@ -23,6 +30,10 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   selectedIds: new Set(),
   isLoading: false,
   unsubscribe: null,
+  activeSourceId: null,
+  activeSourceContent: null,
+  isLoadingContent: false,
+  highlightExcerpt: null,
 
   fetchSources: async (notebookId: string) => {
     set({ isLoading: true });
@@ -108,9 +119,41 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     set({ unsubscribe: unsub });
   },
 
+  setActiveSource: async (notebookId: string, sourceId: string | null, excerpt?: string | null) => {
+    if (sourceId === null) {
+      set({ activeSourceId: null, activeSourceContent: null, isLoadingContent: false, highlightExcerpt: null });
+      return;
+    }
+    // If same source is already active, just update the highlight excerpt
+    if (sourceId === get().activeSourceId) {
+      set({ highlightExcerpt: excerpt ?? null });
+      return;
+    }
+    set({ activeSourceId: sourceId, activeSourceContent: null, isLoadingContent: true, highlightExcerpt: excerpt ?? null });
+    try {
+      const result = await api.getSourceContent(notebookId, sourceId);
+      // Only update if this source is still the active one
+      if (get().activeSourceId === sourceId) {
+        set({ activeSourceContent: result.content, isLoadingContent: false });
+      }
+    } catch {
+      if (get().activeSourceId === sourceId) {
+        set({ activeSourceContent: null, isLoadingContent: false });
+      }
+    }
+  },
+
+  clearActiveSource: () => {
+    set({ activeSourceId: null, activeSourceContent: null, isLoadingContent: false, highlightExcerpt: null });
+  },
+
+  setHighlightExcerpt: (excerpt: string | null) => {
+    set({ highlightExcerpt: excerpt });
+  },
+
   cleanup: () => {
     const { unsubscribe } = get();
     if (unsubscribe) unsubscribe();
-    set({ sources: [], selectedIds: new Set(), unsubscribe: null });
+    set({ sources: [], selectedIds: new Set(), unsubscribe: null, activeSourceId: null, activeSourceContent: null, isLoadingContent: false, highlightExcerpt: null });
   },
 }));

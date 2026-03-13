@@ -41,6 +41,11 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await bootstrap_admin()
+
+    # Initialize ASR service
+    from backend.services.asr_service import asr_service
+    asr_service.configure(settings.VOLCENGINE_ASR_APPID, settings.VOLCENGINE_ASR_ACCESS_KEY)
+
     yield
 
 

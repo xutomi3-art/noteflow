@@ -118,8 +118,19 @@ class ApiClient {
     return this.request(`/notebooks/${notebookId}/sources`);
   }
 
+  async addUrlSource(notebookId: string, url: string): Promise<Source> {
+    return this.request(`/notebooks/${notebookId}/sources/url`, {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+  }
+
   async deleteSource(notebookId: string, sourceId: string): Promise<void> {
     await this.request(`/notebooks/${notebookId}/sources/${sourceId}`, { method: "DELETE" });
+  }
+
+  async getSourceContent(notebookId: string, sourceId: string): Promise<{ content: string | null; filename?: string; file_type?: string; message?: string }> {
+    return this.request(`/notebooks/${notebookId}/sources/${sourceId}/content`);
   }
 
   subscribeToSourceStatus(

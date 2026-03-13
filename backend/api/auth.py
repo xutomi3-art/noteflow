@@ -14,6 +14,8 @@ from backend.models.user import User
 from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse
 from backend.services import auth_service
 from backend.services import google_auth_service
+from backend.services.notebook_service import create_notebook
+from backend.schemas.notebook import NotebookCreate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -22,6 +24,23 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     try:
         user = await auth_service.register(db, req)
+
+        # Create default starter notebooks for new users
+        default_notebooks = [
+            {"name": "Getting Started", "emoji": "🚀", "cover_color": "#ecfccb"},
+            {"name": "My Research", "emoji": "🔬", "cover_color": "#dbeafe"},
+            {"name": "Meeting Notes", "emoji": "📋", "cover_color": "#fef08a"},
+        ]
+        for nb_data in default_notebooks:
+            try:
+                await create_notebook(
+                    db,
+                    owner_id=user.id,
+                    req=NotebookCreate(**nb_data),
+                )
+            except Exception:
+                logger.warning("Failed to create default notebook '%s' for user %s", nb_data["name"], user.id)
+
         return await auth_service.login(db, LoginRequest(email=req.email, password=req.password))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
