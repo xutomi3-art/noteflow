@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2 } from 'lucide-react';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
-import { setPendingUploadFiles } from '@/stores/pending-upload-store';
+import { setPendingUploadFiles, setPendingUploadUrls } from '@/stores/pending-upload-store';
 import type { Notebook } from '@/types/api';
 import ShareModal from '@/components/sharing/ShareModal';
 
@@ -60,6 +60,9 @@ export default function DashboardPage() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [pendingUrls, setPendingUrlsList] = useState<string[]>([]);
+  const [urlInput, setUrlInput] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
 
@@ -123,6 +126,9 @@ export default function DashboardPage() {
     setCreateModalType(null);
     setTeamNotebookId(null);
     setPendingFiles([]);
+    setPendingUrlsList([]);
+    setUrlInput('');
+    setShowUrlInput(false);
     setNotebookName('');
     setIsCreating(false);
   };
@@ -159,6 +165,21 @@ export default function DashboardPage() {
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleAddUrl = () => {
+    const url = urlInput.trim();
+    if (!url) return;
+    if (pendingUrls.includes(url)) {
+      setUrlInput('');
+      return;
+    }
+    setPendingUrlsList(prev => [...prev, url]);
+    setUrlInput('');
+  };
+
+  const removePendingUrl = (index: number) => {
+    setPendingUrlsList(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleCreateAndUpload = async (isTeam: boolean) => {
     setIsCreating(true);
     try {
@@ -171,24 +192,24 @@ export default function DashboardPage() {
       });
 
       const filesToUpload = [...pendingFiles];
+      const urlsToAdd = [...pendingUrls];
 
       if (isTeam) {
         // For team notebooks, close create modal and open ShareModal
         setTeamNotebookId(notebook.id);
         setCreateModalType(null);
         setPendingFiles([]);
+        setPendingUrlsList([]);
         setNotebookName('');
         setIsCreating(false);
         setIsShareModalOpen(true);
-        // Store files for NotebookPage to pick up after share modal closes
-        if (filesToUpload.length > 0) {
-          setPendingUploadFiles(filesToUpload);
-        }
+        // Store files/urls for NotebookPage to pick up after share modal closes
+        if (filesToUpload.length > 0) setPendingUploadFiles(filesToUpload);
+        if (urlsToAdd.length > 0) setPendingUploadUrls(urlsToAdd);
       } else {
-        // Store files for NotebookPage to pick up
-        if (filesToUpload.length > 0) {
-          setPendingUploadFiles(filesToUpload);
-        }
+        // Store files/urls for NotebookPage to pick up
+        if (filesToUpload.length > 0) setPendingUploadFiles(filesToUpload);
+        if (urlsToAdd.length > 0) setPendingUploadUrls(urlsToAdd);
         closeModal();
         navigate('/notebook/' + notebook.id);
       }
@@ -537,6 +558,64 @@ export default function DashboardPage() {
                   <p className="text-sm text-[#5b8c15] font-medium">or click to browse</p>
                 </label>
 
+                {/* URL input toggle */}
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <button
+                    type="button"
+                    onClick={() => setShowUrlInput(!showUrlInput)}
+                    className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${showUrlInput ? 'text-[#5b8c15]' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <Globe className="w-4 h-4" />
+                    Add website URL
+                  </button>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+
+                {/* URL input field */}
+                {showUrlInput && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="url"
+                        placeholder="https://example.com"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
+                        className="w-full h-10 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddUrl}
+                      disabled={!urlInput.trim()}
+                      className="h-10 px-4 rounded-xl bg-[#5b8c15] text-white text-sm font-medium hover:bg-[#4a7311] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+
+                {/* Pending URLs list */}
+                {pendingUrls.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {pendingUrls.map((url, i) => (
+                      <div key={i} className="px-3 py-2 bg-blue-50 rounded-xl text-sm">
+                        <div className="flex items-center gap-3">
+                          <Globe className="w-4 h-4 text-blue-500 shrink-0" />
+                          <span className="flex-1 truncate text-slate-700">{url}</span>
+                          {!isCreating && (
+                            <button onClick={() => removePendingUrl(i)} className="text-slate-400 hover:text-slate-600 shrink-0">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Selected files list */}
                 {pendingFiles.length > 0 && (
                   <div className="mt-4 max-h-40 overflow-y-auto space-y-1.5">
@@ -582,7 +661,9 @@ export default function DashboardPage() {
                           <Loader2 className="w-4 h-4 animate-spin" /> Creating...
                         </span>
                       ) : (
-                        pendingFiles.length > 0 ? `Create Notebook (${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''})` : 'Create Notebook'
+                        (pendingFiles.length > 0 || pendingUrls.length > 0)
+                          ? `Create Notebook (${pendingFiles.length + pendingUrls.length} source${pendingFiles.length + pendingUrls.length > 1 ? 's' : ''})`
+                          : 'Create Notebook'
                       )}
                     </button>
                   )}

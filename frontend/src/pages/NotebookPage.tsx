@@ -34,7 +34,7 @@ import {
   Minimize2,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
-import { consumePendingUploadFiles } from "@/stores/pending-upload-store";
+import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useStudioStore } from "@/stores/studio-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -246,22 +246,36 @@ export default function NotebookPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Consume pending files from create-notebook flow and upload them
+  // Consume pending files and URLs from create-notebook flow and upload them
   useEffect(() => {
     if (!id) return;
     const files = consumePendingUploadFiles();
-    if (files.length === 0) return;
+    const urls = consumePendingUploadUrls();
+    if (files.length === 0 && urls.length === 0) return;
 
-    const uploads = files.map(f => ({ name: f.name, status: 'uploading' as const }));
-    setPendingUploads(uploads);
+    const fileUploads = files.map(f => ({ name: f.name, status: 'uploading' as const }));
+    const urlUploads = urls.map(u => ({ name: u, status: 'uploading' as const }));
+    setPendingUploads([...fileUploads, ...urlUploads]);
 
     (async () => {
+      // Upload files first
       for (let i = 0; i < files.length; i++) {
         try {
           await uploadSource(id, files[i]);
           setPendingUploads(prev => prev.map((u, idx) => idx === i ? { ...u, status: 'done' } : u));
         } catch {
           setPendingUploads(prev => prev.map((u, idx) => idx === i ? { ...u, status: 'error' } : u));
+        }
+      }
+      // Then add URLs
+      for (let i = 0; i < urls.length; i++) {
+        const idx = files.length + i;
+        try {
+          await api.addUrlSource(id, urls[i]);
+          fetchSources(id);
+          setPendingUploads(prev => prev.map((u, j) => j === idx ? { ...u, status: 'done' } : u));
+        } catch {
+          setPendingUploads(prev => prev.map((u, j) => j === idx ? { ...u, status: 'error' } : u));
         }
       }
       // Clear pending uploads after a delay so user can see final states
