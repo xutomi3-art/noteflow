@@ -39,7 +39,7 @@ async def create_invite_link(
     if req.role not in ("editor", "viewer"):
         raise HTTPException(status_code=400, detail="Role must be 'editor' or 'viewer'")
 
-    link = await sharing_service.create_invite_link(db, uuid.UUID(notebook_id), user.id, req.role)
+    link = await sharing_service.create_invite_link(db, uuid.UUID(notebook_id), user.id, req.role, email=req.email)
     return InviteLinkResponse(
         id=str(link.id),
         token=link.token,

@@ -287,10 +287,10 @@ class ApiClient {
   }
 
   // Sharing
-  async createInviteLink(notebookId: string, role: string): Promise<InviteLink> {
+  async createInviteLink(notebookId: string, role: string, email?: string): Promise<InviteLink> {
     return this.request(`/notebooks/${notebookId}/share`, {
       method: "POST",
-      body: JSON.stringify({ role }),
+      body: JSON.stringify({ role, email: email || null }),
     });
   }
 

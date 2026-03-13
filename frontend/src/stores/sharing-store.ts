@@ -8,7 +8,7 @@ interface SharingState {
   isLoading: boolean;
 
   fetchMembers: (notebookId: string) => Promise<void>;
-  createInviteLink: (notebookId: string, role: string) => Promise<InviteLink>;
+  createInviteLink: (notebookId: string, role: string, email?: string) => Promise<InviteLink>;
   sendEmailInvite: (notebookId: string, email: string, role: string) => Promise<string>;
   updateMemberRole: (notebookId: string, userId: string, role: string) => Promise<void>;
   removeMember: (notebookId: string, userId: string) => Promise<void>;
@@ -32,8 +32,8 @@ export const useSharingStore = create<SharingState>((set) => ({
     }
   },
 
-  createInviteLink: async (notebookId: string, role: string) => {
-    const link = await api.createInviteLink(notebookId, role);
+  createInviteLink: async (notebookId: string, role: string, email?: string) => {
+    const link = await api.createInviteLink(notebookId, role, email);
     set((state) => ({ inviteLinks: [link, ...state.inviteLinks] }));
     return link;
   },

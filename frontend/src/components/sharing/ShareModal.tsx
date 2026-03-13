@@ -58,15 +58,16 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
       fetchMembers(notebookId);
       onMemberAdded?.();
     } catch {
-      // Email send failed — create invite link as fallback
+      // Email send failed — create invite link as fallback (pass email so pending invite shows)
       try {
-        const link = await createInviteLink(notebookId, inviteRole);
+        const link = await createInviteLink(notebookId, inviteRole, email);
         const url = `${window.location.origin}/join/${link.token}`;
         setGeneratedLink(url);
         setShowLinkSection(true);
         setInvitedEmails((prev) =>
           prev.map((e) => (e.email === email ? { ...e, status: "sent" } : e)),
         );
+        fetchMembers(notebookId);
         onMemberAdded?.();
       } catch {
         setInvitedEmails((prev) =>

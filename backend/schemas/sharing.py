@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class CreateInviteLinkRequest(BaseModel):
     role: str = "viewer"  # editor or viewer
+    email: str | None = None  # optional email for pending invite display
 
 
 class InviteLinkResponse(BaseModel):
