@@ -91,7 +91,7 @@ class ApiClient {
   }
 
   // Sources
-  async uploadSource(notebookId: string, file: File): Promise<Source> {
+  uploadSource(notebookId: string, file: File, signal?: AbortSignal): Promise<Source> {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -100,18 +100,18 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${this.accessToken}`;
     }
 
-    const res = await fetch(`${API_BASE}/notebooks/${notebookId}/sources`, {
+    return fetch(`${API_BASE}/notebooks/${notebookId}/sources`, {
       method: "POST",
       headers,
       body: formData,
+      signal,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Upload failed: ${res.status}`);
+      }
+      return res.json();
     });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || `Upload failed: ${res.status}`);
-    }
-
-    return res.json();
   }
 
   async listSources(notebookId: string): Promise<Source[]> {
@@ -191,7 +191,7 @@ class ApiClient {
   }
 
   // Chat
-  async sendChatMessage(
+  sendChatMessage(
     notebookId: string,
     message: string,
     sourceIds: string[],
@@ -201,7 +201,8 @@ class ApiClient {
     thinking: boolean = false,
     onThinkingStart?: () => void,
     onReasoning?: (content: string) => void,
-  ): Promise<void> {
+  ): { promise: Promise<void>; abort: () => void } {
+    const controller = new AbortController();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "Accept": "text/event-stream",
@@ -210,11 +211,13 @@ class ApiClient {
       headers["Authorization"] = `Bearer ${this.accessToken}`;
     }
 
+    const promise = (async () => {
     try {
       const response = await fetch(`${API_BASE}/notebooks/${notebookId}/chat`, {
         method: "POST",
         headers,
         body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null, thinking }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -258,8 +261,15 @@ class ApiClient {
         }
       }
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        // Stream was intentionally aborted — not an error
+        return;
+      }
       onError(e instanceof Error ? e.message : "Chat request failed");
     }
+    })();
+
+    return { promise, abort: () => controller.abort() };
   }
 
   async getChatHistory(notebookId: string): Promise<ChatMessage[]> {

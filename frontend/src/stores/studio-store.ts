@@ -54,7 +54,14 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   generateContent: async (notebookId: string, contentType: string) => {
     set(state => ({ isGenerating: { ...state.isGenerating, [contentType]: true } }));
     try {
-      const content = await api.generateStudioContent(notebookId, contentType);
+      let content = await api.generateStudioContent(notebookId, contentType);
+      // Strip ```json fences from mindmap content so the frontend can parse it as JSON
+      if (contentType === "mindmap") {
+        const stripped = content.trim();
+        if (stripped.startsWith("```")) {
+          content = stripped.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+        }
+      }
       set(state => ({
         content: { ...state.content, [contentType]: content },
       }));
