@@ -62,7 +62,7 @@ export default function DashboardPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [pendingUrls, setPendingUrlsList] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
-  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
 
