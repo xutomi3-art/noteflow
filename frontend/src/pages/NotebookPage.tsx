@@ -696,7 +696,15 @@ export default function NotebookPage() {
                   >
                     <Plus className="w-4 h-4 text-slate-400" />
                     <span className="text-[13px] font-medium text-slate-600">Add sources</span>
-                    <span className="text-[10px] text-slate-400">PDF, DOCX, PPTX, TXT, MD, Excel, CSV, Image, Audio</span>
+                    <span className="text-[10px] text-slate-400">
+                      pdf, images, docs, audio,{' '}
+                      <span className="relative group/tip inline-block">
+                        <span className="underline decoration-dotted underline-offset-2 cursor-default">and more</span>
+                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg bg-slate-900 text-white text-[10px] leading-relaxed px-2.5 py-2 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
+                          Supported: pdf, txt, md, docx, pptx, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp, mp3, wav, m4a, flac, ogg, webm
+                        </span>
+                      </span>
+                    </span>
                     <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
                   </label>
                 ) : (
