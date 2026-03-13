@@ -491,7 +491,7 @@ export default function DashboardPage() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.flac,.ogg,.webm"
+              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp"
               className="sr-only"
               onChange={(e) => {
                 handleFilesSelected(e.target.files);
@@ -526,11 +526,11 @@ export default function DashboardPage() {
                   <Upload className="w-10 h-10 text-slate-300 mb-4" />
                   <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
                   <p className="text-sm text-slate-500 mb-1">
-                    pdf, images, docs, audio,{' '}
+                    pdf, images, docs,{' '}
                     <span className="relative group/tip inline-block">
                       <span className="underline decoration-dotted underline-offset-2 cursor-default">and more</span>
                       <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-lg bg-slate-900 text-white text-xs leading-relaxed px-3 py-2.5 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
-                        Supported file types: pdf, txt, md, docx, pptx, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp, mp3, wav, m4a, flac, ogg, webm
+                        Supported file types: pdf, txt, md, docx, pptx, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp
                       </span>
                     </span>
                   </p>

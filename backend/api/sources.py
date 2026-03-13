@@ -31,14 +31,6 @@ ALLOWED_TYPES = {
     'image/webp': 'webp',
     'image/gif': 'gif',
     'image/bmp': 'bmp',
-    'audio/mpeg': 'mp3',
-    'audio/wav': 'wav',
-    'audio/x-wav': 'wav',
-    'audio/mp4': 'm4a',
-    'audio/x-m4a': 'm4a',
-    'audio/flac': 'flac',
-    'audio/ogg': 'ogg',
-    'audio/webm': 'webm',
 }
 
 EXT_MAP = {
@@ -56,12 +48,6 @@ EXT_MAP = {
     '.webp': 'webp',
     '.gif': 'gif',
     '.bmp': 'bmp',
-    '.mp3': 'mp3',
-    '.wav': 'wav',
-    '.m4a': 'm4a',
-    '.flac': 'flac',
-    '.ogg': 'ogg',
-    '.webm': 'webm',
 }
 
 
