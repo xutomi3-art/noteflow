@@ -71,7 +71,7 @@ async def upload_source(
 
     file_type = _detect_file_type(file.filename or '', file.content_type)
     if file_type is None:
-        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV, JPG, PNG, WEBP, MP3, WAV, M4A, FLAC, OGG, WEBM')
+        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV, JPG, PNG, WEBP, GIF, BMP')
 
     content = await file.read()
     file_size = len(content)
