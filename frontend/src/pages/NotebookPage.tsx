@@ -31,6 +31,7 @@ import {
   ListChecks,
   MessageSquare,
   Sparkles,
+  Minimize2,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles } from "@/stores/pending-upload-store";
@@ -202,6 +203,7 @@ export default function NotebookPage() {
     notes,
     pdfViewer,
     generateContent,
+    clearContent,
     fetchNotes,
     deleteNote,
     closePdf,
@@ -453,6 +455,16 @@ export default function NotebookPage() {
       selectAll();
     }
   }, [isAllSelected, deselectAll, selectAll]);
+
+  const handleMinimizeStudioContent = useCallback(
+    async (contentType: string, content: string, label: string) => {
+      // Save to notes with a label prefix
+      await handleSaveNote(`**${label}**\n\n${content}`);
+      // Clear from studio display
+      clearContent(contentType);
+    },
+    [handleSaveNote, clearContent],
+  );
 
   const handleStudioAction = useCallback(
     async (action: string) => {
@@ -1370,7 +1382,16 @@ export default function NotebookPage() {
               <div className="mb-6 space-y-4">
                 {studioContent.summary && (
                   <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                    <h4 className="text-[11px] font-bold text-indigo-600 mb-2">SUMMARY</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-bold text-indigo-600">SUMMARY</h4>
+                      <button
+                        onClick={() => handleMinimizeStudioContent("summary", studioContent.summary, "Summary")}
+                        className="text-indigo-400 hover:text-indigo-600 transition-colors p-0.5"
+                        title="Save to notes and minimize"
+                      >
+                        <Minimize2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <div
                       className="text-[13px] text-slate-700 leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: renderContent(studioContent.summary) }}
@@ -1379,7 +1400,16 @@ export default function NotebookPage() {
                 )}
                 {studioContent.faq && (
                   <div className="p-3 bg-cyan-50 rounded-xl border border-cyan-100">
-                    <h4 className="text-[11px] font-bold text-cyan-600 mb-2">FAQ</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-bold text-cyan-600">FAQ</h4>
+                      <button
+                        onClick={() => handleMinimizeStudioContent("faq", studioContent.faq, "FAQ")}
+                        className="text-cyan-400 hover:text-cyan-600 transition-colors p-0.5"
+                        title="Save to notes and minimize"
+                      >
+                        <Minimize2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <div
                       className="text-[13px] text-slate-700 leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: renderContent(studioContent.faq) }}
@@ -1388,7 +1418,16 @@ export default function NotebookPage() {
                 )}
                 {studioContent.mindmap && (
                   <div className="p-3 bg-pink-50 rounded-xl border border-pink-100">
-                    <h4 className="text-[11px] font-bold text-pink-600 mb-2">MIND MAP</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-bold text-pink-600">MIND MAP</h4>
+                      <button
+                        onClick={() => handleMinimizeStudioContent("mindmap", studioContent.mindmap, "Mind Map")}
+                        className="text-pink-400 hover:text-pink-600 transition-colors p-0.5"
+                        title="Save to notes and minimize"
+                      >
+                        <Minimize2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <div
                       className="text-[13px] text-slate-700 leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: renderContent(studioContent.mindmap) }}
@@ -1397,7 +1436,16 @@ export default function NotebookPage() {
                 )}
                 {studioContent.action_items && (
                   <div className="p-3 bg-yellow-50 rounded-xl border border-yellow-100">
-                    <h4 className="text-[11px] font-bold text-yellow-600 mb-2">ACTION ITEMS</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-bold text-yellow-600">ACTION ITEMS</h4>
+                      <button
+                        onClick={() => handleMinimizeStudioContent("action_items", studioContent.action_items, "Action Items")}
+                        className="text-yellow-500 hover:text-yellow-700 transition-colors p-0.5"
+                        title="Save to notes and minimize"
+                      >
+                        <Minimize2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <div
                       className="text-[13px] text-slate-700 leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: renderContent(studioContent.action_items) }}

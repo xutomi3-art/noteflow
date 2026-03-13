@@ -19,6 +19,7 @@ interface StudioState {
 
   setActiveTab: (tab: StudioState["activeTab"]) => void;
   generateContent: (notebookId: string, contentType: string) => Promise<void>;
+  clearContent: (contentType: string) => void;
   fetchNotes: (notebookId: string) => Promise<void>;
   deleteNote: (notebookId: string, noteId: string) => Promise<void>;
   openPdf: (sourceId: string, filename: string, page: number) => void;
@@ -41,6 +42,14 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   })),
 
   closePdf: () => set({ pdfViewer: null }),
+
+  clearContent: (contentType: string) => {
+    set(state => {
+      const content = { ...state.content };
+      delete content[contentType];
+      return { content };
+    });
+  },
 
   generateContent: async (notebookId: string, contentType: string) => {
     set(state => ({ isGenerating: { ...state.isGenerating, [contentType]: true } }));
