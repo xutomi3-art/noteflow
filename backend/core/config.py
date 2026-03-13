@@ -42,9 +42,10 @@ class Settings(BaseSettings):
     ALIBABA_TTS_APPKEY: str = os.getenv("ALIBABA_TTS_APPKEY", "")
     ALIBABA_TTS_TOKEN: str = os.getenv("ALIBABA_TTS_TOKEN", "")
 
-    # Volcengine ASR
+    # Volcengine ASR (Seed-ASR 2.0)
     VOLCENGINE_ASR_APPID: str = ""
-    VOLCENGINE_ASR_ACCESS_KEY: str = ""
+    VOLCENGINE_ASR_ACCESS_KEY: str = ""  # Access Token from console
+    PUBLIC_BASE_URL: str = ""  # Public URL for audio file serving (e.g. http://111.229.247.26)
 
     # SMTP Email
     SMTP_HOST: str = ""

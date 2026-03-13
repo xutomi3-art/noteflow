@@ -15,7 +15,7 @@ from backend.models.saved_note import SavedNote  # noqa: F401
 from backend.models.notebook_member import NotebookMember  # noqa: F401
 from backend.models.invite_link import InviteLink  # noqa: F401
 from backend.models.system_setting import SystemSetting  # noqa: F401
-from backend.api import auth, notebooks, sources, chat, notes, studio, sharing, overview, admin
+from backend.api import auth, notebooks, sources, chat, notes, studio, sharing, overview, admin, asr
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,11 @@ async def lifespan(app: FastAPI):
 
     # Initialize ASR service
     from backend.services.asr_service import asr_service
-    asr_service.configure(settings.VOLCENGINE_ASR_APPID, settings.VOLCENGINE_ASR_ACCESS_KEY)
+    asr_service.configure(
+        app_id=settings.VOLCENGINE_ASR_APPID,
+        access_token=settings.VOLCENGINE_ASR_ACCESS_KEY,
+        public_base_url=settings.PUBLIC_BASE_URL,
+    )
 
     yield
 
@@ -60,6 +64,7 @@ app.include_router(studio.router, prefix="/api")
 app.include_router(sharing.router, prefix="/api")
 app.include_router(overview.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(asr.router, prefix="/api")
 
 
 @app.get("/api/health")
