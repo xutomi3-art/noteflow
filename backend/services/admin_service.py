@@ -141,7 +141,7 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     )
 
     # MinerU
-    services["mineru"] = await _check_http(f"{settings.MINERU_BASE_URL}/health")
+    services["mineru"] = await _check_http(f"{settings.MINERU_BASE_URL}/docs")
 
     # Elasticsearch (RAGFlow's ES on port 9200)
     services["elasticsearch"] = await _check_http("http://ragflow-es:9200")

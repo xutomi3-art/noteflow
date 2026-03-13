@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     RAGFLOW_API_KEY: str = ""
 
     # MinerU
-    MINERU_BASE_URL: str = "http://mineru:8010"
+    MINERU_BASE_URL: str = "http://mineru-api:8000"
 
     # Presenton
     PRESENTON_BASE_URL: str = "http://presenton:80"

@@ -23,15 +23,26 @@ class MinerUClient:
 
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 resp = await client.post(
-                    f"{self.base_url}/predict",
+                    f"{self.base_url}/file_parse",
                     files={
-                        "file": (filename, file_content, "application/octet-stream")
+                        "files": (filename, file_content, "application/octet-stream")
+                    },
+                    data={
+                        "backend": "pipeline",  # CPU mode
+                        "return_md": "true",
+                        "parse_method": "auto",
                     },
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                # MinerU returns markdown content
-                return data.get("markdown", data.get("content", ""))
+                # MinerU /file_parse returns results list
+                results = data.get("results", [])
+                if results and len(results) > 0:
+                    md = results[0].get("md", "") or results[0].get("markdown", "")
+                    if md:
+                        return md
+                # Fallback: try legacy fields
+                return data.get("markdown", data.get("content", "")) or None
         except Exception as e:
             logger.error("MinerU parse failed: %s", e)
             return None
@@ -40,7 +51,7 @@ class MinerUClient:
         """Check if MinerU service is available."""
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
-                resp = await client.get(f"{self.base_url}/health")
+                resp = await client.get(f"{self.base_url}/docs")
                 return resp.status_code == 200
         except Exception:
             return False

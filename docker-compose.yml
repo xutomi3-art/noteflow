@@ -30,7 +30,7 @@ services:
       - QWEN_API_KEY=${QWEN_API_KEY:-}
       - RAGFLOW_BASE_URL=http://host.docker.internal:9380
       - RAGFLOW_API_KEY=${RAGFLOW_API_KEY:-}
-      - MINERU_BASE_URL=http://host.docker.internal:8010
+      - MINERU_BASE_URL=http://mineru-api:8000
       - UPLOAD_DIR=/app/uploads
       - LLM_API_KEY=sk-d6a264ea0ee54726b5927fe05a1d7d04
       - LLM_BASE_URL=https://api.deepseek.com/v1
