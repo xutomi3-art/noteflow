@@ -322,6 +322,10 @@ export default function NotebookPage() {
       const excerpt = toPlainText(highlightExcerpt);
       if (!excerpt || excerpt.length < 4) return;
 
+      // Strip all non-content chars for matching (block elements concatenate without spaces,
+      // DOM has pipe chars from markdown tables that excerpts don't)
+      const toKey = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
+
       // Walk text nodes to build full text
       const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
       const allText: { node: Text; start: number }[] = [];
@@ -332,38 +336,35 @@ export default function NotebookPage() {
         fullText += node.textContent || "";
       }
 
-      const normFull = fullText.replace(/\s+/g, " ");
+      const keyFull = toKey(fullText);
+      const keyExcerpt = toKey(excerpt);
 
       // Try progressively shorter substrings for matching
       let matchIdx = -1;
-      const tryLengths = [excerpt.length, 80, 60, 40, 20];
+      const tryLengths = [keyExcerpt.length, 60, 40, 20, 12];
       for (const len of tryLengths) {
-        if (len >= excerpt.length) {
-          matchIdx = normFull.indexOf(excerpt);
-        } else if (excerpt.length > len) {
-          matchIdx = normFull.indexOf(excerpt.slice(0, len));
+        if (len >= keyExcerpt.length) {
+          matchIdx = keyFull.indexOf(keyExcerpt);
+        } else if (keyExcerpt.length > len) {
+          matchIdx = keyFull.indexOf(keyExcerpt.slice(0, len));
         }
         if (matchIdx !== -1) break;
       }
 
       if (matchIdx === -1) return;
 
-      // Map normalized index back to raw fullText index
-      // Walk raw fullText chars while tracking normalized position
+      // Map key index back to raw fullText index (skip non-letter/non-digit chars)
+      const isContent = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
       let rawIdx = 0;
-      let normPos = 0;
-      // Skip leading whitespace differences
-      while (rawIdx < fullText.length && normPos < matchIdx) {
-        if (/\s/.test(fullText[rawIdx])) {
-          // In normalized text, consecutive whitespace is collapsed to one space
-          if (normPos > 0 && normFull[normPos - 1] === " " && /\s/.test(fullText[rawIdx])) {
-            rawIdx++;
-            continue;
-          }
+      let keyPos = 0;
+      while (rawIdx < fullText.length && keyPos < matchIdx) {
+        if (isContent(fullText[rawIdx])) {
+          keyPos++;
         }
         rawIdx++;
-        normPos++;
       }
+      // Skip any non-content chars at the match start
+      while (rawIdx < fullText.length && !isContent(fullText[rawIdx])) rawIdx++;
 
       // Find the text node containing the match start
       for (const { node: textNode, start } of allText) {
