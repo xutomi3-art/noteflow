@@ -305,8 +305,10 @@ export default function NotebookPage() {
       });
 
       // Find the excerpt in the text content using a fuzzy approach
-      const excerpt = highlightExcerpt.trim();
-      if (!excerpt) return;
+      // Strip HTML tags from excerpt (RAGFlow returns HTML excerpts but we search visible text)
+      const rawExcerpt = highlightExcerpt.replace(/<[^>]+>/g, "").trim();
+      if (!rawExcerpt) return;
+      const excerpt = rawExcerpt;
 
       // Walk text nodes to find the excerpt
       const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
