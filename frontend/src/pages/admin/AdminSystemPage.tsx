@@ -48,6 +48,9 @@ export default function AdminSystemPage() {
   const [googleForm, setGoogleForm] = useState<Record<string, string>>({});
   const [googleSaving, setGoogleSaving] = useState(false);
   const [googleMessage, setGoogleMessage] = useState('');
+  const [removeSelector, setRemoveSelector] = useState('');
+  const [scraperSaving, setScraperSaving] = useState(false);
+  const [scraperMessage, setScraperMessage] = useState('');
 
   useEffect(() => {
     fetchHealth();
@@ -71,6 +74,9 @@ export default function AdminSystemPage() {
       google[f.key] = found?.value ?? '';
     }
     setGoogleForm(google);
+
+    const scraper = settings.find((s) => s.key === 'web_scraper_remove_selector');
+    if (scraper) setRemoveSelector(scraper.value);
   }, [settings]);
 
   const handleRefresh = async () => {
@@ -122,6 +128,18 @@ export default function AdminSystemPage() {
       setTimeout(() => setGoogleMessage(''), 3000);
     } finally {
       setGoogleSaving(false);
+    }
+  };
+
+  const handleSaveScraper = async () => {
+    setScraperSaving(true);
+    setScraperMessage('');
+    try {
+      await saveSettings({ web_scraper_remove_selector: removeSelector });
+      setScraperMessage('Web scraper settings saved');
+      setTimeout(() => setScraperMessage(''), 3000);
+    } finally {
+      setScraperSaving(false);
     }
   };
 
@@ -239,6 +257,47 @@ export default function AdminSystemPage() {
           >
             Save
           </button>
+        </div>
+      </div>
+
+      {/* Web Scraper Settings */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-0.5">Web Scraper</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          URL sources use Jina Reader for clean markdown extraction. Configure CSS selectors to remove unwanted elements (ads, sidebars, etc.)
+        </p>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-sm font-medium text-gray-700">Remove Selectors</label>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+              getSource('web_scraper_remove_selector') === 'db'
+                ? 'bg-blue-50 text-blue-600'
+                : 'bg-gray-100 text-gray-500'
+            }`}>
+              {getSource('web_scraper_remove_selector') === 'db' ? 'DB override' : 'env default'}
+            </span>
+          </div>
+          <textarea
+            value={removeSelector}
+            onChange={(e) => setRemoveSelector(e.target.value)}
+            placeholder="nav, footer, header, aside, .ads, .sidebar, .advertisement"
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+          />
+          <p className="text-xs text-gray-400 mt-1.5">
+            Comma-separated CSS selectors. These elements will be removed from all scraped web pages before content extraction.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 pt-3">
+          <button
+            onClick={handleSaveScraper}
+            disabled={scraperSaving}
+            className="flex items-center gap-2 px-4 py-2 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
+          >
+            {scraperSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Save
+          </button>
+          {scraperMessage && <span className="text-sm text-green-600">{scraperMessage}</span>}
         </div>
       </div>
 

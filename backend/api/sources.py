@@ -139,6 +139,7 @@ async def add_url_source(
         raise HTTPException(status_code=403, detail='No permission to upload sources')
 
     from backend.services.web_scraper import scrape_url
+    from backend.services.settings_service import get_setting
     from urllib.parse import urlparse
 
     url = body.url.strip()
@@ -150,8 +151,11 @@ async def add_url_source(
     if not parsed.netloc:
         raise HTTPException(status_code=400, detail='Invalid URL')
 
+    # Get configurable remove selector
+    remove_selector = await get_setting(db, "web_scraper_remove_selector")
+
     try:
-        title, content = await scrape_url(url)
+        title, content = await scrape_url(url, remove_selector=remove_selector)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f'Failed to fetch URL: {str(e)}')
 
