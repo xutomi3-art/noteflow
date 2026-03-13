@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, Loader2, Save } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 
@@ -24,7 +24,15 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   qwen: 'Embedding & vision API',
 };
 
-const SMTP_FIELDS = [
+interface ConfigField {
+  key: string;
+  label: string;
+  placeholder: string;
+  secret?: boolean;
+  width?: string;
+}
+
+const SMTP_FIELDS: ConfigField[] = [
   { key: 'smtp_host', label: 'SMTP Host', placeholder: 'smtp.example.com' },
   { key: 'smtp_port', label: 'Port', placeholder: '465', width: 'w-24' },
   { key: 'smtp_user', label: 'Username', placeholder: 'user@example.com' },
@@ -32,22 +40,125 @@ const SMTP_FIELDS = [
   { key: 'smtp_from', label: 'From Address', placeholder: 'noreply@example.com' },
 ];
 
-const GOOGLE_OAUTH_FIELDS = [
+const GOOGLE_OAUTH_FIELDS: ConfigField[] = [
   { key: 'google_client_id', label: 'Google Client ID', placeholder: 'your-client-id.apps.googleusercontent.com' },
   { key: 'google_client_secret', label: 'Google Client Secret', placeholder: 'GOCSPX-...', secret: true },
   { key: 'google_redirect_uri', label: 'Redirect URI', placeholder: 'http://10.200.0.112/api/auth/google/callback' },
 ];
 
+const DEEPSEEK_FIELDS: ConfigField[] = [
+  { key: 'deepseek_api_key', label: 'API Key', placeholder: 'sk-...', secret: true },
+  { key: 'deepseek_base_url', label: 'Base URL', placeholder: 'https://api.deepseek.com/v1' },
+  { key: 'deepseek_model', label: 'Model', placeholder: 'deepseek-chat' },
+];
+
+const QWEN_FIELDS: ConfigField[] = [
+  { key: 'qwen_api_key', label: 'API Key', placeholder: 'sk-...', secret: true },
+];
+
+const RAGFLOW_FIELDS: ConfigField[] = [
+  { key: 'ragflow_api_key', label: 'API Key', placeholder: 'ragflow-...', secret: true },
+  { key: 'ragflow_base_url', label: 'Base URL', placeholder: 'http://ragflow:9380' },
+];
+
+const DOCMEE_FIELDS: ConfigField[] = [
+  { key: 'docmee_api_key', label: 'API Key', placeholder: 'your-docmee-api-key', secret: true },
+];
+
+interface ConfigSectionProps {
+  title: string;
+  description: string;
+  fields: ConfigField[];
+  settings: Array<{ key: string; value: string; source: string }>;
+  saveSettings: (data: Record<string, string>) => Promise<void>;
+  saveLabel: string;
+}
+
+function ConfigSection({ title, description, fields, settings, saveSettings, saveLabel }: ConfigSectionProps) {
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const values: Record<string, string> = {};
+    for (const f of fields) {
+      const found = settings.find((s) => s.key === f.key);
+      values[f.key] = found?.value ?? '';
+    }
+    setForm(values);
+  }, [settings, fields]);
+
+  const getSource = (key: string): string => {
+    const s = settings.find((s) => s.key === key);
+    return s?.source ?? 'env';
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const changed: Record<string, string> = {};
+      for (const [key, value] of Object.entries(form)) {
+        if (!value.startsWith('****')) {
+          changed[key] = value;
+        }
+      }
+      if (Object.keys(changed).length > 0) {
+        await saveSettings(changed);
+      }
+      setMessage(`${title} settings saved`);
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <h3 className="text-sm font-semibold text-gray-700 mb-0.5">{title}</h3>
+      <p className="text-xs text-gray-400 mb-4">{description}</p>
+      <div className="space-y-4">
+        {fields.map(({ key, label, placeholder, secret, width }) => (
+          <div key={key}>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-medium text-gray-700">{label}</label>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                getSource(key) === 'db'
+                  ? 'bg-blue-50 text-blue-600'
+                  : 'bg-gray-100 text-gray-500'
+              }`}>
+                {getSource(key) === 'db' ? 'DB override' : 'env default'}
+              </span>
+            </div>
+            <input
+              type={secret ? 'password' : 'text'}
+              value={form[key] ?? ''}
+              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+              placeholder={placeholder}
+              className={`${width ?? 'w-full'} px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]`}
+            />
+          </div>
+        ))}
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {saveLabel}
+          </button>
+          {message && <span className="text-sm text-green-600">{message}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminSystemPage() {
   const { health, settings, fetchHealth, fetchSettings, saveSettings, isLoading } = useAdminStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [maxFileSize, setMaxFileSize] = useState('');
-  const [smtpForm, setSmtpForm] = useState<Record<string, string>>({});
-  const [smtpSaving, setSmtpSaving] = useState(false);
-  const [smtpMessage, setSmtpMessage] = useState('');
-  const [googleForm, setGoogleForm] = useState<Record<string, string>>({});
-  const [googleSaving, setGoogleSaving] = useState(false);
-  const [googleMessage, setGoogleMessage] = useState('');
   const [removeSelector, setRemoveSelector] = useState('');
   const [scraperSaving, setScraperSaving] = useState(false);
   const [scraperMessage, setScraperMessage] = useState('');
@@ -60,20 +171,6 @@ export default function AdminSystemPage() {
   useEffect(() => {
     const s = settings.find((s) => s.key === 'max_file_size_mb');
     if (s) setMaxFileSize(s.value);
-
-    const smtp: Record<string, string> = {};
-    for (const f of SMTP_FIELDS) {
-      const found = settings.find((s) => s.key === f.key);
-      smtp[f.key] = found?.value ?? '';
-    }
-    setSmtpForm(smtp);
-
-    const google: Record<string, string> = {};
-    for (const f of GOOGLE_OAUTH_FIELDS) {
-      const found = settings.find((s) => s.key === f.key);
-      google[f.key] = found?.value ?? '';
-    }
-    setGoogleForm(google);
 
     const scraper = settings.find((s) => s.key === 'web_scraper_remove_selector');
     if (scraper) setRemoveSelector(scraper.value);
@@ -88,46 +185,6 @@ export default function AdminSystemPage() {
   const handleSaveMaxFileSize = async () => {
     if (maxFileSize) {
       await saveSettings({ max_file_size_mb: maxFileSize });
-    }
-  };
-
-  const handleSaveSmtp = async () => {
-    setSmtpSaving(true);
-    setSmtpMessage('');
-    try {
-      const changed: Record<string, string> = {};
-      for (const [key, value] of Object.entries(smtpForm)) {
-        if (!value.startsWith('****')) {
-          changed[key] = value;
-        }
-      }
-      if (Object.keys(changed).length > 0) {
-        await saveSettings(changed);
-      }
-      setSmtpMessage('SMTP settings saved');
-      setTimeout(() => setSmtpMessage(''), 3000);
-    } finally {
-      setSmtpSaving(false);
-    }
-  };
-
-  const handleSaveGoogle = async () => {
-    setGoogleSaving(true);
-    setGoogleMessage('');
-    try {
-      const changed: Record<string, string> = {};
-      for (const [key, value] of Object.entries(googleForm)) {
-        if (!value.startsWith('****')) {
-          changed[key] = value;
-        }
-      }
-      if (Object.keys(changed).length > 0) {
-        await saveSettings(changed);
-      }
-      setGoogleMessage('Google OAuth settings saved');
-      setTimeout(() => setGoogleMessage(''), 3000);
-    } finally {
-      setGoogleSaving(false);
     }
   };
 
@@ -147,6 +204,11 @@ export default function AdminSystemPage() {
     const s = settings.find((s) => s.key === key);
     return s?.source ?? 'env';
   };
+
+  const handleSaveConfig = useCallback(async (data: Record<string, string>) => {
+    await saveSettings(data);
+    await fetchSettings();
+  }, [saveSettings, fetchSettings]);
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -260,6 +322,46 @@ export default function AdminSystemPage() {
         </div>
       </div>
 
+      {/* LLM (DeepSeek) */}
+      <ConfigSection
+        title="LLM (DeepSeek)"
+        description="Configure the DeepSeek LLM for chat and reasoning"
+        fields={DEEPSEEK_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save LLM"
+      />
+
+      {/* Qwen (Embedding) */}
+      <ConfigSection
+        title="Qwen (Embedding)"
+        description="Configure the Qwen API for text embedding"
+        fields={QWEN_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save Qwen"
+      />
+
+      {/* RAGFlow */}
+      <ConfigSection
+        title="RAGFlow"
+        description="Configure the RAGFlow retrieval engine connection"
+        fields={RAGFLOW_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save RAGFlow"
+      />
+
+      {/* Docmee AiPPT */}
+      <ConfigSection
+        title="Docmee AiPPT"
+        description="Configure the Docmee API for AI-powered PPT generation"
+        fields={DOCMEE_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save Docmee"
+      />
+
       {/* Web Scraper Settings */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-0.5">Web Scraper</h3>
@@ -302,84 +404,24 @@ export default function AdminSystemPage() {
       </div>
 
       {/* SMTP Settings */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-0.5">SMTP Email</h3>
-        <p className="text-xs text-gray-400 mb-4">Configure outgoing email for invite notifications</p>
-        <div className="space-y-4">
-          {SMTP_FIELDS.map(({ key, label, placeholder, secret, width }) => (
-            <div key={key}>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-gray-700">{label}</label>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  getSource(key) === 'db'
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {getSource(key) === 'db' ? 'DB override' : 'env default'}
-                </span>
-              </div>
-              <input
-                type={secret ? 'password' : 'text'}
-                value={smtpForm[key] ?? ''}
-                onChange={(e) => setSmtpForm({ ...smtpForm, [key]: e.target.value })}
-                placeholder={placeholder}
-                className={`${width ?? 'w-full'} px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]`}
-              />
-            </div>
-          ))}
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={handleSaveSmtp}
-              disabled={smtpSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
-            >
-              {smtpSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              Save SMTP
-            </button>
-            {smtpMessage && <span className="text-sm text-green-600">{smtpMessage}</span>}
-          </div>
-        </div>
-      </div>
+      <ConfigSection
+        title="SMTP Email"
+        description="Configure outgoing email for invite notifications"
+        fields={SMTP_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save SMTP"
+      />
 
       {/* Google OAuth Settings */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-0.5">Google OAuth</h3>
-        <p className="text-xs text-gray-400 mb-4">Configure Google Sign-In for users</p>
-        <div className="space-y-4">
-          {GOOGLE_OAUTH_FIELDS.map(({ key, label, placeholder, secret }) => (
-            <div key={key}>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-gray-700">{label}</label>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                  getSource(key) === 'db'
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {getSource(key) === 'db' ? 'DB override' : 'env default'}
-                </span>
-              </div>
-              <input
-                type={secret ? 'password' : 'text'}
-                value={googleForm[key] ?? ''}
-                onChange={(e) => setGoogleForm({ ...googleForm, [key]: e.target.value })}
-                placeholder={placeholder}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
-              />
-            </div>
-          ))}
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={handleSaveGoogle}
-              disabled={googleSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
-            >
-              {googleSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              Save Google OAuth
-            </button>
-            {googleMessage && <span className="text-sm text-green-600">{googleMessage}</span>}
-          </div>
-        </div>
-      </div>
+      <ConfigSection
+        title="Google OAuth"
+        description="Configure Google Sign-In for users"
+        fields={GOOGLE_OAUTH_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save Google OAuth"
+      />
     </div>
   );
 }
