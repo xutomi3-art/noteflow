@@ -24,7 +24,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/dashboard', { replace: true });
+      const redirect = searchParams.get('redirect') || '/dashboard';
+      navigate(redirect, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

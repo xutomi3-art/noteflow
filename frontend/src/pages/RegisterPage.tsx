@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuthStore } from '@/stores/auth-store';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const register = useAuthStore(s => s.register);
 
   const [name, setName] = useState('');
@@ -19,7 +20,8 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, name, password);
-      navigate('/dashboard', { replace: true });
+      const redirect = searchParams.get('redirect') || '/dashboard';
+      navigate(redirect, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {

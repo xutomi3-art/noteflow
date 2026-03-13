@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import LoginPage from '@/pages/LoginPage';
@@ -16,10 +16,14 @@ import AdminSystemPage from '@/pages/admin/AdminSystemPage';
 import AdminUsagePage from '@/pages/admin/AdminUsagePage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
+import PrivacyPolicyPage from '@/pages/PrivacyPolicyPage';
+import TermsOfServicePage from '@/pages/TermsOfServicePage';
+import HelpCenterPage from '@/pages/HelpCenterPage';
 import './index.css';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuthStore();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -30,7 +34,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    const redirectParam = location.pathname !== '/' ? `?redirect=${encodeURIComponent(location.pathname)}` : '';
+    return <Navigate to={`/login${redirectParam}`} replace />;
   }
 
   return <>{children}</>;
@@ -80,6 +85,9 @@ function App() {
       <AppInit>
         <Routes>
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
+          <Route path="/help" element={<HelpCenterPage />} />
           <Route path="/login" element={<GuestGuard><LoginPage /></GuestGuard>} />
           <Route path="/register" element={<GuestGuard><RegisterPage /></GuestGuard>} />
           <Route path="/join/:token" element={<AuthGuard><JoinPage /></AuthGuard>} />
