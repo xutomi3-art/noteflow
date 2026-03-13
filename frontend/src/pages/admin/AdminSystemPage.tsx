@@ -8,7 +8,7 @@ const SERVICE_LABELS: Record<string, string> = {
   elasticsearch: 'Elasticsearch',
   redis: 'Redis',
   mineru: 'MinerU',
-  presenton: 'Presenton',
+  docmee: 'Docmee AiPPT',
   deepseek: 'DeepSeek LLM',
   qwen: 'Qwen (Embedding)',
 };
@@ -19,7 +19,7 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   elasticsearch: 'Full-text search & vector index',
   redis: 'Cache & session store',
   mineru: 'Document parsing service',
-  presenton: 'AI slide deck generator',
+  docmee: 'AI PPT generation service',
   deepseek: 'Chat LLM API',
   qwen: 'Embedding & vision API',
 };

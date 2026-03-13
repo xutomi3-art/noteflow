@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { api } from "@/services/api";
 
 export interface PptConfig {
-  n_slides: number;
-  template: "general" | "modern" | "standard" | "swift";
-  tone: string;
-  verbosity: "concise" | "standard" | "text-heavy";
+  template_id: string;
+  scene: string;
+  audience: string;
   language: string;
+  length: "short" | "medium" | "long";
 }
 
 interface PptConfigModalProps {
@@ -16,51 +17,22 @@ interface PptConfigModalProps {
   isGenerating: boolean;
 }
 
-const TEMPLATES: {
-  key: PptConfig["template"];
-  name: string;
-  description: string;
-  accent: string;
-}[] = [
-  {
-    key: "general",
-    name: "Classic",
-    description: "Clean and versatile layout",
-    accent: "#5b8c15",
-  },
-  {
-    key: "modern",
-    name: "Modern",
-    description: "Bold headers, contemporary feel",
-    accent: "#2563eb",
-  },
-  {
-    key: "standard",
-    name: "Standard",
-    description: "Traditional business style",
-    accent: "#6366f1",
-  },
-  {
-    key: "swift",
-    name: "Swift",
-    description: "Minimal, fast-paced",
-    accent: "#f59e0b",
-  },
-];
+interface Template {
+  id: string;
+  coverUrl: string;
+  name?: string;
+}
 
-const TONES = [
-  { value: "default", label: "Default" },
-  { value: "casual", label: "Casual" },
-  { value: "professional", label: "Professional" },
-  { value: "funny", label: "Funny" },
-  { value: "educational", label: "Educational" },
-  { value: "sales_pitch", label: "Sales Pitch" },
-];
+interface GenerationOptions {
+  lang?: { label: string; value: string }[];
+  scene?: { label: string; value: string }[];
+  audience?: { label: string; value: string }[];
+}
 
-const VERBOSITY_OPTIONS: { value: PptConfig["verbosity"]; label: string }[] = [
-  { value: "concise", label: "Concise" },
-  { value: "standard", label: "Standard" },
-  { value: "text-heavy", label: "Text-heavy" },
+const LENGTH_OPTIONS: { value: PptConfig["length"]; label: string }[] = [
+  { value: "short", label: "精简" },
+  { value: "medium", label: "标准" },
+  { value: "long", label: "详细" },
 ];
 
 export default function PptConfigModal({
@@ -69,29 +41,64 @@ export default function PptConfigModal({
   onGenerate,
   isGenerating,
 }: PptConfigModalProps) {
-  const [template, setTemplate] = useState<PptConfig["template"]>("general");
-  const [nSlides, setNSlides] = useState(8);
-  const [tone, setTone] = useState("default");
-  const [verbosity, setVerbosity] = useState<PptConfig["verbosity"]>("standard");
-  const [language, setLanguage] = useState("中文");
+  const [templateId, setTemplateId] = useState("");
+  const [scene, setScene] = useState("");
+  const [audience, setAudience] = useState("");
+  const [language, setLanguage] = useState("zh");
+  const [length, setLength] = useState<PptConfig["length"]>("medium");
+
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templatePage, setTemplatePage] = useState(1);
+  const [templateTotal, setTemplateTotal] = useState(0);
+  const [templateLoading, setTemplateLoading] = useState(false);
+
+  const [options, setOptions] = useState<GenerationOptions>({});
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
+
+  const pageSize = 8;
+
+  // Load templates
+  useEffect(() => {
+    if (!isOpen) return;
+    setTemplateLoading(true);
+    api
+      .listPptTemplates(templatePage, pageSize)
+      .then((data) => {
+        setTemplates(data.records || []);
+        setTemplateTotal(data.total || 0);
+        // Auto-select first template if none selected
+        if (!templateId && data.records?.length > 0) {
+          setTemplateId(data.records[0].id);
+        }
+      })
+      .catch(() => setTemplates([]))
+      .finally(() => setTemplateLoading(false));
+  }, [isOpen, templatePage]);
+
+  // Load generation options
+  useEffect(() => {
+    if (!isOpen || optionsLoaded) return;
+    api
+      .getPptGenerationOptions()
+      .then((data) => {
+        setOptions(data);
+        setOptionsLoaded(true);
+      })
+      .catch(() => {});
+  }, [isOpen, optionsLoaded]);
 
   if (!isOpen) return null;
 
+  const totalPages = Math.ceil(templateTotal / pageSize);
+
   const handleGenerate = () => {
     onGenerate({
-      n_slides: nSlides,
-      template,
-      tone,
-      verbosity,
+      template_id: templateId,
+      scene,
+      audience,
       language,
+      length,
     });
-  };
-
-  const handleSlideCount = (value: string) => {
-    const num = parseInt(value, 10);
-    if (!isNaN(num)) {
-      setNSlides(Math.max(3, Math.min(20, num)));
-    }
   };
 
   return (
@@ -103,11 +110,11 @@ export default function PptConfigModal({
       />
 
       {/* Modal card */}
-      <div className="relative z-10 w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative z-10 w-full max-w-2xl mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-2">
           <h2 className="text-lg font-semibold text-slate-900">
-            Slide Deck Configuration
+            生成演示文稿
           </h2>
           <button
             onClick={onClose}
@@ -118,118 +125,139 @@ export default function PptConfigModal({
           </button>
         </div>
 
-        <div className="px-6 pb-6 space-y-5 max-h-[75vh] overflow-y-auto">
+        <div className="px-6 pb-6 space-y-5 max-h-[80vh] overflow-y-auto">
           {/* Template selector */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Template
+              选择模板
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              {TEMPLATES.map((t) => {
-                const selected = template === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    disabled={isGenerating}
-                    onClick={() => setTemplate(t.key)}
-                    className={`relative text-left rounded-xl border-2 p-3 pt-0 overflow-hidden transition-all disabled:opacity-60 ${
-                      selected
-                        ? "border-[#5b8c15] bg-green-50/40"
-                        : "border-slate-200 hover:border-slate-300 bg-white"
-                    }`}
-                  >
-                    {/* Accent bar */}
-                    <div
-                      className="h-1.5 -mx-3 mb-3 rounded-b"
-                      style={{ backgroundColor: t.accent }}
-                    />
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {t.name}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {t.description}
-                        </p>
-                      </div>
-                      {/* Radio indicator */}
-                      <div
-                        className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+
+            {templateLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={20} className="animate-spin text-slate-400" />
+                <span className="ml-2 text-sm text-slate-400">加载模板...</span>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-4 gap-3">
+                  {templates.map((t) => {
+                    const selected = templateId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        disabled={isGenerating}
+                        onClick={() => setTemplateId(t.id)}
+                        className={`relative rounded-xl border-2 overflow-hidden transition-all disabled:opacity-60 aspect-[16/9] ${
                           selected
-                            ? "border-[#5b8c15] bg-[#5b8c15]"
-                            : "border-slate-300"
+                            ? "border-[#5b8c15] ring-2 ring-[#5b8c15]/30"
+                            : "border-slate-200 hover:border-slate-300"
                         }`}
                       >
+                        <img
+                          src={t.coverUrl}
+                          alt={t.name || "Template"}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
                         {selected && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#5b8c15] flex items-center justify-center">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                              <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </div>
                         )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 mt-3">
+                    <button
+                      type="button"
+                      disabled={templatePage <= 1 || isGenerating}
+                      onClick={() => setTemplatePage((p) => p - 1)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <span className="text-xs text-slate-500">
+                      {templatePage} / {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={templatePage >= totalPages || isGenerating}
+                      onClick={() => setTemplatePage((p) => p + 1)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Scene selector */}
+          {options.scene && options.scene.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                场景
+              </label>
+              <select
+                value={scene}
+                onChange={(e) => setScene(e.target.value)}
+                disabled={isGenerating}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
+              >
+                <option value="">不限</option>
+                {options.scene.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
+          )}
 
-          {/* Slide count */}
-          <div>
-            <label
-              htmlFor="ppt-slide-count"
-              className="block text-sm font-medium text-slate-700 mb-1.5"
-            >
-              Number of Slides
-            </label>
-            <input
-              id="ppt-slide-count"
-              type="number"
-              min={3}
-              max={20}
-              value={nSlides}
-              onChange={(e) => handleSlideCount(e.target.value)}
-              disabled={isGenerating}
-              className="w-24 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50"
-            />
-            <span className="ml-2 text-xs text-slate-400">3 – 20</span>
-          </div>
+          {/* Audience selector */}
+          {options.audience && options.audience.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                受众
+              </label>
+              <select
+                value={audience}
+                onChange={(e) => setAudience(e.target.value)}
+                disabled={isGenerating}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
+              >
+                <option value="">不限</option>
+                {options.audience.map((a) => (
+                  <option key={a.value} value={a.value}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          {/* Tone selector */}
-          <div>
-            <label
-              htmlFor="ppt-tone"
-              className="block text-sm font-medium text-slate-700 mb-1.5"
-            >
-              Tone
-            </label>
-            <select
-              id="ppt-tone"
-              value={tone}
-              onChange={(e) => setTone(e.target.value)}
-              disabled={isGenerating}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
-            >
-              {TONES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Verbosity segmented control */}
+          {/* Length segmented control */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Verbosity
+              内容长度
             </label>
             <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
-              {VERBOSITY_OPTIONS.map((opt) => {
-                const active = verbosity === opt.value;
+              {LENGTH_OPTIONS.map((opt) => {
+                const active = length === opt.value;
                 return (
                   <button
                     key={opt.value}
                     type="button"
                     disabled={isGenerating}
-                    onClick={() => setVerbosity(opt.value)}
+                    onClick={() => setLength(opt.value)}
                     className={`px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${
                       active
                         ? "bg-[#5b8c15] text-white"
@@ -244,38 +272,41 @@ export default function PptConfigModal({
           </div>
 
           {/* Language */}
-          <div>
-            <label
-              htmlFor="ppt-language"
-              className="block text-sm font-medium text-slate-700 mb-1.5"
-            >
-              Language
-            </label>
-            <input
-              id="ppt-language"
-              type="text"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              disabled={isGenerating}
-              className="w-48 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50"
-            />
-          </div>
+          {options.lang && options.lang.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                语言
+              </label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                disabled={isGenerating}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
+              >
+                {options.lang.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Generate button */}
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={isGenerating}
+            disabled={isGenerating || !templateId}
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
             style={{ backgroundColor: "#5b8c15" }}
           >
             {isGenerating ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Generating presentation...
+                正在生成演示文稿...
               </>
             ) : (
-              "Generate Presentation"
+              "生成演示文稿"
             )}
           </button>
         </div>

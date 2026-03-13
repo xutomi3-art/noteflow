@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     # MinerU
     MINERU_BASE_URL: str = "http://mineru-api:8000"
 
-    # Presenton
-    PRESENTON_BASE_URL: str = "http://presenton:80"
+    # Docmee (文多多 AiPPT)
+    DOCMEE_API_KEY: str = ""
 
     # File Storage
     UPLOAD_DIR: str = "./uploads"

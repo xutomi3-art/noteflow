@@ -157,8 +157,14 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     except Exception as e:
         services["redis"] = {"status": "error", "latency_ms": 0, "message": str(e)}
 
-    # Presenton (Slide Deck Generator)
-    services["presenton"] = await _check_http(f"{settings.PRESENTON_BASE_URL}/")
+    # Docmee (AiPPT)
+    if settings.DOCMEE_API_KEY:
+        services["docmee"] = await _check_http(
+            "https://docmee.cn/api/user/apiInfo",
+            headers={"Api-Key": settings.DOCMEE_API_KEY},
+        )
+    else:
+        services["docmee"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
 
     # DeepSeek LLM API
     if settings.LLM_API_KEY:

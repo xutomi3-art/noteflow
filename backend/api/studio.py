@@ -11,9 +11,9 @@ from pydub import AudioSegment
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
+from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.text import PP_ALIGN
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,9 +29,10 @@ from backend.services.qwen_client import qwen_client
 from backend.services.ragflow_client import ragflow_client
 from backend.services import permission_service
 from backend.services.tts_client import text_to_speech
-from backend.services.presenton_client import presenton_client
+from backend.services.docmee_client import docmee_client
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/studio", tags=["studio"])
+ppt_router = APIRouter(prefix="/ppt", tags=["ppt"])
 
 PROMPTS = {
     "summary": """Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points. Write in the same language as the documents.
@@ -237,11 +238,38 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID) -> str:
 
 
 class PptGenerateRequest(BaseModel):
-    n_slides: int = 8
-    template: str = "general"
-    tone: str = "default"
-    verbosity: str = "standard"
-    language: str = "English"
+    template_id: str = ""
+    scene: str = ""
+    audience: str = ""
+    language: str = "zh"
+    length: str = "medium"
+
+
+@ppt_router.get("/templates")
+async def list_ppt_templates(
+    page: int = 1,
+    size: int = 20,
+    current_user: User = Depends(get_current_user),
+):
+    """List available Docmee PPT templates."""
+    result = await docmee_client.list_templates(page=page, size=size)
+    return result
+
+
+@ppt_router.get("/template-options")
+async def get_ppt_template_options(
+    current_user: User = Depends(get_current_user),
+):
+    """Get template filter options (categories, etc.)."""
+    return await docmee_client.get_template_options()
+
+
+@ppt_router.get("/generation-options")
+async def get_ppt_generation_options(
+    current_user: User = Depends(get_current_user),
+):
+    """Get generation options (scene, audience, language)."""
+    return await docmee_client.get_generation_options()
 
 
 @router.post("/ppt")
@@ -267,31 +295,34 @@ async def generate_ppt(
 
     cfg = config or PptGenerateRequest()
 
-    # Try Presenton first, fallback to basic python-pptx
-    if await presenton_client.is_available():
-        pptx_bytes = await presenton_client.generate_presentation(
-            content=context[:12000],
-            n_slides=cfg.n_slides,
-            language=cfg.language,
-            template=cfg.template,
-            tone=cfg.tone,
-            verbosity=cfg.verbosity,
+    # Try Docmee first
+    if await docmee_client.is_available() and cfg.template_id:
+        ppt_info = await docmee_client.generate_ppt(
+            content=context[:1000],
+            template_id=cfg.template_id,
+            scene=cfg.scene,
+            audience=cfg.audience,
+            lang=cfg.language,
+            length=cfg.length,
         )
-        if pptx_bytes:
-            buf = io.BytesIO(pptx_bytes)
-            return StreamingResponse(
-                buf,
-                media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                headers={"Content-Disposition": f'attachment; filename="{urllib.parse.quote(filename)}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'}
-            )
+        if ppt_info:
+            ppt_id = ppt_info.get("id", "")
+            pptx_bytes = await docmee_client.download_pptx(ppt_id)
+            if pptx_bytes:
+                buf = io.BytesIO(pptx_bytes)
+                return StreamingResponse(
+                    buf,
+                    media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    headers={"Content-Disposition": f'attachment; filename="{urllib.parse.quote(filename)}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'}
+                )
 
     # Fallback: styled python-pptx generation
     prompt = PPT_PROMPT.format(
         context=context[:8000],
-        n_slides=cfg.n_slides,
-        tone=cfg.tone,
-        verbosity=cfg.verbosity,
-        language=cfg.language,
+        n_slides=8,
+        tone="default",
+        verbosity="standard",
+        language=cfg.language or "zh",
     )
     raw = await qwen_client.generate(
         [{"role": "system", "content": "Return only valid JSON."},
@@ -310,54 +341,18 @@ async def generate_ppt(
     if not isinstance(data, dict) or "slides" not in data or not isinstance(data.get("slides"), list):
         raise HTTPException(status_code=500, detail="AI returned unexpected slide structure")
 
-    # Template color schemes
-    TEMPLATES = {
-        "general": {
-            "bg": RGBColor(0xFF, 0xFF, 0xFF),
-            "title_bg": RGBColor(0x1A, 0x1A, 0x2E),
-            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
-            "accent": RGBColor(0x00, 0x7A, 0xFF),
-            "heading": RGBColor(0x1A, 0x1A, 0x2E),
-            "body": RGBColor(0x33, 0x33, 0x33),
-            "sub": RGBColor(0x66, 0x66, 0x66),
-            "bar": RGBColor(0x00, 0x7A, 0xFF),
-            "bullet_dot": RGBColor(0x00, 0x7A, 0xFF),
-        },
-        "modern": {
-            "bg": RGBColor(0x0F, 0x0F, 0x23),
-            "title_bg": RGBColor(0x0F, 0x0F, 0x23),
-            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
-            "accent": RGBColor(0x6C, 0x5C, 0xE7),
-            "heading": RGBColor(0xFF, 0xFF, 0xFF),
-            "body": RGBColor(0xDD, 0xDD, 0xDD),
-            "sub": RGBColor(0x99, 0x99, 0xAA),
-            "bar": RGBColor(0x6C, 0x5C, 0xE7),
-            "bullet_dot": RGBColor(0xA2, 0x9B, 0xFE),
-        },
-        "standard": {
-            "bg": RGBColor(0xF8, 0xF9, 0xFA),
-            "title_bg": RGBColor(0x2C, 0x3E, 0x50),
-            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
-            "accent": RGBColor(0x27, 0xAE, 0x60),
-            "heading": RGBColor(0x2C, 0x3E, 0x50),
-            "body": RGBColor(0x2C, 0x3E, 0x50),
-            "sub": RGBColor(0x7F, 0x8C, 0x8D),
-            "bar": RGBColor(0x27, 0xAE, 0x60),
-            "bullet_dot": RGBColor(0x27, 0xAE, 0x60),
-        },
-        "swift": {
-            "bg": RGBColor(0xFF, 0xFF, 0xFF),
-            "title_bg": RGBColor(0xE7, 0x4C, 0x3C),
-            "title_text": RGBColor(0xFF, 0xFF, 0xFF),
-            "accent": RGBColor(0xE7, 0x4C, 0x3C),
-            "heading": RGBColor(0x2C, 0x2C, 0x2C),
-            "body": RGBColor(0x33, 0x33, 0x33),
-            "sub": RGBColor(0x88, 0x88, 0x88),
-            "bar": RGBColor(0xE7, 0x4C, 0x3C),
-            "bullet_dot": RGBColor(0xE7, 0x4C, 0x3C),
-        },
+    # Template color scheme (fallback uses general theme)
+    theme = {
+        "bg": RGBColor(0xFF, 0xFF, 0xFF),
+        "title_bg": RGBColor(0x1A, 0x1A, 0x2E),
+        "title_text": RGBColor(0xFF, 0xFF, 0xFF),
+        "accent": RGBColor(0x00, 0x7A, 0xFF),
+        "heading": RGBColor(0x1A, 0x1A, 0x2E),
+        "body": RGBColor(0x33, 0x33, 0x33),
+        "sub": RGBColor(0x66, 0x66, 0x66),
+        "bar": RGBColor(0x00, 0x7A, 0xFF),
+        "bullet_dot": RGBColor(0x00, 0x7A, 0xFF),
     }
-    theme = TEMPLATES.get(cfg.template, TEMPLATES["general"])
 
     SLIDE_W = Inches(13.33)
     SLIDE_H = Inches(7.5)
@@ -392,24 +387,19 @@ async def generate_ppt(
         return txBox
 
     # --- Title Slide ---
-    title_slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
+    title_slide = prs.slides.add_slide(prs.slide_layouts[6])
     _add_bg(title_slide, theme["title_bg"])
-    # Accent bar at top
     _add_shape(title_slide, Inches(0), Inches(0), SLIDE_W, Inches(0.08), theme["accent"])
-    # Title
     _add_text(
         title_slide, Inches(1.2), Inches(2.0), Inches(10.9), Inches(1.8),
         data.get("title", "Presentation"), 44, theme["title_text"], bold=True, alignment=PP_ALIGN.LEFT,
     )
-    # Subtitle
     subtitle = data.get("subtitle", "Generated by Noteflow AI")
     _add_text(
         title_slide, Inches(1.2), Inches(3.8), Inches(10.9), Inches(0.8),
         subtitle, 20, theme["sub"], alignment=PP_ALIGN.LEFT,
     )
-    # Bottom accent bar
     _add_shape(title_slide, Inches(1.2), Inches(5.2), Inches(2.5), Inches(0.06), theme["accent"])
-    # Branding
     _add_text(
         title_slide, Inches(1.2), Inches(6.2), Inches(4), Inches(0.5),
         "Generated by Noteflow AI", 12, theme["sub"],
@@ -417,68 +407,37 @@ async def generate_ppt(
 
     # --- Content Slides ---
     for idx, slide_data in enumerate(data.get("slides", [])):
-        slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank
+        slide = prs.slides.add_slide(prs.slide_layouts[6])
         _add_bg(slide, theme["bg"])
-
-        # Top colored bar
         _add_shape(slide, Inches(0), Inches(0), SLIDE_W, Inches(0.06), theme["bar"])
-
-        # Slide number
         _add_text(
             slide, Inches(11.5), Inches(0.3), Inches(1.5), Inches(0.4),
             f"{idx + 1:02d}", 14, theme["sub"], alignment=PP_ALIGN.RIGHT,
         )
-
-        # Left accent stripe
         _add_shape(slide, Inches(0.8), Inches(0.9), Inches(0.06), Inches(0.7), theme["accent"])
-
-        # Slide title
         _add_text(
             slide, Inches(1.1), Inches(0.8), Inches(10), Inches(0.9),
             slide_data.get("title", ""), 32, theme["heading"], bold=True,
         )
 
-        # Bullets
         bullets = slide_data.get("bullets", [])
         y_offset = 2.0
         for bullet in bullets:
-            # Support both old format (string) and new format (dict with main/sub)
             if isinstance(bullet, dict):
                 main_text = bullet.get("main", "")
                 sub_text = bullet.get("sub", "")
             else:
                 main_text = str(bullet)
                 sub_text = ""
-
-            # Bullet dot
-            _add_shape(
-                slide,
-                Inches(1.2), Inches(y_offset + 0.12),
-                Inches(0.12), Inches(0.12),
-                theme["bullet_dot"],
-            )
-
-            # Main text (bold)
-            _add_text(
-                slide, Inches(1.6), Inches(y_offset - 0.05), Inches(10), Inches(0.5),
-                main_text, 20, theme["body"], bold=True,
-            )
+            _add_shape(slide, Inches(1.2), Inches(y_offset + 0.12), Inches(0.12), Inches(0.12), theme["bullet_dot"])
+            _add_text(slide, Inches(1.6), Inches(y_offset - 0.05), Inches(10), Inches(0.5), main_text, 20, theme["body"], bold=True)
             y_offset += 0.45
-
-            # Sub text (lighter, smaller)
             if sub_text:
-                _add_text(
-                    slide, Inches(1.6), Inches(y_offset - 0.08), Inches(10), Inches(0.4),
-                    sub_text, 15, theme["sub"],
-                )
+                _add_text(slide, Inches(1.6), Inches(y_offset - 0.08), Inches(10), Inches(0.4), sub_text, 15, theme["sub"])
                 y_offset += 0.38
 
-        # Footer line
         _add_shape(slide, Inches(0.8), Inches(6.8), Inches(11.7), Inches(0.01), theme["sub"])
-        _add_text(
-            slide, Inches(0.8), Inches(6.85), Inches(4), Inches(0.35),
-            data.get("title", ""), 10, theme["sub"],
-        )
+        _add_text(slide, Inches(0.8), Inches(6.85), Inches(4), Inches(0.35), data.get("title", ""), 10, theme["sub"])
 
     buf = io.BytesIO()
     prs.save(buf)

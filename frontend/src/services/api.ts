@@ -365,12 +365,28 @@ class ApiClient {
     return URL.createObjectURL(blob);
   }
 
+  async listPptTemplates(page: number = 1, size: number = 20): Promise<{
+    records: { id: string; coverUrl: string; name?: string }[];
+    total: number;
+    pages: number;
+  }> {
+    return this.request(`/ppt/templates?page=${page}&size=${size}`);
+  }
+
+  async getPptGenerationOptions(): Promise<{
+    lang?: { label: string; value: string }[];
+    scene?: { label: string; value: string }[];
+    audience?: { label: string; value: string }[];
+  }> {
+    return this.request("/ppt/generation-options");
+  }
+
   async downloadPPT(notebookId: string, config?: {
-    n_slides?: number;
-    template?: string;
-    tone?: string;
-    verbosity?: string;
+    template_id?: string;
+    scene?: string;
+    audience?: string;
     language?: string;
+    length?: string;
   }): Promise<void> {
     const headers: Record<string, string> = {};
     if (this.accessToken) {
