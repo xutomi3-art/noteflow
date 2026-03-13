@@ -304,13 +304,25 @@ export default function NotebookPage() {
         }
       });
 
-      // Find the excerpt in the text content using a fuzzy approach
-      // Strip HTML tags from excerpt (RAGFlow returns HTML excerpts but we search visible text)
-      const rawExcerpt = highlightExcerpt.replace(/<[^>]+>/g, "").trim();
-      if (!rawExcerpt) return;
-      const excerpt = rawExcerpt;
+      // Normalize text by stripping HTML tags, markdown syntax, and extra whitespace
+      const toPlainText = (s: string) =>
+        s
+          .replace(/<[^>]+>/g, "")           // strip HTML tags
+          .replace(/^#{1,6}\s+/gm, "")       // strip heading markers
+          .replace(/\*\*(.+?)\*\*/g, "$1")   // strip bold
+          .replace(/\*(.+?)\*/g, "$1")       // strip italic
+          .replace(/`{1,3}[^`]*`{1,3}/g, (m) => m.replace(/`/g, "")) // strip code markers
+          .replace(/^\|.*\|$/gm, (row) => row.replace(/\|/g, " "))   // strip table pipes
+          .replace(/^[-|:\s]+$/gm, "")       // strip table separator rows
+          .replace(/^[-*]\s+/gm, "")         // strip list markers
+          .replace(/^\d+\.\s+/gm, "")        // strip ordered list markers
+          .replace(/\s+/g, " ")              // normalize whitespace
+          .trim();
 
-      // Walk text nodes to find the excerpt
+      const excerpt = toPlainText(highlightExcerpt);
+      if (!excerpt || excerpt.length < 4) return;
+
+      // Walk text nodes to build full text
       const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
       const allText: { node: Text; start: number }[] = [];
       let fullText = "";
@@ -320,28 +332,46 @@ export default function NotebookPage() {
         fullText += node.textContent || "";
       }
 
-      // Try exact match first, then normalized match
-      const normalizeWs = (s: string) => s.replace(/\s+/g, " ");
-      let matchIdx = fullText.indexOf(excerpt);
-      if (matchIdx === -1) {
-        const normFull = normalizeWs(fullText);
-        const normExcerpt = normalizeWs(excerpt);
-        matchIdx = normFull.indexOf(normExcerpt);
-        // Try first 60 chars if full excerpt not found
-        if (matchIdx === -1 && normExcerpt.length > 60) {
-          matchIdx = normFull.indexOf(normExcerpt.slice(0, 60));
+      const normFull = fullText.replace(/\s+/g, " ");
+
+      // Try progressively shorter substrings for matching
+      let matchIdx = -1;
+      const tryLengths = [excerpt.length, 80, 60, 40, 20];
+      for (const len of tryLengths) {
+        if (len >= excerpt.length) {
+          matchIdx = normFull.indexOf(excerpt);
+        } else if (excerpt.length > len) {
+          matchIdx = normFull.indexOf(excerpt.slice(0, len));
         }
+        if (matchIdx !== -1) break;
       }
 
       if (matchIdx === -1) return;
 
+      // Map normalized index back to raw fullText index
+      // Walk raw fullText chars while tracking normalized position
+      let rawIdx = 0;
+      let normPos = 0;
+      // Skip leading whitespace differences
+      while (rawIdx < fullText.length && normPos < matchIdx) {
+        if (/\s/.test(fullText[rawIdx])) {
+          // In normalized text, consecutive whitespace is collapsed to one space
+          if (normPos > 0 && normFull[normPos - 1] === " " && /\s/.test(fullText[rawIdx])) {
+            rawIdx++;
+            continue;
+          }
+        }
+        rawIdx++;
+        normPos++;
+      }
+
       // Find the text node containing the match start
       for (const { node: textNode, start } of allText) {
         const nodeEnd = start + (textNode.textContent?.length || 0);
-        if (start <= matchIdx && matchIdx < nodeEnd) {
-          // Create a mark element around the matched portion
-          const localOffset = matchIdx - start;
-          const markLen = Math.min(excerpt.length, (textNode.textContent?.length || 0) - localOffset);
+        if (start <= rawIdx && rawIdx < nodeEnd) {
+          const localOffset = rawIdx - start;
+          const markLen = Math.min(40, (textNode.textContent?.length || 0) - localOffset);
+          if (markLen <= 0) break;
           const range = document.createRange();
           range.setStart(textNode, localOffset);
           range.setEnd(textNode, localOffset + markLen);
@@ -349,9 +379,15 @@ export default function NotebookPage() {
           const mark = document.createElement("mark");
           mark.className = "citation-highlight";
           mark.style.cssText = "background: #fef08a; padding: 2px 0; border-radius: 2px; scroll-margin-top: 80px;";
-          range.surroundContents(mark);
+          try {
+            range.surroundContents(mark);
+          } catch {
+            // If surroundContents fails (cross-element), just scroll to the range position
+            const rect = range.getBoundingClientRect();
+            container.scrollTo({ top: container.scrollTop + rect.top - container.getBoundingClientRect().top - 100, behavior: "smooth" });
+            return;
+          }
 
-          // Scroll the mark into view
           mark.scrollIntoView({ behavior: "smooth", block: "center" });
           break;
         }
