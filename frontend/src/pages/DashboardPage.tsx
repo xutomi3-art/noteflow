@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
-import { api } from '@/services/api';
+import { setPendingUploadFiles } from '@/stores/pending-upload-store';
 import type { Notebook } from '@/types/api';
 import ShareModal from '@/components/sharing/ShareModal';
 
@@ -60,8 +60,6 @@ export default function DashboardPage() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<Record<number, 'waiting' | 'uploading' | 'done' | 'error'>>({});
-  const [currentUploadIndex, setCurrentUploadIndex] = useState(-1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
 
@@ -127,8 +125,6 @@ export default function DashboardPage() {
     setPendingFiles([]);
     setNotebookName('');
     setIsCreating(false);
-    setUploadProgress({});
-    setCurrentUploadIndex(-1);
   };
 
   const handleOpenNotebook = (notebook: Notebook) => {
@@ -173,24 +169,8 @@ export default function DashboardPage() {
         cover_color: randomColor(),
         is_team: isTeam,
       });
-      // Upload all pending files with progress tracking
-      const progress: Record<number, 'waiting' | 'uploading' | 'done' | 'error'> = {};
-      pendingFiles.forEach((_, i) => { progress[i] = 'waiting'; });
-      setUploadProgress({...progress});
 
-      for (let i = 0; i < pendingFiles.length; i++) {
-        setCurrentUploadIndex(i);
-        progress[i] = 'uploading';
-        setUploadProgress({...progress});
-        try {
-          await api.uploadSource(notebook.id, pendingFiles[i]);
-          progress[i] = 'done';
-        } catch {
-          progress[i] = 'error';
-        }
-        setUploadProgress({...progress});
-      }
-      setCurrentUploadIndex(-1);
+      const filesToUpload = [...pendingFiles];
 
       if (isTeam) {
         // For team notebooks, close create modal and open ShareModal
@@ -200,7 +180,15 @@ export default function DashboardPage() {
         setNotebookName('');
         setIsCreating(false);
         setIsShareModalOpen(true);
+        // Store files for NotebookPage to pick up after share modal closes
+        if (filesToUpload.length > 0) {
+          setPendingUploadFiles(filesToUpload);
+        }
       } else {
+        // Store files for NotebookPage to pick up
+        if (filesToUpload.length > 0) {
+          setPendingUploadFiles(filesToUpload);
+        }
         closeModal();
         navigate('/notebook/' + notebook.id);
       }
@@ -544,34 +532,20 @@ export default function DashboardPage() {
                 {/* Selected files list */}
                 {pendingFiles.length > 0 && (
                   <div className="mt-4 max-h-40 overflow-y-auto space-y-1.5">
-                    {pendingFiles.map((file, i) => {
-                      const status = uploadProgress[i];
-                      return (
-                        <div key={i} className="px-3 py-2 bg-slate-50 rounded-xl text-sm">
-                          <div className="flex items-center gap-3">
-                            <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                            <span className="flex-1 truncate text-slate-700">{file.name}</span>
-                            <span className="text-xs text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
-                            {status === 'done' ? (
-                              <span className="text-green-500 text-xs font-medium">&#10003;</span>
-                            ) : status === 'error' ? (
-                              <span className="text-red-500 text-xs font-medium">&#10007;</span>
-                            ) : status === 'uploading' ? (
-                              <Loader2 className="w-3.5 h-3.5 text-[#5b8c15] animate-spin shrink-0" />
-                            ) : !isCreating ? (
-                              <button onClick={() => removePendingFile(i)} className="text-slate-400 hover:text-slate-600 shrink-0">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            ) : null}
-                          </div>
-                          {status === 'uploading' && (
-                            <div className="mt-1.5 h-1 bg-slate-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-[#5b8c15] rounded-full animate-pulse" style={{ width: '60%' }} />
-                            </div>
+                    {pendingFiles.map((file, i) => (
+                      <div key={i} className="px-3 py-2 bg-slate-50 rounded-xl text-sm">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="flex-1 truncate text-slate-700">{file.name}</span>
+                          <span className="text-xs text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+                          {!isCreating && (
+                            <button onClick={() => removePendingFile(i)} className="text-slate-400 hover:text-slate-600 shrink-0">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           )}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 )}
 
@@ -597,13 +571,10 @@ export default function DashboardPage() {
                     >
                       {isCreating ? (
                         <span className="flex items-center justify-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          {currentUploadIndex >= 0
-                            ? `Uploading ${currentUploadIndex + 1}/${pendingFiles.length}...`
-                            : pendingFiles.length > 0 ? 'Creating & Uploading...' : 'Creating...'}
+                          <Loader2 className="w-4 h-4 animate-spin" /> Creating...
                         </span>
                       ) : (
-                        pendingFiles.length > 0 ? `Create Notebook & Upload ${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''}` : 'Create Notebook'
+                        pendingFiles.length > 0 ? `Create Notebook (${pendingFiles.length} file${pendingFiles.length > 1 ? 's' : ''})` : 'Create Notebook'
                       )}
                     </button>
                   )}

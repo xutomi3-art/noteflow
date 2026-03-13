@@ -33,6 +33,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
+import { consumePendingUploadFiles } from "@/stores/pending-upload-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useStudioStore } from "@/stores/studio-store";
 import { useAuthStore } from "@/stores/auth-store";
@@ -155,6 +156,7 @@ export default function NotebookPage() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
+  const [pendingUploads, setPendingUploads] = useState<{ name: string; status: 'uploading' | 'done' | 'error' }[]>([]);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
@@ -238,6 +240,30 @@ export default function NotebookPage() {
       setSavedMessageIds(new Set());
       setOverviewSaved(false);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Consume pending files from create-notebook flow and upload them
+  useEffect(() => {
+    if (!id) return;
+    const files = consumePendingUploadFiles();
+    if (files.length === 0) return;
+
+    const uploads = files.map(f => ({ name: f.name, status: 'uploading' as const }));
+    setPendingUploads(uploads);
+
+    (async () => {
+      for (let i = 0; i < files.length; i++) {
+        try {
+          await uploadSource(id, files[i]);
+          setPendingUploads(prev => prev.map((u, idx) => idx === i ? { ...u, status: 'done' } : u));
+        } catch {
+          setPendingUploads(prev => prev.map((u, idx) => idx === i ? { ...u, status: 'error' } : u));
+        }
+      }
+      // Clear pending uploads after a delay so user can see final states
+      setTimeout(() => setPendingUploads([]), 3000);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -612,6 +638,33 @@ export default function NotebookPage() {
             </div>
           ) : (
           <div className="p-4 flex-1 overflow-y-auto" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
+            {/* Pending uploads progress bar */}
+            {pendingUploads.length > 0 && (
+              <div className="mb-3 space-y-1.5">
+                {pendingUploads.filter(u => u.status !== 'done').length > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl">
+                    <Loader2 className="w-3.5 h-3.5 text-[#5b8c15] animate-spin shrink-0" />
+                    <span className="text-[12px] font-medium text-[#5b8c15]">
+                      Uploading {pendingUploads.filter(u => u.status === 'done').length}/{pendingUploads.length} files...
+                    </span>
+                  </div>
+                )}
+                {pendingUploads.map((upload, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-[12px]">
+                    {upload.status === 'uploading' ? (
+                      <Loader2 className="w-3 h-3 text-amber-500 animate-spin shrink-0" />
+                    ) : upload.status === 'done' ? (
+                      <Check className="w-3 h-3 text-green-500 shrink-0" />
+                    ) : (
+                      <X className="w-3 h-3 text-red-500 shrink-0" />
+                    )}
+                    <span className={`truncate ${upload.status === 'uploading' ? 'text-slate-600' : upload.status === 'done' ? 'text-slate-400' : 'text-red-500'}`}>
+                      {upload.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             {notebook?.user_role !== "viewer" && (
               <>
                 <input
