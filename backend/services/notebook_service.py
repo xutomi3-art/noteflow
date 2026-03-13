@@ -86,25 +86,31 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
     ]
 
 
-async def get_notebook(db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID) -> Notebook:
-    """Get a notebook if user is owner or member."""
+async def get_notebook(db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID, touch: bool = False) -> Notebook:
+    """Get a notebook if user is owner or member. If touch=True, update updated_at."""
     # Check ownership first
     result = await db.execute(
         select(Notebook).where(Notebook.id == notebook_id, Notebook.owner_id == user_id)
     )
     notebook = result.scalar_one_or_none()
-    if notebook:
-        return notebook
 
-    # Check membership
-    result = await db.execute(
-        select(Notebook)
-        .join(NotebookMember, NotebookMember.notebook_id == Notebook.id)
-        .where(Notebook.id == notebook_id, NotebookMember.user_id == user_id)
-    )
-    notebook = result.scalar_one_or_none()
+    if not notebook:
+        # Check membership
+        result = await db.execute(
+            select(Notebook)
+            .join(NotebookMember, NotebookMember.notebook_id == Notebook.id)
+            .where(Notebook.id == notebook_id, NotebookMember.user_id == user_id)
+        )
+        notebook = result.scalar_one_or_none()
+
     if not notebook:
         raise ValueError("Notebook not found")
+
+    if touch:
+        notebook.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(notebook)
+
     return notebook
 
 

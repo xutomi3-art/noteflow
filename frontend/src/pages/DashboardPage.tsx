@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { setPendingUploadFiles, setPendingUploadUrls } from '@/stores/pending-upload-store';
@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const [showUrlInput, setShowUrlInput] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchNotebooks();
@@ -89,11 +90,21 @@ export default function DashboardPage() {
     (nb) => nb.is_shared || nb.user_role !== 'owner'
   );
 
+  // Sort: starred first, then preserve backend order (updated_at DESC)
   const sortedPersonal = [...personalNotebooks].sort(
-    (a, b) => (starredIds.has(b.id) ? 1 : 0) - (starredIds.has(a.id) ? 1 : 0)
+    (a, b) => {
+      const starDiff = (starredIds.has(b.id) ? 1 : 0) - (starredIds.has(a.id) ? 1 : 0);
+      if (starDiff !== 0) return starDiff;
+      // Preserve backend order (already sorted by updated_at DESC)
+      return personalNotebooks.indexOf(a) - personalNotebooks.indexOf(b);
+    }
   );
   const sortedTeam = [...teamNotebooks].sort(
-    (a, b) => (starredIds.has(b.id) ? 1 : 0) - (starredIds.has(a.id) ? 1 : 0)
+    (a, b) => {
+      const starDiff = (starredIds.has(b.id) ? 1 : 0) - (starredIds.has(a.id) ? 1 : 0);
+      if (starDiff !== 0) return starDiff;
+      return teamNotebooks.indexOf(a) - teamNotebooks.indexOf(b);
+    }
   );
 
   const displayedPersonal = showAllPersonal ? sortedPersonal : sortedPersonal.slice(0, 4);
@@ -283,7 +294,17 @@ export default function DashboardPage() {
         <section className="mb-16">
           <div className="flex items-center justify-between mb-6 relative">
             <h2 className="text-xl md:text-[28px] font-bold tracking-tight">Personal Notebooks</h2>
-            <div className="relative" ref={createMenuRef}>
+            <div
+              className="relative"
+              ref={createMenuRef}
+              onMouseEnter={() => {
+                if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                setIsCreateMenuOpen(true);
+              }}
+              onMouseLeave={() => {
+                hoverTimeoutRef.current = setTimeout(() => setIsCreateMenuOpen(false), 150);
+              }}
+            >
               <button
                 onClick={() => setIsCreateMenuOpen((prev) => !prev)}
                 className="flex items-center gap-2 bg-[#5b8c15] hover:bg-[#4a7311] text-white px-5 py-2.5 rounded-xl font-medium transition-colors shadow-sm"
@@ -483,9 +504,9 @@ export default function DashboardPage() {
         <footer className="pt-8 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between text-[13px] font-medium text-slate-500">
           <div>上海聚托信息科技有限公司©2026 <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 transition-colors">沪ICP备15056478号-5</a></div>
           <div className="flex items-center gap-8 mt-4 md:mt-0">
-            <a href="#" className="hover:text-slate-900 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-slate-900 transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-slate-900 transition-colors">Help Center</a>
+            <Link to="/privacy" className="hover:text-slate-900 transition-colors">Privacy Policy</Link>
+            <Link to="/terms" className="hover:text-slate-900 transition-colors">Terms of Service</Link>
+            <Link to="/help" className="hover:text-slate-900 transition-colors">Help Center</Link>
           </div>
         </footer>
       </main>
@@ -576,7 +597,7 @@ export default function DashboardPage() {
                 {showUrlInput && (
                   <div className="mt-3 flex items-center gap-2">
                     <div className="relative flex-1">
-                      <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
                         type="url"
                         placeholder="https://example.com"

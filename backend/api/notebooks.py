@@ -48,7 +48,7 @@ async def get_notebook(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        notebook = await notebook_service.get_notebook(db, uuid.UUID(notebook_id), user.id)
+        notebook = await notebook_service.get_notebook(db, uuid.UUID(notebook_id), user.id, touch=True)
         role = await permission_service.get_user_role(db, uuid.UUID(notebook_id), user.id)
         return NotebookResponse(
             id=str(notebook.id),
