@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Files,
@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Sparkles,
   Minimize2,
+  Square,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -44,6 +45,7 @@ import type { Notebook, Source, ChatMessage } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
 import PptConfigModal from "@/components/PptConfigModal";
 import type { PptConfig } from "@/components/PptConfigModal";
+import MarkdownContent from "@/components/MarkdownContent";
 
 /* ─── helpers ─── */
 
@@ -116,6 +118,93 @@ function renderContent(text: string): string {
   return html;
 }
 
+/** Renders mind map content: JSON as tree view, otherwise markdown */
+function MindMapContent({ content }: { content: string }) {
+  let raw = content.trim();
+  // Strip ```json fences
+  if (raw.startsWith("```")) {
+    raw = raw.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return <MindMapTree data={parsed} />;
+  } catch {
+    return (
+      <MarkdownContent
+        content={content}
+        className="text-[13px] text-slate-700 leading-relaxed"
+      />
+    );
+  }
+}
+
+const LEVEL_COLORS = [
+  "bg-pink-400",
+  "bg-purple-400",
+  "bg-indigo-400",
+  "bg-cyan-400",
+  "bg-teal-400",
+  "bg-emerald-400",
+];
+
+function MindMapTree({ data }: { data: unknown }) {
+  const renderNode = (node: unknown, depth: number = 0): React.ReactNode => {
+    if (typeof node === "string") {
+      return (
+        <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: depth * 16 }}>
+          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[depth % LEVEL_COLORS.length]}`} />
+          <span className="text-[13px] text-slate-700">{node}</span>
+        </div>
+      );
+    }
+    if (Array.isArray(node)) {
+      return <>{node.map((item, i) => <React.Fragment key={i}>{renderNode(item, depth)}</React.Fragment>)}</>;
+    }
+    if (node && typeof node === "object") {
+      const obj = node as Record<string, unknown>;
+      // Check for common mind map structures: label/name/topic + children
+      const label = (obj.label || obj.name || obj.topic || obj.title || obj.text || "") as string;
+      const children = (obj.children || obj.nodes || obj.items || []) as unknown[];
+      if (label) {
+        return (
+          <div>
+            <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: depth * 16 }}>
+              <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[depth % LEVEL_COLORS.length]}`} />
+              <span className={`text-[13px] ${depth === 0 ? "font-semibold text-slate-900" : "text-slate-700"}`}>{label}</span>
+            </div>
+            {Array.isArray(children) && children.length > 0 && (
+              <div>{children.map((child, i) => <React.Fragment key={i}>{renderNode(child, depth + 1)}</React.Fragment>)}</div>
+            )}
+          </div>
+        );
+      }
+      // Fallback: render each key-value
+      return (
+        <div>
+          {Object.entries(obj).map(([key, value]) => (
+            <div key={key}>
+              <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: depth * 16 }}>
+                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[depth % LEVEL_COLORS.length]}`} />
+                <span className="text-[13px] font-medium text-slate-800">{key}</span>
+              </div>
+              {typeof value === "object" && value !== null ? renderNode(value, depth + 1) : (
+                <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: (depth + 1) * 16 }}>
+                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[(depth + 1) % LEVEL_COLORS.length]}`} />
+                  <span className="text-[13px] text-slate-600">{String(value)}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return <span className="text-[13px] text-slate-600">{String(node)}</span>;
+  };
+
+  return <div className="text-[13px] text-slate-700 leading-relaxed">{renderNode(data)}</div>;
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -157,7 +246,9 @@ export default function NotebookPage() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
-  const [pendingUploads, setPendingUploads] = useState<{ name: string; status: 'uploading' | 'done' | 'error' }[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<{ name: string; status: 'uploading' | 'done' | 'error' | 'cancelled' }[]>([]);
+  const uploadControllersRef = useRef<Map<number, AbortController>>(new Map());
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
@@ -196,7 +287,7 @@ export default function NotebookPage() {
   const { user, logout } = useAuthStore();
   const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt } =
     useSourceStore();
-  const { messages, isStreaming, streamingContent, thinking, setThinking, reasoningContent, isThinkingPhase, fetchHistory, sendMessage, reset: resetChat } = useChatStore();
+  const { messages, isStreaming, streamingContent, thinking, setThinking, reasoningContent, isThinkingPhase, fetchHistory, sendMessage, stopStream, reset: resetChat } = useChatStore();
   const {
     content: studioContent,
     isGenerating,
@@ -447,12 +538,36 @@ export default function NotebookPage() {
       if (rejected.length > 0) {
         alert(`The following files exceed the 50 MB limit and were skipped:\n\n${rejected.join('\n')}`);
       }
-      for (const file of accepted) {
-        await uploadSource(id, file);
+      // Show uploading state immediately
+      const newUploads = accepted.map(f => ({ name: f.name, status: 'uploading' as const }));
+      setPendingUploads(prev => {
+        const updated = [...prev, ...newUploads];
+        return updated;
+      });
+      const startIdx = pendingUploads.length;
+      for (let i = 0; i < accepted.length; i++) {
+        const controller = new AbortController();
+        const uploadIdx = startIdx + i;
+        uploadControllersRef.current.set(uploadIdx, controller);
+        try {
+          await api.uploadSource(id, accepted[i], controller.signal);
+          fetchSources(id);
+          setPendingUploads(prev => prev.map((u, idx) => idx === uploadIdx ? { ...u, status: 'done' as const } : u));
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            setPendingUploads(prev => prev.map((u, idx) => idx === uploadIdx ? { ...u, status: 'cancelled' as const } : u));
+          } else {
+            setPendingUploads(prev => prev.map((u, idx) => idx === uploadIdx ? { ...u, status: 'error' as const } : u));
+          }
+        } finally {
+          uploadControllersRef.current.delete(uploadIdx);
+        }
       }
+      // Clear completed uploads after 2s
+      setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading')), 2000);
       e.target.value = "";
     },
-    [id, uploadSource],
+    [id, fetchSources, pendingUploads.length],
   );
 
   const handleAddUrl = useCallback(async () => {
@@ -897,34 +1012,50 @@ export default function NotebookPage() {
 
             <div className="space-y-1">
               {/* Pending uploads — shown inline with sources */}
-              {pendingUploads.length > 0 && (
-                <>
-                  {pendingUploads.filter(u => u.status !== 'done').length > 0 && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl">
-                      <Loader2 className="w-3.5 h-3.5 text-[#5b8c15] animate-spin shrink-0" />
-                      <span className="text-[12px] font-medium text-[#5b8c15]">
-                        Uploading {pendingUploads.filter(u => u.status === 'done').length}/{pendingUploads.length} files...
-                      </span>
-                    </div>
+              {pendingUploads.map((upload, i) => (
+                <div key={`pending-${i}`} className="relative overflow-hidden rounded-xl">
+                  {upload.status === 'uploading' && (
+                    <div className="absolute inset-0 bg-[#dcfce7] animate-pulse" />
                   )}
-                  {pendingUploads.map((upload, i) => (
-                    <div key={`pending-${i}`} className="flex items-center gap-3 p-2 rounded-xl">
-                      <div className="bg-slate-100 text-slate-400 p-1.5 rounded flex-shrink-0">
-                        {upload.status === 'uploading' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : upload.status === 'done' ? (
-                          <Check className="w-3.5 h-3.5 text-green-500" />
-                        ) : (
-                          <X className="w-3.5 h-3.5 text-red-500" />
-                        )}
-                      </div>
-                      <p className={`text-[13px] truncate flex-1 ${upload.status === 'uploading' ? 'text-slate-500 italic' : upload.status === 'done' ? 'text-slate-400' : 'text-red-500'}`}>
+                  {upload.status === 'done' && (
+                    <div className="absolute inset-0 bg-[#dcfce7]" />
+                  )}
+                  <div className="relative flex items-center gap-3 p-2">
+                    <div className={`p-1.5 rounded flex-shrink-0 ${upload.status === 'error' || upload.status === 'cancelled' ? 'bg-red-50 text-red-400' : 'bg-white/60 text-[#5b8c15]'}`}>
+                      {upload.status === 'uploading' ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : upload.status === 'done' ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <X className="w-3.5 h-3.5" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[13px] truncate ${upload.status === 'error' || upload.status === 'cancelled' ? 'text-red-500' : 'text-slate-700'}`}>
                         {upload.name}
                       </p>
+                      {upload.status === 'uploading' && (
+                        <p className="text-[11px] text-[#5b8c15] font-medium">uploading...</p>
+                      )}
+                      {upload.status === 'cancelled' && (
+                        <p className="text-[11px] text-slate-400">cancelled</p>
+                      )}
                     </div>
-                  ))}
-                </>
-              )}
+                    {upload.status === 'uploading' && (
+                      <button
+                        onClick={() => {
+                          const controller = uploadControllersRef.current.get(i);
+                          if (controller) controller.abort();
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                        title="Cancel upload"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
               {sources.map((source) => (
                 <div
                   key={source.id}
@@ -1033,13 +1164,17 @@ export default function NotebookPage() {
                     ) : (
                       <span className="text-[10px] text-slate-400 capitalize w-12 text-right shrink-0">{member.role}</span>
                     )}
-                    {member.role !== "owner" && notebook?.user_role === "owner" && (
-                      <button
-                        onClick={() => removeMember(id || "", member.user_id)}
-                        className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                    {notebook?.user_role === "owner" && (
+                      member.role !== "owner" ? (
+                        <button
+                          onClick={() => removeMember(id || "", member.user_id)}
+                          className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      ) : (
+                        <div className="w-4 shrink-0" />
+                      )
                     )}
                   </div>
                 ))}
@@ -1092,7 +1227,7 @@ export default function NotebookPage() {
 
                 {overview?.overview && (
                   <div className="text-left text-[15px] text-slate-700 leading-relaxed space-y-4 mb-8">
-                    <div dangerouslySetInnerHTML={{ __html: renderContent(overview.overview) }} />
+                    <MarkdownContent content={overview.overview} />
                   </div>
                 )}
 
@@ -1151,7 +1286,7 @@ export default function NotebookPage() {
                     ) : (
                       <div className="flex justify-start">
                         <div className="text-slate-800 text-[14px] leading-relaxed max-w-full">
-                          <div dangerouslySetInnerHTML={{ __html: renderContent(msg.content) }} />
+                          <MarkdownContent content={msg.content} />
                           <div className="flex items-center gap-2 mt-4">
                             {savedMessageIds.has(msg.id) ? (
                               <span className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-green-200 bg-green-50 text-[11px] font-medium text-green-600">
@@ -1198,7 +1333,7 @@ export default function NotebookPage() {
                 {isStreaming && streamingContent && (
                   <div className="flex justify-start">
                     <div className="text-slate-800 text-[14px] leading-relaxed max-w-full">
-                      <div dangerouslySetInnerHTML={{ __html: renderContent(streamingContent) }} />
+                      <MarkdownContent content={streamingContent} />
                       <span className="inline-block w-2 h-4 bg-slate-400 animate-pulse ml-0.5 rounded-sm" />
                     </div>
                   </div>
@@ -1260,15 +1395,25 @@ export default function NotebookPage() {
                   <span className="text-[11px] text-slate-400 font-medium px-2">
                     {selectedCount} sources
                   </span>
-                  <button
-                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
-                      canSend ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-300"
-                    }`}
-                    disabled={!canSend}
-                    onClick={handleSend}
-                  >
-                    <ArrowLeft className="w-4 h-4 rotate-180" />
-                  </button>
+                  {isStreaming ? (
+                    <button
+                      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => stopStream()}
+                      title="Stop generating"
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                        canSend ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-300"
+                      }`}
+                      disabled={!canSend}
+                      onClick={handleSend}
+                    >
+                      <ArrowLeft className="w-4 h-4 rotate-180" />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="text-center mt-3 text-[10px] text-slate-400">
@@ -1445,9 +1590,9 @@ export default function NotebookPage() {
                         <Minimize2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div
+                    <MarkdownContent
+                      content={studioContent.summary}
                       className="text-[13px] text-slate-700 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: renderContent(studioContent.summary) }}
                     />
                   </div>
                 )}
@@ -1463,9 +1608,9 @@ export default function NotebookPage() {
                         <Minimize2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div
+                    <MarkdownContent
+                      content={studioContent.faq}
                       className="text-[13px] text-slate-700 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: renderContent(studioContent.faq) }}
                     />
                   </div>
                 )}
@@ -1481,10 +1626,7 @@ export default function NotebookPage() {
                         <Minimize2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div
-                      className="text-[13px] text-slate-700 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: renderContent(studioContent.mindmap) }}
-                    />
+                    <MindMapContent content={studioContent.mindmap} />
                   </div>
                 )}
                 {studioContent.action_items && (
@@ -1499,9 +1641,9 @@ export default function NotebookPage() {
                         <Minimize2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div
+                    <MarkdownContent
+                      content={studioContent.action_items}
                       className="text-[13px] text-slate-700 leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: renderContent(studioContent.action_items) }}
                     />
                   </div>
                 )}
@@ -1523,33 +1665,43 @@ export default function NotebookPage() {
               </div>
 
               <div className="space-y-3">
-                {notes.map((note) => (
-                  <div
-                    key={note.id}
-                    className="p-3 rounded-xl hover:bg-slate-50 cursor-pointer group transition-colors border border-transparent hover:border-slate-100"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-3">
-                        <FileText className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                        <div>
-                          <h4 className="text-[13px] font-medium text-slate-800 line-clamp-2">
-                            {note.content.slice(0, 80)}
-                            {note.content.length > 80 ? "..." : ""}
-                          </h4>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            {timeAgo(note.created_at)}
-                          </p>
+                {notes.map((note) => {
+                  const isExpanded = expandedNoteId === note.id;
+                  return (
+                    <div
+                      key={note.id}
+                      className="p-3 rounded-xl hover:bg-slate-50 cursor-pointer group transition-colors border border-transparent hover:border-slate-100"
+                      onClick={() => setExpandedNoteId(isExpanded ? null : note.id)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <FileText className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            {isExpanded ? (
+                              <MarkdownContent
+                                content={note.content}
+                                className="text-[13px] text-slate-700 leading-relaxed"
+                              />
+                            ) : (
+                              <div className="text-[13px] font-medium text-slate-800 line-clamp-2">
+                                <MarkdownContent content={note.content} />
+                              </div>
+                            )}
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {timeAgo(note.created_at)}
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); id && deleteNote(id, note.id); }}
+                          className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => id && deleteNote(id, note.id)}
-                        className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {notes.length === 0 && (
                   <p className="text-[12px] text-slate-400 text-center py-4">
