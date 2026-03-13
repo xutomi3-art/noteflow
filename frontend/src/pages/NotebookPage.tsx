@@ -186,13 +186,14 @@ export default function NotebookPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  const sourceContentRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef<"left" | "right" | null>(null);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(0);
 
   // Stores
   const { user, logout } = useAuthStore();
-  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource } =
+  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt } =
     useSourceStore();
   const { messages, isStreaming, streamingContent, thinking, setThinking, reasoningContent, isThinkingPhase, fetchHistory, sendMessage, reset: resetChat } = useChatStore();
   const {
@@ -282,6 +283,79 @@ export default function NotebookPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent, reasoningContent]);
+
+  // Scroll to and highlight excerpt in source content viewer
+  useEffect(() => {
+    if (!activeSourceContent || !highlightExcerpt || !sourceContentRef.current) return;
+
+    // Wait for DOM to render
+    const timer = setTimeout(() => {
+      const container = sourceContentRef.current;
+      if (!container) return;
+
+      // Remove previous highlights
+      container.querySelectorAll("mark.citation-highlight").forEach((el) => {
+        const parent = el.parentNode;
+        if (parent) {
+          parent.replaceChild(document.createTextNode(el.textContent || ""), el);
+          parent.normalize();
+        }
+      });
+
+      // Find the excerpt in the text content using a fuzzy approach
+      const excerpt = highlightExcerpt.trim();
+      if (!excerpt) return;
+
+      // Walk text nodes to find the excerpt
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      const allText: { node: Text; start: number }[] = [];
+      let fullText = "";
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        allText.push({ node, start: fullText.length });
+        fullText += node.textContent || "";
+      }
+
+      // Try exact match first, then normalized match
+      const normalizeWs = (s: string) => s.replace(/\s+/g, " ");
+      let matchIdx = fullText.indexOf(excerpt);
+      if (matchIdx === -1) {
+        const normFull = normalizeWs(fullText);
+        const normExcerpt = normalizeWs(excerpt);
+        matchIdx = normFull.indexOf(normExcerpt);
+        // Try first 60 chars if full excerpt not found
+        if (matchIdx === -1 && normExcerpt.length > 60) {
+          matchIdx = normFull.indexOf(normExcerpt.slice(0, 60));
+        }
+      }
+
+      if (matchIdx === -1) return;
+
+      // Find the text node containing the match start
+      for (const { node: textNode, start } of allText) {
+        const nodeEnd = start + (textNode.textContent?.length || 0);
+        if (start <= matchIdx && matchIdx < nodeEnd) {
+          // Create a mark element around the matched portion
+          const localOffset = matchIdx - start;
+          const markLen = Math.min(excerpt.length, (textNode.textContent?.length || 0) - localOffset);
+          const range = document.createRange();
+          range.setStart(textNode, localOffset);
+          range.setEnd(textNode, localOffset + markLen);
+
+          const mark = document.createElement("mark");
+          mark.className = "citation-highlight";
+          mark.style.cssText = "background: #fef08a; padding: 2px 0; border-radius: 2px; scroll-margin-top: 80px;";
+          range.surroundContents(mark);
+
+          // Scroll the mark into view
+          mark.scrollIntoView({ behavior: "smooth", block: "center" });
+          break;
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [activeSourceContent, highlightExcerpt]);
 
   // Handlers
   const handleSend = useCallback(() => {
@@ -639,6 +713,7 @@ export default function NotebookPage() {
                   </div>
                 ) : activeSourceContent ? (
                   <div
+                    ref={sourceContentRef}
                     className="prose prose-sm prose-slate max-w-none text-[13px] leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: renderContent(activeSourceContent) }}
                   />
