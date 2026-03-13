@@ -378,6 +378,25 @@ async def get_source_content(
                 content = f.read()
             break
 
+    # Fallback: reconstruct content from RAGFlow chunks
+    if content is None and source.ragflow_dataset_id and source.ragflow_doc_id:
+        from backend.services.ragflow_client import ragflow_client
+        chunks = await ragflow_client.list_chunks(
+            source.ragflow_dataset_id, source.ragflow_doc_id
+        )
+        if chunks:
+            content = "\n\n".join(
+                c.get("content", "") for c in chunks if c.get("content")
+            )
+            # Cache for future requests
+            if content:
+                try:
+                    md_path = base_path + "_parsed.md"
+                    with open(md_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                except Exception:
+                    pass
+
     if content is None:
         return {'content': None, 'message': 'Parsed content not available yet'}
 

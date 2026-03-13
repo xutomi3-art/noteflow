@@ -151,6 +151,29 @@ class RAGFlowClient:
             logger.error("RAGFlow retrieve failed: %s", e)
             return []
 
+    async def list_chunks(
+        self, dataset_id: str, document_id: str, page: int = 1, size: int = 100
+    ) -> list[dict]:
+        """List chunks of a document. Returns list of chunk dicts with 'content' field."""
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+                resp = await client.get(
+                    f"{self.base_url}/api/v1/datasets/{dataset_id}/documents/{document_id}/chunks",
+                    headers=self._headers,
+                    params={"page": page, "page_size": size},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") == 0 and data.get("data"):
+                    chunks = data["data"]
+                    if isinstance(chunks, dict) and "chunks" in chunks:
+                        chunks = chunks["chunks"]
+                    return chunks if isinstance(chunks, list) else []
+                return []
+        except Exception as e:
+            logger.error("RAGFlow list_chunks failed: %s", e)
+            return []
+
     async def delete_document(self, dataset_id: str, document_id: str) -> bool:
         """Delete a document from RAGFlow."""
         try:
