@@ -56,7 +56,12 @@ export default function DashboardPage() {
   const [createModalType, setCreateModalType] = useState<'personal' | 'team' | null>(null);
   const [teamNotebookId, setTeamNotebookId] = useState<string | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
+  const [starredIds, setStarredIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('starredNotebooks');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -131,6 +136,7 @@ export default function DashboardPage() {
       } else {
         next.add(id);
       }
+      localStorage.setItem('starredNotebooks', JSON.stringify([...next]));
       return next;
     });
   };

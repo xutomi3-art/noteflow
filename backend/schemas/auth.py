@@ -6,6 +6,13 @@ class RegisterRequest(BaseModel):
     name: str
     password: str
 
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('Name is required')
+        return v.strip()
+
     @field_validator('password')
     @classmethod
     def password_min_length(cls, v: str) -> str:
