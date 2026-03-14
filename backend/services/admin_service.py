@@ -140,8 +140,19 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
         headers={"Authorization": f"Bearer {settings.RAGFLOW_API_KEY}"},
     )
 
-    # MinerU
-    services["mineru"] = await _check_http(f"{settings.MINERU_BASE_URL}/docs")
+    # MinerU — POST /file_parse without a file: healthy returns 422, broken returns 500
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            start = datetime.now()
+            resp = await client.post(f"{settings.MINERU_BASE_URL}/file_parse")
+            latency = (datetime.now() - start).total_seconds() * 1000
+            if resp.status_code == 422:
+                # 422 = service is up and models are loaded, just missing file param
+                services["mineru"] = {"status": "ok", "latency_ms": round(latency), "message": None}
+            else:
+                services["mineru"] = {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}"}
+    except Exception as e:
+        services["mineru"] = {"status": "error", "latency_ms": 0, "message": str(e)}
 
     # Elasticsearch (RAGFlow's ES on port 9200)
     services["elasticsearch"] = await _check_http("http://ragflow-es:9200")
