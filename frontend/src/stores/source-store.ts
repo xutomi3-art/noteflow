@@ -39,12 +39,17 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     set({ isLoading: true });
     try {
       const sources = await api.listSources(notebookId);
-      set({ sources });
-      // Auto-select all ready sources
-      const readyIds = new Set(
-        sources.filter((s) => s.status === "ready").map((s) => s.id),
-      );
-      set({ selectedIds: readyIds });
+      const { selectedIds: currentSelected } = get();
+      // Only auto-select all ready sources on initial load (when nothing is selected)
+      // On subsequent fetches, preserve user's selections and add newly ready sources
+      if (currentSelected.size === 0) {
+        const readyIds = new Set(
+          sources.filter((s) => s.status === "ready").map((s) => s.id),
+        );
+        set({ sources, selectedIds: readyIds });
+      } else {
+        set({ sources });
+      }
     } finally {
       set({ isLoading: false });
     }
