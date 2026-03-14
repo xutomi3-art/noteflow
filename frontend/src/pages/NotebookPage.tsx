@@ -1521,8 +1521,8 @@ export default function NotebookPage() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 pb-24">
-            <div className="grid grid-cols-2 gap-2.5 mb-8 select-none">
+          <div className="flex-1 overflow-y-auto pb-24">
+            <div className="grid grid-cols-2 gap-2.5 mb-4 select-none sticky top-0 bg-white z-10 p-4 pb-2">
               {/* Summary */}
               <button
                 onClick={() => handleStudioAction("summary")}
@@ -1608,6 +1608,7 @@ export default function NotebookPage() {
               </button>
             </div>
 
+            <div className="px-4">
             {/* PDF / Source Viewer */}
             {pdfViewer && (
               <div className="mb-6">
@@ -1770,6 +1771,7 @@ export default function NotebookPage() {
                   </p>
                 )}
               </div>
+            </div>
             </div>
           </div>
 
