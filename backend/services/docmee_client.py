@@ -185,7 +185,10 @@ class DocmeeClient:
                 if data.get("code") != 0:
                     logger.error("Docmee generateContent failed: %s", data.get("message"))
                     return None
-                markdown = data["data"]["markdown"]
+                markdown = data["data"].get("text") or data["data"].get("markdown", "")
+                if not markdown:
+                    logger.error("Docmee generateContent returned no text/markdown")
+                    return None
                 logger.info("Docmee content generated, markdown length: %d", len(markdown))
 
                 # Step 3: Generate PPT from outline + template
