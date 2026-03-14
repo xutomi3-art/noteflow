@@ -256,12 +256,14 @@ async def recover_stuck_sources() -> None:
     """
     from backend.models.source import Source
 
+    logger.info("recover_stuck_sources: checking for stuck sources...")
     async with async_session() as db:
         result = await db.execute(
             select(Source).where(Source.status.in_(["uploading", "parsing", "vectorizing"]))
         )
         stuck = list(result.scalars().all())
         if not stuck:
+            logger.info("recover_stuck_sources: no stuck sources found")
             return
 
         logger.info("Found %d stuck sources, checking RAGFlow status...", len(stuck))

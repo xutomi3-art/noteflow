@@ -1,4 +1,5 @@
 import logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -45,9 +46,11 @@ async def lifespan(app: FastAPI):
     # Recover sources stuck in processing states after restart
     from backend.services.document_pipeline import recover_stuck_sources
     try:
+        logger.info("Running stuck source recovery...")
         await recover_stuck_sources()
+        logger.info("Stuck source recovery complete")
     except Exception as e:
-        logger.error("Failed to recover stuck sources: %s", e)
+        logger.error("Failed to recover stuck sources: %s", e, exc_info=True)
 
     # Initialize ASR service
     from backend.services.asr_service import asr_service
