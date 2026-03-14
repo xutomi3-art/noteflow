@@ -52,6 +52,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Failed to recover stuck sources: %s", e, exc_info=True)
 
+    # Warmup MinerU (trigger model loading in background, ~70s on CPU)
+    import asyncio
+    from backend.services.mineru_client import mineru_client
+    asyncio.create_task(mineru_client.warmup())
+
     # Initialize ASR service
     from backend.services.asr_service import asr_service
     asr_service.configure(
