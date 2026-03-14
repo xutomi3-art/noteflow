@@ -780,9 +780,9 @@ export default function NotebookPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#f0f2f5] font-sans text-slate-900 overflow-hidden">
+    <div className="h-screen flex flex-col bg-white font-sans text-slate-900 overflow-hidden">
       {/* Header */}
-      <header className="h-14 bg-[#f0f2f5] flex items-center justify-between px-2 md:px-4 shrink-0 select-none">
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-2 md:px-4 shrink-0 select-none">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/dashboard")}
@@ -902,11 +902,11 @@ export default function NotebookPage() {
       </div>
 
       {/* Main Workspace */}
-      <main className="flex-1 flex overflow-hidden px-2 pb-2 md:px-4 md:pb-4 gap-0">
+      <main className="flex-1 flex overflow-hidden gap-0">
         {/* Left Panel: Sources */}
         <section
           style={!isMobile && !isLeftCollapsed ? { width: leftWidth } : undefined}
-          className={`bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shrink-0 shadow-sm ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
+          className={`bg-white border-r border-slate-200 flex-col overflow-hidden shrink-0 ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Sources</h2>
@@ -1267,7 +1267,7 @@ export default function NotebookPage() {
         )}
 
         {/* Center Panel: Chat */}
-        <section className={`flex-1 bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shadow-sm relative ${isMobile ? (mobileTab === "chat" ? "flex" : "hidden") : "flex"}`} onPaste={handlePaste}>
+        <section className={`flex-1 bg-white flex-col overflow-hidden relative ${isMobile ? (mobileTab === "chat" ? "flex" : "hidden") : "flex"}`} onPaste={handlePaste}>
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-6 shrink-0">
             <h2 className="text-[13px] font-semibold text-slate-700">Chat</h2>
           </div>
@@ -1509,7 +1509,7 @@ export default function NotebookPage() {
         {/* Right Panel: Studio */}
         <section
           style={!isMobile && !isRightCollapsed ? { width: rightWidth } : undefined}
-          className={`bg-white rounded-2xl border border-slate-200 flex-col overflow-hidden shrink-0 shadow-sm relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "studio" ? "flex w-full" : "hidden") : "flex"}`}
+          className={`bg-white border-l border-slate-200 flex-col overflow-hidden shrink-0 relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "studio" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Studio</h2>
