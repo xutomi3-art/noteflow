@@ -137,6 +137,10 @@ export default function PptConfigModal({
                 <Loader2 size={20} className="animate-spin text-slate-400" />
                 <span className="ml-2 text-sm text-slate-400">加载模板...</span>
               </div>
+            ) : templates.length === 0 ? (
+              <div className="py-4 px-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                <p className="text-sm text-slate-500">将使用默认模板生成演示文稿</p>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-4 gap-3">
@@ -296,7 +300,7 @@ export default function PptConfigModal({
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={isGenerating || !templateId}
+            disabled={isGenerating}
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
             style={{ backgroundColor: "#5b8c15" }}
           >

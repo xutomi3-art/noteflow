@@ -245,6 +245,31 @@ class PptGenerateRequest(BaseModel):
     length: str = "medium"
 
 
+_FALLBACK_GENERATION_OPTIONS = {
+    "lang": [
+        {"label": "中文", "value": "zh"},
+        {"label": "English", "value": "en"},
+        {"label": "日本語", "value": "ja"},
+        {"label": "한국어", "value": "ko"},
+    ],
+    "scene": [
+        {"label": "工作汇报", "value": "work_report"},
+        {"label": "教育培训", "value": "education"},
+        {"label": "商业计划", "value": "business_plan"},
+        {"label": "产品介绍", "value": "product_intro"},
+        {"label": "学术研究", "value": "academic"},
+        {"label": "项目总结", "value": "project_summary"},
+    ],
+    "audience": [
+        {"label": "同事 / 团队", "value": "team"},
+        {"label": "管理层", "value": "management"},
+        {"label": "客户", "value": "client"},
+        {"label": "学生", "value": "student"},
+        {"label": "通用", "value": "general"},
+    ],
+}
+
+
 @ppt_router.get("/templates")
 async def list_ppt_templates(
     page: int = 1,
@@ -268,8 +293,11 @@ async def get_ppt_template_options(
 async def get_ppt_generation_options(
     current_user: User = Depends(get_current_user),
 ):
-    """Get generation options (scene, audience, language)."""
-    return await docmee_client.get_generation_options()
+    """Get generation options (scene, audience, language). Falls back to defaults when Docmee is unavailable."""
+    result = await docmee_client.get_generation_options()
+    if not result or (not result.get("lang") and not result.get("scene") and not result.get("audience")):
+        return _FALLBACK_GENERATION_OPTIONS
+    return result
 
 
 @router.post("/ppt")
