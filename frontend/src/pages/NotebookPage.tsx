@@ -245,6 +245,8 @@ export default function NotebookPage() {
   const [overviewSaved, setOverviewSaved] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [pendingUploads, setPendingUploads] = useState<{ name: string; status: 'uploading' | 'done' | 'error' | 'cancelled' }[]>([]);
   const uploadControllersRef = useRef<Map<number, AbortController>>(new Map());
@@ -278,6 +280,7 @@ export default function NotebookPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const sourceContentRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef<"left" | "right" | null>(null);
   const dragStartXRef = useRef(0);
@@ -626,8 +629,57 @@ export default function NotebookPage() {
 
   const handleMinimizeStudioContent = useCallback(
     async (contentType: string, content: string, label: string) => {
+      let noteContent = content;
+
+      // For mindmap, convert JSON to a readable text tree
+      if (contentType === "mindmap") {
+        let raw = content.trim();
+        if (raw.startsWith("```")) {
+          raw = raw.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+        }
+        try {
+          const parsed = JSON.parse(raw);
+          const lines: string[] = [];
+          const walk = (node: unknown, depth: number) => {
+            const indent = "  ".repeat(depth);
+            if (typeof node === "string") {
+              lines.push(`${indent}- ${node}`);
+            } else if (Array.isArray(node)) {
+              node.forEach((item) => walk(item, depth));
+            } else if (node && typeof node === "object") {
+              const obj = node as Record<string, unknown>;
+              const nodeLabel = (obj.label || obj.name || obj.topic || obj.title || obj.text || "") as string;
+              const children = (obj.children || obj.nodes || obj.items || []) as unknown[];
+              if (nodeLabel) {
+                if (depth === 0) {
+                  lines.push(`# ${nodeLabel}`);
+                } else {
+                  lines.push(`${indent}- ${nodeLabel}`);
+                }
+                if (Array.isArray(children)) {
+                  children.forEach((child) => walk(child, depth + 1));
+                }
+              } else {
+                Object.entries(obj).forEach(([key, value]) => {
+                  lines.push(`${indent}- **${key}**`);
+                  if (typeof value === "object" && value !== null) {
+                    walk(value, depth + 1);
+                  } else {
+                    lines.push(`${indent}  ${String(value)}`);
+                  }
+                });
+              }
+            }
+          };
+          walk(parsed, 0);
+          noteContent = lines.join("\n");
+        } catch {
+          // If JSON parse fails, keep original content
+        }
+      }
+
       // Save to notes with a label prefix
-      await handleSaveNote(`**${label}**\n\n${content}`);
+      await handleSaveNote(`**${label}**\n\n${noteContent}`);
       // Clear from studio display
       clearContent(contentType);
     },
@@ -776,9 +828,53 @@ export default function NotebookPage() {
           >
             <img src="/logo.png" alt="Noteflow" className="w-6 h-6 rounded-md" />
           </button>
-          <span className="font-semibold text-[15px] text-slate-800 truncate max-w-[300px]">
-            {notebook?.name || "Loading..."}
-          </span>
+          {isEditingName ? (
+            <input
+              ref={nameInputRef}
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const trimmed = editName.trim();
+                  if (trimmed && notebook && id && trimmed !== notebook.name) {
+                    api.updateNotebook(id, { name: trimmed }).then((updated) => {
+                      setNotebook(updated);
+                    });
+                  }
+                  setIsEditingName(false);
+                } else if (e.key === "Escape") {
+                  setIsEditingName(false);
+                }
+              }}
+              onBlur={() => {
+                const trimmed = editName.trim();
+                if (trimmed && notebook && id && trimmed !== notebook.name) {
+                  api.updateNotebook(id, { name: trimmed }).then((updated) => {
+                    setNotebook(updated);
+                  });
+                }
+                setIsEditingName(false);
+              }}
+              className="font-semibold text-[15px] text-slate-800 max-w-[300px] bg-transparent border-b-2 border-blue-400 outline-none px-0 py-0.5"
+              autoFocus
+            />
+          ) : (
+            <span
+              className={`font-semibold text-[15px] text-slate-800 truncate max-w-[300px] ${
+                notebook?.user_role !== "viewer" ? "cursor-pointer hover:text-blue-600 transition-colors" : ""
+              }`}
+              onClick={() => {
+                if (notebook && notebook.user_role !== "viewer") {
+                  setEditName(notebook.name);
+                  setIsEditingName(true);
+                }
+              }}
+              title={notebook?.user_role !== "viewer" ? "Click to rename" : undefined}
+            >
+              {notebook?.name || "Loading..."}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
