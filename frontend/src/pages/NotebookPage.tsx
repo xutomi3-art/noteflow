@@ -359,7 +359,7 @@ export default function NotebookPage() {
   const selectedCount = selectedIds.size;
   const isAllSelected = readySources.length > 0 && readySources.every((s) => selectedIds.has(s.id));
   const hasProcessingSelected = sources.some((s) => selectedIds.has(s.id) && isProcessingStatus(s.status));
-  const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && readySources.length > 0;
+  const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && readySources.length > 0 && selectedIds.size > 0;
 
   // Data loading
   useEffect(() => {
@@ -903,6 +903,7 @@ export default function NotebookPage() {
             <input
               ref={nameInputRef}
               value={editName}
+              maxLength={100}
               onChange={(e) => setEditName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -1393,7 +1394,7 @@ export default function NotebookPage() {
                   {notebook?.name || ""}
                 </h1>
                 <p className="text-[13px] text-slate-500 mb-6">
-                  {selectedCount} sources selected
+                  {selectedCount} {selectedCount === 1 ? 'source' : 'sources'} selected
                 </p>
 
                 {overview?.overview && (
@@ -1564,7 +1565,7 @@ export default function NotebookPage() {
                     {thinking ? "Thinking" : "Think"}
                   </button>
                   <span className="text-[11px] text-slate-400 font-medium px-2">
-                    {selectedCount} sources
+                    {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
                   </span>
                   {isStreaming ? (
                     <button
@@ -1581,6 +1582,7 @@ export default function NotebookPage() {
                       }`}
                       disabled={!canSend}
                       onClick={handleSend}
+                      title={selectedIds.size === 0 ? "Select at least 1 source to chat" : undefined}
                     >
                       <ArrowLeft className="w-4 h-4 rotate-180" />
                     </button>
