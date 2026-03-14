@@ -83,6 +83,18 @@ export default function DashboardPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isCreateMenuOpen]);
 
+  // Close Create Notebook modal on Escape key
+  useEffect(() => {
+    if (!createModalType) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [createModalType]);
+
   const personalNotebooks = notebooks.filter(
     (nb) => nb.user_role === 'owner' && !nb.is_shared
   );
@@ -401,7 +413,7 @@ export default function DashboardPage() {
                   <div className="p-5">
                     <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
                     <div className="text-[13px] text-slate-500 font-medium">
-                      {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} sources
+                      {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
                     </div>
                   </div>
                 </div>

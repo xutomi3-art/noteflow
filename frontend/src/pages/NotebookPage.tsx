@@ -183,9 +183,11 @@ export default function NotebookPage() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [pendingUploads, setPendingUploads] = useState<{ name: string; status: 'uploading' | 'done' | 'error' | 'cancelled' }[]>([]);
   const uploadControllersRef = useRef<Map<number, AbortController>>(new Map());
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
@@ -258,7 +260,7 @@ export default function NotebookPage() {
     api.getNotebook(id).then((nb) => {
       setNotebook(nb);
       if (nb.is_shared) fetchMembers(id);
-    }).catch(() => {});
+    }).catch(() => { setNotFound(true); });
     fetchSources(id);
     subscribeStatus(id);
     fetchHistory(id);
@@ -452,10 +454,11 @@ export default function NotebookPage() {
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
+        if (!chatInput.trim()) return;
         handleSend();
       }
     },
-    [handleSend],
+    [handleSend, chatInput],
   );
 
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -511,13 +514,15 @@ export default function NotebookPage() {
   const handleAddUrl = useCallback(async () => {
     if (!urlInput.trim() || !id) return;
     setIsAddingUrl(true);
+    setUrlError(null);
     try {
       await api.addUrlSource(id, urlInput.trim());
       setUrlInput("");
       setShowUrlInput(false);
+      setUrlError(null);
       fetchSources(id);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add URL");
+      setUrlError(err instanceof Error ? err.message : "Failed to add URL");
     } finally {
       setIsAddingUrl(false);
     }
@@ -752,6 +757,24 @@ export default function NotebookPage() {
     [messages, id, setActiveSource],
   );
 
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] font-sans">
+        <div className="text-center">
+          <div className="text-6xl mb-4">📓</div>
+          <h1 className="text-2xl font-semibold text-slate-800 mb-2">Notebook not found</h1>
+          <p className="text-slate-500 mb-6">This notebook doesn't exist or you don't have access to it.</p>
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="px-5 py-2.5 bg-[#5b8c15] text-white rounded-xl text-sm font-medium hover:bg-[#4a7310] transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-[#f0f2f5] font-sans text-slate-900 overflow-hidden">
       {/* Header */}
@@ -984,7 +1007,7 @@ export default function NotebookPage() {
                       <input
                         type="text"
                         value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
+                        onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); }}
                         onKeyDown={(e) => { if (e.key === "Enter") handleAddUrl(); }}
                         placeholder="https://example.com/article"
                         className="flex-1 text-[13px] bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#5b8c15]/40 focus:border-[#5b8c15]/40"
@@ -1009,6 +1032,9 @@ export default function NotebookPage() {
                         Add
                       </button>
                     </div>
+                    {urlError && (
+                      <p className="text-[11px] text-red-500 mt-1 px-1">{urlError}</p>
+                    )}
                   </div>
                 )}
                 <button

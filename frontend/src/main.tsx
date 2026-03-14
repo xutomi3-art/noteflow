@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import LoginPage from '@/pages/LoginPage';
@@ -69,6 +69,24 @@ function GuestGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function NotFoundPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] font-sans">
+      <div className="text-center">
+        <div className="text-6xl mb-4">🔍</div>
+        <h1 className="text-2xl font-semibold text-slate-800 mb-2">Page not found</h1>
+        <p className="text-slate-500 mb-6">The page you're looking for doesn't exist.</p>
+        <Link
+          to="/dashboard"
+          className="px-5 py-2.5 bg-[#5b8c15] text-white rounded-xl text-sm font-medium hover:bg-[#4a7310] transition-colors inline-block"
+        >
+          Go to Dashboard
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function AppInit({ children }: { children: React.ReactNode }) {
   const loadUser = useAuthStore(s => s.loadUser);
 
@@ -102,7 +120,7 @@ function App() {
             <Route path="logs" element={<AdminLogsPage />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AppInit>
     </BrowserRouter>
