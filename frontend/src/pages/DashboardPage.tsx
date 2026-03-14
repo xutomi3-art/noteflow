@@ -677,7 +677,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-3">
                           <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                           <span className="flex-1 truncate text-slate-700">{file.name}</span>
-                          <span className="text-xs text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+                          <span className="text-xs text-slate-400 shrink-0">{file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1024 / 1024).toFixed(1)} MB`}</span>
                           {!isCreating && (
                             <button onClick={() => removePendingFile(i)} className="text-slate-400 hover:text-slate-600 shrink-0">
                               <X className="w-3.5 h-3.5" />
