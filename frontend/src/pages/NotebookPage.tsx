@@ -373,7 +373,9 @@ export default function NotebookPage() {
     subscribeStatus(id);
     fetchHistory(id);
     fetchNotes(id);
-    api.getOverview(id).then(setOverview).catch(() => {});
+    api.getOverview(id).then(data => {
+      if (data.overview) setOverview(data);
+    }).catch(() => {});
 
     return () => {
       cleanup();
@@ -445,16 +447,25 @@ export default function NotebookPage() {
     }
   }, [sources, pendingUploads]);
 
-  // Re-fetch overview when first source becomes ready (for newly created notebooks)
+  // Re-fetch overview when sources finish processing
   const readyCount = sources.filter(s => s.status === "ready").length;
   const prevReadyRef = useRef(0);
+  const allSourcesDone = sources.length > 0 && sources.every(s => s.status === "ready" || s.status === "failed");
+  const prevAllDoneRef = useRef(false);
   useEffect(() => {
-    if (!id) return;
-    if (readyCount > 0 && prevReadyRef.current === 0 && !overview) {
-      api.getOverview(id).then(setOverview).catch(() => {});
+    if (!id || readyCount === 0) return;
+    // Fetch when readyCount increases and we have no overview yet
+    const shouldFetch =
+      (readyCount > prevReadyRef.current && !overview) ||
+      (allSourcesDone && !prevAllDoneRef.current);
+    if (shouldFetch) {
+      api.getOverview(id).then(data => {
+        if (data.overview) setOverview(data);
+      }).catch(() => {});
     }
     prevReadyRef.current = readyCount;
-  }, [id, readyCount, overview]);
+    prevAllDoneRef.current = allSourcesDone;
+  }, [id, readyCount, allSourcesDone, overview]);
 
   // Auto-scroll chat — only if user is near the bottom
   const chatScrollRef = useRef<HTMLDivElement>(null);
