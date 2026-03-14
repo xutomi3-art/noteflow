@@ -42,7 +42,16 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
-  const user = useAuthStore((s) => s.user);
+  const { user, isLoading } = useAuthStore();
+
+  // Wait for auth to resolve before enforcing the guard
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa]">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#5b8c15] border-t-transparent" />
+      </div>
+    );
+  }
 
   if (!user?.is_admin) {
     return <Navigate to="/dashboard" replace />;
