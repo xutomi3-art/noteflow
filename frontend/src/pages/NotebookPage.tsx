@@ -399,14 +399,25 @@ export default function NotebookPage() {
     setPendingUploads([...fileUploads, ...urlUploads]);
 
     (async () => {
-      // Upload files first
+      // Upload files (use api.uploadSource with AbortController + progress)
       for (let i = 0; i < files.length; i++) {
         const uploadId = fileIds[i];
+        const controller = new AbortController();
+        uploadControllersRef.current.set(uploadId, controller);
         try {
-          const uploaded = await uploadSource(id, files[i]);
+          const uploaded = await api.uploadSource(id, files[i], controller.signal, (progress) => {
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, progress } : u));
+          });
+          fetchSources(id);
           setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'processing' as const, progress: 100, sourceId: uploaded.id } : u));
-        } catch {
-          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'cancelled' as const } : u));
+          } else {
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
+          }
+        } finally {
+          uploadControllersRef.current.delete(uploadId);
         }
       }
       // Then add URLs
@@ -420,8 +431,6 @@ export default function NotebookPage() {
           setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
         }
       }
-      // Clear pending uploads after a delay so user can see final states
-      setTimeout(() => setPendingUploads([]), 3000);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -1245,11 +1254,16 @@ export default function NotebookPage() {
                         <p className="text-[11px] text-slate-400">cancelled</p>
                       )}
                     </div>
-                    {upload.status === 'uploading' && (
+                    {(upload.status === 'uploading' || upload.status === 'error') && (
                       <button
                         onClick={() => {
                           const controller = uploadControllersRef.current.get(upload.id);
-                          if (controller) controller.abort();
+                          if (controller) {
+                            controller.abort();
+                          } else {
+                            // No controller (stale or already finished) — just remove from list
+                            setPendingUploads(prev => prev.filter(u => u.id !== upload.id));
+                          }
                         }}
                         className="p-1 text-slate-400 hover:text-red-500 transition-colors shrink-0"
                         title="Cancel upload"
