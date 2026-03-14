@@ -247,25 +247,25 @@ class PptGenerateRequest(BaseModel):
 
 _FALLBACK_GENERATION_OPTIONS = {
     "lang": [
-        {"label": "中文", "value": "zh"},
         {"label": "English", "value": "en"},
-        {"label": "日本語", "value": "ja"},
-        {"label": "한국어", "value": "ko"},
+        {"label": "Chinese", "value": "zh"},
+        {"label": "Japanese", "value": "ja"},
+        {"label": "Korean", "value": "ko"},
     ],
     "scene": [
-        {"label": "工作汇报", "value": "work_report"},
-        {"label": "教育培训", "value": "education"},
-        {"label": "商业计划", "value": "business_plan"},
-        {"label": "产品介绍", "value": "product_intro"},
-        {"label": "学术研究", "value": "academic"},
-        {"label": "项目总结", "value": "project_summary"},
+        {"label": "Work Report", "value": "work_report"},
+        {"label": "Education", "value": "education"},
+        {"label": "Business Plan", "value": "business_plan"},
+        {"label": "Product Introduction", "value": "product_intro"},
+        {"label": "Academic Research", "value": "academic"},
+        {"label": "Project Summary", "value": "project_summary"},
     ],
     "audience": [
-        {"label": "同事 / 团队", "value": "team"},
-        {"label": "管理层", "value": "management"},
-        {"label": "客户", "value": "client"},
-        {"label": "学生", "value": "student"},
-        {"label": "通用", "value": "general"},
+        {"label": "Team / Colleagues", "value": "team"},
+        {"label": "Management", "value": "management"},
+        {"label": "Clients", "value": "client"},
+        {"label": "Students", "value": "student"},
+        {"label": "General", "value": "general"},
     ],
 }
 

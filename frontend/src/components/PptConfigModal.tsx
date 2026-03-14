@@ -30,9 +30,9 @@ interface GenerationOptions {
 }
 
 const LENGTH_OPTIONS: { value: PptConfig["length"]; label: string }[] = [
-  { value: "short", label: "精简" },
-  { value: "medium", label: "标准" },
-  { value: "long", label: "详细" },
+  { value: "short", label: "Brief" },
+  { value: "medium", label: "Standard" },
+  { value: "long", label: "Detailed" },
 ];
 
 export default function PptConfigModal({
@@ -44,7 +44,7 @@ export default function PptConfigModal({
   const [templateId, setTemplateId] = useState("");
   const [scene, setScene] = useState("");
   const [audience, setAudience] = useState("");
-  const [language, setLanguage] = useState("zh");
+  const [language, setLanguage] = useState("en");
   const [length, setLength] = useState<PptConfig["length"]>("medium");
 
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -114,7 +114,7 @@ export default function PptConfigModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-2">
           <h2 className="text-lg font-semibold text-slate-900">
-            生成演示文稿
+            Generate Presentation
           </h2>
           <button
             onClick={onClose}
@@ -129,17 +129,17 @@ export default function PptConfigModal({
           {/* Template selector */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              选择模板
+              Template
             </label>
 
             {templateLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 size={20} className="animate-spin text-slate-400" />
-                <span className="ml-2 text-sm text-slate-400">加载模板...</span>
+                <span className="ml-2 text-sm text-slate-400">Loading templates...</span>
               </div>
             ) : templates.length === 0 ? (
               <div className="py-4 px-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <p className="text-sm text-slate-500">将使用默认模板生成演示文稿</p>
+                <p className="text-sm text-slate-500">Default template will be used</p>
               </div>
             ) : (
               <>
@@ -208,7 +208,7 @@ export default function PptConfigModal({
           {options.scene && options.scene.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                场景
+                Scene
               </label>
               <select
                 value={scene}
@@ -216,7 +216,7 @@ export default function PptConfigModal({
                 disabled={isGenerating}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
               >
-                <option value="">不限</option>
+                <option value="">Any</option>
                 {options.scene.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
@@ -230,7 +230,7 @@ export default function PptConfigModal({
           {options.audience && options.audience.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                受众
+                Audience
               </label>
               <select
                 value={audience}
@@ -238,7 +238,7 @@ export default function PptConfigModal({
                 disabled={isGenerating}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
               >
-                <option value="">不限</option>
+                <option value="">Any</option>
                 {options.audience.map((a) => (
                   <option key={a.value} value={a.value}>
                     {a.label}
@@ -251,7 +251,7 @@ export default function PptConfigModal({
           {/* Length segmented control */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              内容长度
+              Content Length
             </label>
             <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
               {LENGTH_OPTIONS.map((opt) => {
@@ -279,7 +279,7 @@ export default function PptConfigModal({
           {options.lang && options.lang.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                语言
+                Language
               </label>
               <select
                 value={language}
@@ -307,10 +307,10 @@ export default function PptConfigModal({
             {isGenerating ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                正在生成演示文稿...
+                Generating presentation...
               </>
             ) : (
-              "生成演示文稿"
+              "Generate Presentation"
             )}
           </button>
         </div>
