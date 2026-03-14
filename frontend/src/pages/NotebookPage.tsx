@@ -291,7 +291,7 @@ export default function NotebookPage() {
   const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [pendingUploads, setPendingUploads] = useState<{ id: number; name: string; status: 'uploading' | 'done' | 'error' | 'cancelled'; progress: number }[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<{ id: number; name: string; status: 'uploading' | 'processing' | 'error' | 'cancelled'; progress: number; sourceId?: string }[]>([]);
   const uploadControllersRef = useRef<Map<number, AbortController>>(new Map());
   const uploadIdCounterRef = useRef(0);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -403,8 +403,8 @@ export default function NotebookPage() {
       for (let i = 0; i < files.length; i++) {
         const uploadId = fileIds[i];
         try {
-          await uploadSource(id, files[i]);
-          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const } : u));
+          const uploaded = await uploadSource(id, files[i]);
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'processing' as const, progress: 100, sourceId: uploaded.id } : u));
         } catch {
           setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
         }
@@ -413,9 +413,9 @@ export default function NotebookPage() {
       for (let i = 0; i < urls.length; i++) {
         const uploadId = urlIds[i];
         try {
-          await api.addUrlSource(id, urls[i]);
+          const uploaded = await api.addUrlSource(id, urls[i]);
           fetchSources(id);
-          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const } : u));
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'processing' as const, progress: 100, sourceId: uploaded.id } : u));
         } catch {
           setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
         }
@@ -425,6 +425,16 @@ export default function NotebookPage() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Remove pending uploads whose linked source has reached "ready" status
+  useEffect(() => {
+    if (pendingUploads.length === 0) return;
+    const readySourceIds = new Set(sources.filter(s => s.status === 'ready').map(s => s.id));
+    const hasReady = pendingUploads.some(u => u.sourceId && readySourceIds.has(u.sourceId));
+    if (hasReady) {
+      setPendingUploads(prev => prev.filter(u => !u.sourceId || !readySourceIds.has(u.sourceId)));
+    }
+  }, [sources, pendingUploads]);
 
   // Re-fetch overview when first source becomes ready (for newly created notebooks)
   const readyCount = sources.filter(s => s.status === "ready").length;
@@ -600,11 +610,12 @@ export default function NotebookPage() {
         const uploadId = uploadIds[i];
         uploadControllersRef.current.set(uploadId, controller);
         try {
-          await api.uploadSource(id, accepted[i], controller.signal, (progress) => {
+          const uploaded = await api.uploadSource(id, accepted[i], controller.signal, (progress) => {
             setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, progress } : u));
           });
           fetchSources(id);
-          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const, progress: 100 } : u));
+          // Keep in pending with sourceId — will show processing status in same row
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'processing' as const, progress: 100, sourceId: uploaded.id } : u));
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') {
             setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'cancelled' as const } : u));
@@ -615,8 +626,8 @@ export default function NotebookPage() {
           uploadControllersRef.current.delete(uploadId);
         }
       }
-      // Clear completed/cancelled/error uploads after 2s, keep any still-uploading ones
-      setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading')), 2000);
+      // Clear cancelled/error uploads after 2s
+      setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading' || u.status === 'processing')), 2000);
       e.target.value = "";
     },
     [id, fetchSources, pendingUploads.length],
@@ -1186,7 +1197,11 @@ export default function NotebookPage() {
 
             <div className="space-y-1">
               {/* Pending uploads — shown inline with sources */}
-              {pendingUploads.map((upload) => (
+              {pendingUploads.map((upload) => {
+                // Get linked source's processing status
+                const linkedSource = upload.sourceId ? sources.find(s => s.id === upload.sourceId) : null;
+                const processingLabel = linkedSource ? statusLabel(linkedSource.status) : null;
+                return (
                 <div key={`pending-${upload.id}`} className="relative overflow-hidden rounded-xl bg-slate-50">
                   {/* Progress bar fill */}
                   {upload.status === 'uploading' && (
@@ -1195,15 +1210,13 @@ export default function NotebookPage() {
                       style={{ width: `${upload.progress}%` }}
                     />
                   )}
-                  {upload.status === 'done' && (
+                  {upload.status === 'processing' && (
                     <div className="absolute inset-0 bg-[#dcfce7]" />
                   )}
                   <div className="relative flex items-center gap-3 p-2">
                     <div className={`p-1.5 rounded flex-shrink-0 ${upload.status === 'error' || upload.status === 'cancelled' ? 'bg-red-50 text-red-400' : 'bg-white/60 text-[#5b8c15]'}`}>
-                      {upload.status === 'uploading' ? (
+                      {upload.status === 'uploading' || upload.status === 'processing' ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : upload.status === 'done' ? (
-                        <Check className="w-3.5 h-3.5" />
                       ) : (
                         <X className="w-3.5 h-3.5" />
                       )}
@@ -1214,6 +1227,9 @@ export default function NotebookPage() {
                       </p>
                       {upload.status === 'uploading' && (
                         <p className="text-[11px] text-[#5b8c15] font-medium">uploading... {upload.progress}%</p>
+                      )}
+                      {upload.status === 'processing' && processingLabel && (
+                        <p className="text-[11px] text-amber-500 font-medium">{processingLabel}</p>
                       )}
                       {upload.status === 'cancelled' && (
                         <p className="text-[11px] text-slate-400">cancelled</p>
@@ -1233,8 +1249,9 @@ export default function NotebookPage() {
                     )}
                   </div>
                 </div>
-              ))}
-              {sources.map((source) => (
+                );
+              })}
+              {sources.filter(s => !pendingUploads.some(u => u.sourceId === s.id)).map((source) => (
                 <div
                   key={source.id}
                   className={`flex items-center gap-3 p-2 hover:bg-slate-50 rounded-xl cursor-pointer group transition-colors ${selectedIds.has(source.id) ? "bg-slate-50/50" : ""}`}
