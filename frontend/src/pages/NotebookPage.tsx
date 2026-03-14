@@ -133,6 +133,10 @@ function stripMarkdownToText(markdown: string): string {
     .replace(/`([^`]+)`/g, "$1")
     // Remove fenced code blocks
     .replace(/^```[\s\S]*?^```/gm, "")
+    // Remove table separator rows (| --- | --- |)
+    .replace(/^\|[\s:-]+\|\s*$/gm, "")
+    // Remove table pipe delimiters but keep cell content
+    .replace(/^\|(.+)\|$/gm, (_m, cells: string) => cells.split("|").map((c: string) => c.trim()).filter(Boolean).join(" · "))
     // Remove blockquotes
     .replace(/^>\s+/gm, "")
     // Remove list markers
