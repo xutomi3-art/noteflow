@@ -44,7 +44,7 @@ export default function MarkdownContent({ content, className }: MarkdownContentP
           className="border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
           {...props}
         >
-          {children}
+          {processCitations(children)}
         </td>
       ),
       h1: ({ children, ...props }) => (
@@ -82,6 +82,27 @@ export default function MarkdownContent({ content, className }: MarkdownContentP
           {children}
         </strong>
       ),
+      code: ({ children, className, ...props }) => {
+        // Block code fences have a language className like "language-xxx"
+        const isBlock = className?.startsWith("language-");
+        if (isBlock) {
+          return (
+            <pre className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 overflow-x-auto my-3">
+              <code className="text-xs text-slate-700 font-mono" {...props}>
+                {children}
+              </code>
+            </pre>
+          );
+        }
+        return (
+          <code
+            className="bg-slate-100 text-slate-700 text-[11px] font-mono px-1 py-0.5 rounded"
+            {...props}
+          >
+            {children}
+          </code>
+        );
+      },
     }),
     [],
   );

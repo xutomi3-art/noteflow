@@ -85,39 +85,6 @@ function statusLabel(status: Source["status"]): string {
   return "";
 }
 
-/** Render markdown-ish content with citation badges [1] [2] */
-function renderContent(text: string): string {
-  const lines = text.split("\n");
-  const htmlLines = lines.map((line) => {
-    // Headings (match deeper levels first so #### doesn't match ###)
-    if (/^#{4,} (.+)/.test(line))
-      return `<h5 class="font-semibold text-[13px] text-slate-700 mt-2 mb-1">${line.replace(/^#{4,} /, "")}</h5>`;
-    if (/^### (.+)/.test(line))
-      return `<h4 class="font-semibold text-sm text-slate-800 mt-3 mb-1">${line.replace(/^### /, "")}</h4>`;
-    if (/^## (.+)/.test(line))
-      return `<h3 class="font-semibold text-base text-slate-900 mt-4 mb-1">${line.replace(/^## /, "")}</h3>`;
-    if (/^# (.+)/.test(line))
-      return `<h2 class="font-bold text-lg text-slate-900 mt-4 mb-2">${line.replace(/^# /, "")}</h2>`;
-    // List items
-    if (/^[-*] (.+)/.test(line))
-      return `<li class="ml-4 list-disc text-sm">${line.replace(/^[-*] /, "")}</li>`;
-    if (/^\d+\. (.+)/.test(line))
-      return `<li class="ml-4 list-decimal text-sm">${line.replace(/^\d+\. /, "")}</li>`;
-    // Empty line
-    if (line.trim() === "") return "<br />";
-    // Normal text
-    return `<p class="text-sm leading-relaxed">${line}</p>`;
-  });
-  let html = htmlLines.join("")
-    // Bold
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    // Inline citations [n]
-    .replace(
-      /\[(\d+)\]/g,
-      '<span class="citation-badge inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-[9px] text-slate-500 ml-0.5 cursor-pointer hover:bg-slate-200 hover:ring-1 hover:ring-slate-300" data-citation-index="$1">$1</span>',
-    );
-  return html;
-}
 
 /** Renders mind map content: JSON as visual mind map, otherwise markdown */
 function MindMapContent({ content }: { content: string }) {
@@ -149,6 +116,142 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+/**
+ * Strip markdown syntax to get a plain-text preview string.
+ * Used for collapsed note previews where line-clamp needs plain text.
+ */
+function stripMarkdownToText(markdown: string): string {
+  return markdown
+    // Remove headings markers
+    .replace(/^#{1,6}\s+/gm, "")
+    // Remove bold/italic
+    .replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")
+    .replace(/_{1,3}([^_]+)_{1,3}/g, "$1")
+    // Remove inline code
+    .replace(/`([^`]+)`/g, "$1")
+    // Remove fenced code blocks
+    .replace(/^```[\s\S]*?^```/gm, "")
+    // Remove blockquotes
+    .replace(/^>\s+/gm, "")
+    // Remove list markers
+    .replace(/^[-*+]\s+/gm, "")
+    .replace(/^\d+\.\s+/gm, "")
+    // Remove links, keep text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // Remove images
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    // Collapse multiple newlines to a single space
+    .replace(/\n+/g, " ")
+    .trim();
+}
+
+/**
+ * Renders a saved note: detects JSON mindmap and shows a tree view,
+ * otherwise renders with MarkdownContent.
+ */
+function NoteContent({ content, className }: { content: string; className?: string }) {
+  // Check if this note contains raw JSON mindmap data
+  let raw = content.trim();
+  // Strip a leading label line like "**Mind Map**\n\n" before the JSON
+  const jsonStart = raw.indexOf("{");
+  const jsonFragment = jsonStart >= 0 ? raw.slice(jsonStart) : raw;
+  if (jsonFragment.startsWith("{") || jsonFragment.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(jsonFragment);
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed) &&
+        (Array.isArray((parsed as Record<string, unknown>).nodes) ||
+          Array.isArray((parsed as Record<string, unknown>).children))
+      ) {
+        // It's a mindmap JSON — render as indented tree
+        const prefix = raw.slice(0, jsonStart).trim();
+        return (
+          <div className={className}>
+            {prefix && (
+              <MarkdownContent content={prefix} className="text-[13px] text-slate-700 leading-relaxed mb-2" />
+            )}
+            <MindMapTreeView data={parsed} />
+          </div>
+        );
+      }
+    } catch {
+      // Not valid JSON, fall through to MarkdownContent
+    }
+  }
+  return <MarkdownContent content={content} className={className} />;
+}
+
+interface MindMapNode {
+  id?: string | number;
+  label?: string;
+  name?: string;
+  topic?: string;
+  title?: string;
+  text?: string;
+  level?: number;
+  children?: MindMapNode[];
+  nodes?: MindMapNode[];
+  items?: MindMapNode[];
+  parent?: string | number;
+}
+
+const TREE_COLORS = ["#7c3aed", "#4f46e5", "#0891b2", "#0d9488", "#059669", "#ca8a04"];
+
+function MindMapTreeView({ data }: { data: unknown }) {
+  const nodes = Array.isArray((data as Record<string, unknown>).nodes)
+    ? ((data as Record<string, unknown>).nodes as MindMapNode[])
+    : Array.isArray((data as Record<string, unknown>).children)
+    ? ((data as Record<string, unknown>).children as MindMapNode[])
+    : [];
+
+  if (nodes.length === 0) return null;
+
+  // Find root nodes (no parent or level === 0)
+  const rootNodes = nodes.filter((n) => !n.parent && (n.level === undefined || n.level === 0));
+  if (rootNodes.length === 0) return null;
+
+  function renderNode(node: MindMapNode, depth: number): React.ReactNode {
+    const label = node.label || node.name || node.topic || node.title || node.text || "";
+    const color = depth === 0 ? "#e11d48" : TREE_COLORS[(depth - 1) % TREE_COLORS.length];
+    const children = nodes.filter(
+      (n) =>
+        n.parent !== undefined &&
+        String(n.parent) === String(node.id ?? label) &&
+        n !== node
+    );
+
+    return (
+      <div key={`${label}-${depth}`} style={{ marginLeft: depth * 16 }}>
+        <div className="flex items-center gap-1.5 py-0.5">
+          <span
+            className="inline-block rounded-full shrink-0"
+            style={{
+              width: depth === 0 ? 8 : 6,
+              height: depth === 0 ? 8 : 6,
+              background: color,
+            }}
+          />
+          <span
+            className="text-[12px] leading-snug"
+            style={{ color: depth === 0 ? "#111827" : "#374151", fontWeight: depth === 0 ? 600 : 400 }}
+          >
+            {label}
+          </span>
+        </div>
+        {children.map((child) => renderNode(child, depth + 1))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="py-1 space-y-0.5">
+      {rootNodes.map((n) => renderNode(n, 0))}
+    </div>
+  );
 }
 
 /* ─── component ─── */
@@ -184,8 +287,9 @@ export default function NotebookPage() {
   const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [pendingUploads, setPendingUploads] = useState<{ name: string; status: 'uploading' | 'done' | 'error' | 'cancelled' }[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<{ id: number; name: string; status: 'uploading' | 'done' | 'error' | 'cancelled' }[]>([]);
   const uploadControllersRef = useRef<Map<number, AbortController>>(new Map());
+  const uploadIdCounterRef = useRef(0);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -284,29 +388,32 @@ export default function NotebookPage() {
     const urls = consumePendingUploadUrls();
     if (files.length === 0 && urls.length === 0) return;
 
-    const fileUploads = files.map(f => ({ name: f.name, status: 'uploading' as const }));
-    const urlUploads = urls.map(u => ({ name: u, status: 'uploading' as const }));
+    const fileIds = files.map(() => ++uploadIdCounterRef.current);
+    const urlIds = urls.map(() => ++uploadIdCounterRef.current);
+    const fileUploads = files.map((f, i) => ({ id: fileIds[i], name: f.name, status: 'uploading' as const }));
+    const urlUploads = urls.map((u, i) => ({ id: urlIds[i], name: u, status: 'uploading' as const }));
     setPendingUploads([...fileUploads, ...urlUploads]);
 
     (async () => {
       // Upload files first
       for (let i = 0; i < files.length; i++) {
+        const uploadId = fileIds[i];
         try {
           await uploadSource(id, files[i]);
-          setPendingUploads(prev => prev.map((u, idx) => idx === i ? { ...u, status: 'done' } : u));
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const } : u));
         } catch {
-          setPendingUploads(prev => prev.map((u, idx) => idx === i ? { ...u, status: 'error' } : u));
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
         }
       }
       // Then add URLs
       for (let i = 0; i < urls.length; i++) {
-        const idx = files.length + i;
+        const uploadId = urlIds[i];
         try {
           await api.addUrlSource(id, urls[i]);
           fetchSources(id);
-          setPendingUploads(prev => prev.map((u, j) => j === idx ? { ...u, status: 'done' } : u));
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const } : u));
         } catch {
-          setPendingUploads(prev => prev.map((u, j) => j === idx ? { ...u, status: 'error' } : u));
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
         }
       }
       // Clear pending uploads after a delay so user can see final states
@@ -479,32 +586,30 @@ export default function NotebookPage() {
       if (rejected.length > 0) {
         alert(`The following files exceed the 50 MB limit and were skipped:\n\n${rejected.join('\n')}`);
       }
+      // Assign stable unique IDs to each upload so cancel lookups are always correct
+      const uploadIds = accepted.map(() => ++uploadIdCounterRef.current);
       // Show uploading state immediately
-      const newUploads = accepted.map(f => ({ name: f.name, status: 'uploading' as const }));
-      setPendingUploads(prev => {
-        const updated = [...prev, ...newUploads];
-        return updated;
-      });
-      const startIdx = pendingUploads.length;
+      const newUploads = accepted.map((f, i) => ({ id: uploadIds[i], name: f.name, status: 'uploading' as const }));
+      setPendingUploads(prev => [...prev, ...newUploads]);
       for (let i = 0; i < accepted.length; i++) {
         const controller = new AbortController();
-        const uploadIdx = startIdx + i;
-        uploadControllersRef.current.set(uploadIdx, controller);
+        const uploadId = uploadIds[i];
+        uploadControllersRef.current.set(uploadId, controller);
         try {
           await api.uploadSource(id, accepted[i], controller.signal);
           fetchSources(id);
-          setPendingUploads(prev => prev.map((u, idx) => idx === uploadIdx ? { ...u, status: 'done' as const } : u));
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const } : u));
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') {
-            setPendingUploads(prev => prev.map((u, idx) => idx === uploadIdx ? { ...u, status: 'cancelled' as const } : u));
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'cancelled' as const } : u));
           } else {
-            setPendingUploads(prev => prev.map((u, idx) => idx === uploadIdx ? { ...u, status: 'error' as const } : u));
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
           }
         } finally {
-          uploadControllersRef.current.delete(uploadIdx);
+          uploadControllersRef.current.delete(uploadId);
         }
       }
-      // Clear completed uploads after 2s
+      // Clear completed/cancelled/error uploads after 2s, keep any still-uploading ones
       setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading')), 2000);
       e.target.value = "";
     },
@@ -950,11 +1055,12 @@ export default function NotebookPage() {
                     <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                   </div>
                 ) : activeSourceContent ? (
-                  <div
-                    ref={sourceContentRef}
-                    className="prose prose-sm prose-slate max-w-none text-[13px] leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: renderContent(activeSourceContent) }}
-                  />
+                  <div ref={sourceContentRef}>
+                    <MarkdownContent
+                      content={activeSourceContent}
+                      className="text-[13px] leading-relaxed"
+                    />
+                  </div>
                 ) : (
                   <p className="text-sm text-slate-400 text-center py-8">Content not available</p>
                 )}
@@ -1073,8 +1179,8 @@ export default function NotebookPage() {
 
             <div className="space-y-1">
               {/* Pending uploads — shown inline with sources */}
-              {pendingUploads.map((upload, i) => (
-                <div key={`pending-${i}`} className="relative overflow-hidden rounded-xl">
+              {pendingUploads.map((upload) => (
+                <div key={`pending-${upload.id}`} className="relative overflow-hidden rounded-xl">
                   {upload.status === 'uploading' && (
                     <div className="absolute inset-0 bg-[#dcfce7] animate-pulse" />
                   )}
@@ -1105,7 +1211,7 @@ export default function NotebookPage() {
                     {upload.status === 'uploading' && (
                       <button
                         onClick={() => {
-                          const controller = uploadControllersRef.current.get(i);
+                          const controller = uploadControllersRef.current.get(upload.id);
                           if (controller) controller.abort();
                         }}
                         className="p-1 text-slate-400 hover:text-red-500 transition-colors shrink-0"
@@ -1740,14 +1846,14 @@ export default function NotebookPage() {
                           <FileText className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
                           <div className="min-w-0 flex-1">
                             {isExpanded ? (
-                              <MarkdownContent
+                              <NoteContent
                                 content={note.content}
                                 className="text-[13px] text-slate-700 leading-relaxed"
                               />
                             ) : (
-                              <div className="text-[13px] font-medium text-slate-800 line-clamp-2">
-                                <MarkdownContent content={note.content} />
-                              </div>
+                              <p className="text-[13px] text-slate-700 leading-snug line-clamp-2">
+                                {stripMarkdownToText(note.content)}
+                              </p>
                             )}
                             <p className="text-[11px] text-slate-500 mt-0.5">
                               {timeAgo(note.created_at)}
