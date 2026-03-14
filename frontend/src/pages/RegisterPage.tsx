@@ -135,7 +135,10 @@ export default function RegisterPage() {
         {/* Footer link */}
         <p className="text-center text-sm text-gray-500 mt-6">
           Already have an account?{' '}
-          <Link to="/login" className="text-[#5b8c15] font-medium hover:underline">
+          <Link
+            to={searchParams.get('redirect') ? `/login?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/login'}
+            className="text-[#5b8c15] font-medium hover:underline"
+          >
             Sign in
           </Link>
         </p>

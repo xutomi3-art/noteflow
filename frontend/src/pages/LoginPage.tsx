@@ -124,7 +124,10 @@ export default function LoginPage() {
         {/* Footer link */}
         <p className="text-center text-sm text-gray-500 mt-6">
           Don't have an account?{' '}
-          <Link to="/register" className="text-[#5b8c15] font-medium hover:underline">
+          <Link
+            to={searchParams.get('redirect') ? `/register?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/register'}
+            className="text-[#5b8c15] font-medium hover:underline"
+          >
             Create one
           </Link>
         </p>
