@@ -247,3 +247,94 @@ async def process_document(
                     err_db, sid, "failed", error_message=str(e)
                 )
             await _notify(notebook_id, source_id, "failed", error=str(e))
+
+
+async def recover_stuck_sources() -> None:
+    """Recover sources stuck in processing states after a backend restart.
+
+    Checks RAGFlow for actual status and updates accordingly.
+    """
+    from backend.models.source import Source
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(Source).where(Source.status.in_(["uploading", "parsing", "vectorizing"]))
+        )
+        stuck = list(result.scalars().all())
+        if not stuck:
+            return
+
+        logger.info("Found %d stuck sources, checking RAGFlow status...", len(stuck))
+        for source in stuck:
+            try:
+                if not source.ragflow_dataset_id or not source.ragflow_doc_id:
+                    # No RAGFlow IDs — was stuck before reaching RAGFlow, mark failed
+                    await update_source_status(
+                        db, source.id, "failed", error_message="Interrupted during processing"
+                    )
+                    logger.info("Marked %s as failed (no RAGFlow IDs)", source.filename)
+                    continue
+
+                doc_status = await ragflow_client.get_document_status(
+                    source.ragflow_dataset_id, source.ragflow_doc_id
+                )
+                if doc_status is None:
+                    await update_source_status(
+                        db, source.id, "failed", error_message="RAGFlow document not found"
+                    )
+                    logger.info("Marked %s as failed (not found in RAGFlow)", source.filename)
+                    continue
+
+                run = doc_status.get("run", "UNSTART")
+                chunks = doc_status.get("chunk_count", 0)
+
+                if run in ("DONE", "SUCCEEDED") or chunks > 0:
+                    await update_source_status(db, source.id, "ready")
+                    logger.info("Recovered %s → ready (run=%s, chunks=%d)", source.filename, run, chunks)
+                elif run in ("FAIL", "FAILED", "CANCEL"):
+                    await update_source_status(
+                        db, source.id, "failed", error_message=f"RAGFlow status: {run}"
+                    )
+                    logger.info("Marked %s as failed (RAGFlow %s)", source.filename, run)
+                else:
+                    # Still processing in RAGFlow — spawn a background poll
+                    logger.info("Source %s still processing in RAGFlow (run=%s), spawning poll...", source.filename, run)
+                    asyncio.create_task(_poll_and_update(source, db))
+            except Exception as e:
+                logger.error("Error recovering source %s: %s", source.filename, e)
+
+
+async def _poll_and_update(source: "Source", db: "AsyncSession") -> None:
+    """Poll RAGFlow for a stuck source until done or timeout."""
+    from backend.models.source import Source
+
+    for _ in range(60):
+        await asyncio.sleep(5)
+        try:
+            doc_status = await ragflow_client.get_document_status(
+                source.ragflow_dataset_id, source.ragflow_doc_id
+            )
+            if doc_status is None:
+                continue
+            run = doc_status.get("run", "UNSTART")
+            chunks = doc_status.get("chunk_count", 0)
+            if run in ("DONE", "SUCCEEDED") or chunks > 0:
+                async with async_session() as fresh_db:
+                    await update_source_status(fresh_db, source.id, "ready")
+                logger.info("Poll recovered %s → ready", source.filename)
+                return
+            if run in ("FAIL", "FAILED", "CANCEL"):
+                async with async_session() as fresh_db:
+                    await update_source_status(
+                        fresh_db, source.id, "failed", error_message=f"RAGFlow: {run}"
+                    )
+                return
+        except Exception:
+            pass
+
+    # Timed out — mark as failed
+    async with async_session() as fresh_db:
+        await update_source_status(
+            fresh_db, source.id, "failed", error_message="Recovery poll timed out"
+        )
+    logger.warning("Recovery poll timed out for %s", source.filename)

@@ -42,6 +42,13 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     await bootstrap_admin()
 
+    # Recover sources stuck in processing states after restart
+    from backend.services.document_pipeline import recover_stuck_sources
+    try:
+        await recover_stuck_sources()
+    except Exception as e:
+        logger.error("Failed to recover stuck sources: %s", e)
+
     # Initialize ASR service
     from backend.services.asr_service import asr_service
     asr_service.configure(

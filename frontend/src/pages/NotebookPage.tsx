@@ -1236,7 +1236,7 @@ export default function NotebookPage() {
                         {upload.name}
                       </p>
                       {upload.status === 'uploading' && (
-                        <p className="text-[11px] text-[#5b8c15] font-medium">uploading... {upload.progress}%</p>
+                        <p className="text-[11px] text-[#5b8c15] font-medium">Uploading {upload.progress}%</p>
                       )}
                       {upload.status === 'processing' && processingLabel && (
                         <p className="text-[11px] text-amber-500 font-medium">{processingLabel}</p>
