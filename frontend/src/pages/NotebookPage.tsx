@@ -148,6 +148,32 @@ const LEVEL_COLORS = [
   "bg-emerald-400",
 ];
 
+function buildTreeFromFlat(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
+  // Convert flat adjacency list (id/label/level/parent) to nested tree
+  const map = new Map<string, Record<string, unknown>>();
+  const roots: Record<string, unknown>[] = [];
+  for (const n of nodes) {
+    const copy = { ...n, children: [] as Record<string, unknown>[] };
+    map.set(String(n.id || ""), copy);
+  }
+  for (const n of nodes) {
+    const copy = map.get(String(n.id || ""))!;
+    const parentId = n.parent as string | undefined;
+    if (parentId && map.has(parentId)) {
+      (map.get(parentId)!.children as Record<string, unknown>[]).push(copy);
+    } else {
+      roots.push(copy);
+    }
+  }
+  return roots;
+}
+
+function isFlatNodeList(arr: unknown[]): boolean {
+  if (arr.length === 0) return false;
+  const first = arr[0];
+  return !!first && typeof first === "object" && ("parent" in (first as object) || "level" in (first as object));
+}
+
 function MindMapTree({ data }: { data: unknown }) {
   const renderNode = (node: unknown, depth: number = 0): React.ReactNode => {
     if (typeof node === "string") {
@@ -159,7 +185,8 @@ function MindMapTree({ data }: { data: unknown }) {
       );
     }
     if (Array.isArray(node)) {
-      return <>{node.map((item, i) => <React.Fragment key={i}>{renderNode(item, depth)}</React.Fragment>)}</>;
+      const items = isFlatNodeList(node) ? buildTreeFromFlat(node as Record<string, unknown>[]) : node;
+      return <>{items.map((item, i) => <React.Fragment key={i}>{renderNode(item, depth)}</React.Fragment>)}</>;
     }
     if (node && typeof node === "object") {
       const obj = node as Record<string, unknown>;
