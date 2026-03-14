@@ -1,283 +1,221 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useCallback, useMemo } from "react";
+import {
+  ReactFlow,
+  type Node,
+  type Edge,
+  type NodeTypes,
+  Handle,
+  Position,
+  useNodesState,
+  useEdgesState,
+  ReactFlowProvider,
+} from "@xyflow/react";
+import dagre from "dagre";
+import "@xyflow/react/dist/style.css";
 
-/* ─── Types ─── */
-interface TreeNode {
-  label: string;
-  children: TreeNode[];
-}
+/* ─── Colors ─── */
+const ROOT_COLOR = "#e11d48";
+const DEPTH_COLORS = [
+  "#7c3aed",
+  "#4f46e5",
+  "#0891b2",
+  "#0d9488",
+  "#059669",
+  "#ca8a04",
+];
 
-interface LayoutNode {
-  label: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  children: LayoutNode[];
-  depth: number;
-}
-
-/* ─── Constants ─── */
-const NODE_H = 32;
-const NODE_PAD_X = 16;
-const NODE_PAD_Y = 8;
-const H_GAP = 32; // horizontal gap between levels
-const V_GAP = 8;  // vertical gap between siblings
-const ROOT_COLOR = "#e11d48"; // rose-600
-const DEPTH_COLORS = ["#7c3aed", "#4f46e5", "#0891b2", "#0d9488", "#059669", "#ca8a04"];
-
-/* ─── Helpers: parse raw LLM data → TreeNode[] ─── */
-function isFlatNodeList(arr: unknown[]): boolean {
-  if (arr.length === 0) return false;
-  const first = arr[0];
-  return (
-    !!first &&
-    typeof first === "object" &&
-    ("parent" in (first as object) || "level" in (first as object))
-  );
-}
-
-function buildTreeFromFlat(
-  nodes: Record<string, unknown>[]
-): Record<string, unknown>[] {
-  const map = new Map<string, Record<string, unknown>>();
-  const roots: Record<string, unknown>[] = [];
-  for (const n of nodes) {
-    map.set(String(n.id || ""), { ...n, children: [] as Record<string, unknown>[] });
-  }
-  for (const n of nodes) {
-    const copy = map.get(String(n.id || ""))!;
-    const parentId = n.parent as string | undefined;
-    if (parentId && map.has(parentId)) {
-      (map.get(parentId)!.children as Record<string, unknown>[]).push(copy);
-    } else {
-      roots.push(copy);
-    }
-  }
-  return roots;
-}
-
-function toTreeNodes(data: unknown): TreeNode[] {
-  if (!data) return [];
-
-  // Array of flat nodes
-  if (Array.isArray(data)) {
-    const items = isFlatNodeList(data)
-      ? buildTreeFromFlat(data as Record<string, unknown>[])
-      : data;
-    return items.map(convertObj).filter(Boolean) as TreeNode[];
-  }
-
-  if (typeof data === "object") {
-    const obj = data as Record<string, unknown>;
-    const label = (obj.label || obj.name || obj.topic || obj.title || obj.text || "") as string;
-    const children = (obj.children || obj.nodes || obj.items || []) as unknown[];
-
-    // Wrapper with no label — unwrap children
-    if (!label && Array.isArray(children) && children.length > 0) {
-      const items = isFlatNodeList(children as unknown[])
-        ? buildTreeFromFlat(children as Record<string, unknown>[])
-        : children;
-      return items.map(convertObj).filter(Boolean) as TreeNode[];
-    }
-
-    if (label) {
-      return [convertObj(obj)].filter(Boolean) as TreeNode[];
-    }
-  }
-
-  return [];
-}
-
-function convertObj(raw: unknown): TreeNode | null {
-  if (typeof raw === "string") return { label: raw, children: [] };
-  if (!raw || typeof raw !== "object") return null;
-  const obj = raw as Record<string, unknown>;
-  const label = (obj.label || obj.name || obj.topic || obj.title || obj.text || "") as string;
-  if (!label) return null;
-  const rawChildren = (obj.children || obj.nodes || obj.items || []) as unknown[];
-  const children = Array.isArray(rawChildren)
-    ? rawChildren.map(convertObj).filter(Boolean) as TreeNode[]
-    : [];
-  return { label, children };
-}
-
-/* ─── Layout engine: compute x/y positions ─── */
-function measureText(text: string, fontSize: number): number {
-  // Approximate: avg char width ~0.55 * fontSize for sans-serif
-  return text.length * fontSize * 0.55 + NODE_PAD_X * 2;
-}
-
-function layoutTree(roots: TreeNode[]): { nodes: LayoutNode[]; width: number; height: number } {
-  if (roots.length === 0) return { nodes: [], width: 0, height: 0 };
-
-  // If multiple roots, create a virtual root
-  const singleRoot: TreeNode =
-    roots.length === 1 ? roots[0] : { label: "", children: roots };
-
-  let maxX = 0;
-  let currentY = 0;
-
-  function layout(node: TreeNode, depth: number, startX: number): LayoutNode {
-    const fontSize = depth === 0 ? 14 : 12;
-    const width = Math.max(measureText(node.label, fontSize), 60);
-    const height = NODE_H;
-    const x = startX;
-
-    if (node.children.length === 0) {
-      const y = currentY;
-      currentY += height + V_GAP;
-      maxX = Math.max(maxX, x + width);
-      return { label: node.label, x, y, width, height, children: [], depth };
-    }
-
-    const childX = x + width + H_GAP;
-    const childNodes = node.children.map((c) => layout(c, depth + 1, childX));
-
-    // Center parent vertically among children
-    const firstChild = childNodes[0];
-    const lastChild = childNodes[childNodes.length - 1];
-    const childTop = firstChild.y;
-    const childBottom = lastChild.y + lastChild.height;
-    const y = childTop + (childBottom - childTop) / 2 - height / 2;
-
-    maxX = Math.max(maxX, x + width);
-
-    return { label: node.label, x, y, width, height, children: childNodes, depth };
-  }
-
-  const root = layout(singleRoot, 0, 0);
-
-  // If virtual root (no label), use children directly
-  const resultNodes = root.label === "" ? root.children : [root];
-
-  return {
-    nodes: resultNodes,
-    width: maxX + 20,
-    height: currentY > 0 ? currentY - V_GAP + 20 : 100,
-  };
-}
-
-/* ─── Render ─── */
 function getNodeColor(depth: number): string {
   if (depth === 0) return ROOT_COLOR;
   return DEPTH_COLORS[(depth - 1) % DEPTH_COLORS.length];
 }
 
-function renderEdges(nodes: LayoutNode[]): React.ReactNode[] {
-  const edges: React.ReactNode[] = [];
+/* ─── Custom Node ─── */
+function MindMapNode({ data }: { data: { label: string; depth: number } }) {
+  const color = getNodeColor(data.depth);
+  const isRoot = data.depth === 0;
 
-  function walk(node: LayoutNode) {
-    for (const child of node.children) {
-      const x1 = node.x + node.width;
-      const y1 = node.y + node.height / 2;
-      const x2 = child.x;
-      const y2 = child.y + child.height / 2;
-      const midX = (x1 + x2) / 2;
+  return (
+    <div
+      style={{
+        background: isRoot ? color : `${color}14`,
+        border: isRoot ? "none" : `1.5px solid ${color}50`,
+        color: isRoot ? "#fff" : color,
+        borderRadius: 999,
+        padding: "6px 16px",
+        fontSize: isRoot ? 13 : 11,
+        fontWeight: isRoot ? 600 : 500,
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        whiteSpace: "nowrap",
+        cursor: "grab",
+        boxShadow: isRoot
+          ? `0 2px 8px ${color}40`
+          : `0 1px 3px ${color}15`,
+      }}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{ opacity: 0, width: 1, height: 1 }}
+      />
+      {data.label}
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{ opacity: 0, width: 1, height: 1 }}
+      />
+    </div>
+  );
+}
 
-      edges.push(
-        <path
-          key={`${node.label}-${child.label}-${child.y}`}
-          d={`M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}`}
-          fill="none"
-          stroke={getNodeColor(child.depth)}
-          strokeWidth={1.5}
-          strokeOpacity={0.4}
-        />
-      );
-      walk(child);
+const nodeTypes: NodeTypes = { mindmap: MindMapNode };
+
+/* ─── Parse LLM data ─── */
+interface FlatNode {
+  id: string;
+  label: string;
+  level: number;
+  parent?: string;
+}
+
+function parseFlatNodes(data: unknown): FlatNode[] {
+  if (!data) return [];
+
+  let raw: unknown[] = [];
+
+  if (Array.isArray(data)) {
+    raw = data;
+  } else if (typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+    const arr = obj.nodes || obj.children || obj.items;
+    if (Array.isArray(arr)) raw = arr;
+    else {
+      // Single root with label
+      const label = (obj.label || obj.name || obj.topic || obj.title || "") as string;
+      if (label) return [{ id: "root", label, level: 0 }];
+      return [];
     }
   }
 
-  nodes.forEach(walk);
-  return edges;
+  return raw
+    .filter((n): n is Record<string, unknown> => !!n && typeof n === "object")
+    .map((n, i) => ({
+      id: String(n.id || `n${i}`),
+      label: String(n.label || n.name || n.topic || n.title || n.text || ""),
+      level: typeof n.level === "number" ? n.level : 0,
+      parent: n.parent ? String(n.parent) : undefined,
+    }))
+    .filter((n) => n.label);
 }
 
-function renderNodes(nodes: LayoutNode[]): React.ReactNode[] {
-  const elements: React.ReactNode[] = [];
+/* ─── Dagre layout ─── */
+function buildGraph(flatNodes: FlatNode[]): { nodes: Node[]; edges: Edge[] } {
+  if (flatNodes.length === 0) return { nodes: [], edges: [] };
 
-  function walk(node: LayoutNode) {
-    const color = getNodeColor(node.depth);
-    const isRoot = node.depth === 0;
-    const fontSize = isRoot ? 13 : 11;
-    const fontWeight = isRoot ? 600 : 500;
-    const bgOpacity = isRoot ? 1 : 0.08;
-    const textColor = isRoot ? "#fff" : color;
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({
+    rankdir: "LR",
+    nodesep: 12,
+    ranksep: 60,
+    marginx: 20,
+    marginy: 20,
+  });
+  g.setDefaultEdgeLabel(() => ({}));
 
-    elements.push(
-      <g key={`${node.label}-${node.x}-${node.y}`}>
-        <rect
-          x={node.x}
-          y={node.y}
-          width={node.width}
-          height={node.height}
-          rx={node.height / 2}
-          fill={isRoot ? color : color}
-          fillOpacity={bgOpacity}
-          stroke={color}
-          strokeWidth={isRoot ? 0 : 1}
-          strokeOpacity={0.3}
-        />
-        <text
-          x={node.x + node.width / 2}
-          y={node.y + node.height / 2}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill={textColor}
-          fontSize={fontSize}
-          fontWeight={fontWeight}
-          fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-        >
-          {node.label}
-        </text>
-      </g>
-    );
-
-    node.children.forEach(walk);
+  // Estimate node widths
+  for (const n of flatNodes) {
+    const isRoot = n.level === 0;
+    const charWidth = isRoot ? 8 : 7;
+    const width = Math.max(n.label.length * charWidth + 32, 60);
+    const height = isRoot ? 36 : 30;
+    g.setNode(n.id, { width, height });
   }
 
-  nodes.forEach(walk);
-  return elements;
+  const edges: Edge[] = [];
+  for (const n of flatNodes) {
+    if (n.parent) {
+      const edgeId = `${n.parent}-${n.id}`;
+      g.setEdge(n.parent, n.id);
+      edges.push({
+        id: edgeId,
+        source: n.parent,
+        target: n.id,
+        type: "smoothstep",
+        style: {
+          stroke: getNodeColor(n.level),
+          strokeWidth: 1.5,
+          opacity: 0.5,
+        },
+        animated: false,
+      });
+    }
+  }
+
+  dagre.layout(g);
+
+  const nodes: Node[] = flatNodes.map((n) => {
+    const pos = g.node(n.id);
+    return {
+      id: n.id,
+      type: "mindmap",
+      position: { x: pos.x - pos.width / 2, y: pos.y - pos.height / 2 },
+      data: { label: n.label, depth: n.level },
+    };
+  });
+
+  return { nodes, edges };
 }
 
-/* ─── Main component ─── */
-export default function MindMap({ data }: { data: unknown }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(400);
+/* ─── Flow component ─── */
+function MindMapFlow({ data }: { data: unknown }) {
+  const { nodes: initialNodes, edges: initialEdges } = useMemo(
+    () => buildGraph(parseFlatNodes(data)),
+    [data],
+  );
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const obs = new ResizeObserver((entries) => {
-      for (const e of entries) setContainerWidth(e.contentRect.width);
-    });
-    obs.observe(containerRef.current);
-    return () => obs.disconnect();
+  const [nodes, , onNodesChange] = useNodesState(initialNodes);
+  const [edges] = useEdgesState(initialEdges);
+
+  const onInit = useCallback((instance: { fitView: () => void }) => {
+    setTimeout(() => instance.fitView(), 50);
   }, []);
 
-  const roots = toTreeNodes(data);
-  const { nodes, width, height } = layoutTree(roots);
-
-  if (nodes.length === 0) {
-    return <div className="text-[13px] text-slate-400 py-4 text-center">No mind map data</div>;
+  if (initialNodes.length === 0) {
+    return (
+      <div className="text-[13px] text-slate-400 py-4 text-center">
+        No mind map data
+      </div>
+    );
   }
 
-  // Compute scale to fit horizontally
-  const padding = 16;
-  const svgWidth = width + padding * 2;
-  const svgHeight = height + padding * 2;
-  const scale = Math.min(1, (containerWidth - 8) / svgWidth);
-  const displayHeight = svgHeight * scale;
-
   return (
-    <div ref={containerRef} className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: 400 }}>
-      <svg
-        width={svgWidth * scale}
-        height={displayHeight}
-        viewBox={`${-padding} ${-padding} ${svgWidth} ${svgHeight}`}
-        className="select-none"
-      >
-        {renderEdges(nodes)}
-        {renderNodes(nodes)}
-      </svg>
+    <div style={{ width: "100%", height: 380 }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        nodeTypes={nodeTypes}
+        onInit={onInit}
+        fitView
+        minZoom={0.3}
+        maxZoom={2}
+        proOptions={{ hideAttribution: true }}
+        nodesDraggable
+        panOnDrag
+        zoomOnScroll
+        zoomOnPinch
+        panOnScroll={false}
+        style={{ background: "transparent" }}
+      />
     </div>
+  );
+}
+
+/* ─── Wrapper with provider ─── */
+export default function MindMap({ data }: { data: unknown }) {
+  return (
+    <ReactFlowProvider>
+      <MindMapFlow data={data} />
+    </ReactFlowProvider>
   );
 }

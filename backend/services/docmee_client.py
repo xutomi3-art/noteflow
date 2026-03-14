@@ -67,7 +67,7 @@ class DocmeeClient:
         if not token:
             return {"records": [], "total": 0}
         try:
-            body: dict[str, Any] = {"page": {"current": page, "size": size}}
+            body: dict[str, Any] = {"page": page, "size": size}
             if filters:
                 body.update(filters)
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
@@ -79,20 +79,31 @@ class DocmeeClient:
                 resp.raise_for_status()
                 data = resp.json()
                 if data.get("code") != 0:
+                    logger.warning("Docmee list_templates code=%s: %s", data.get("code"), data.get("message"))
                     return {"records": [], "total": 0}
-                page_data = data.get("data", {})
-                records = page_data.get("records", [])
-                # Add token to coverUrl for image auth
+                raw = data.get("data", [])
+                # API returns array directly or paginated object
+                records = raw if isinstance(raw, list) else raw.get("records", [])
+                total = len(records) if isinstance(raw, list) else raw.get("total", 0)
+                # Resolve coverUrl redirects to get final CDN URLs
+                # chatmee.cn URLs need token and return 302 → Alibaba OSS
                 for r in records:
                     cover = r.get("coverUrl", "")
-                    if cover and "?" not in cover:
-                        r["coverUrl"] = f"{cover}?token={token}"
-                    elif cover:
-                        r["coverUrl"] = f"{cover}&token={token}"
+                    if not cover:
+                        continue
+                    sep = "&" if "?" in cover else "?"
+                    auth_url = f"{cover}{sep}token={token}"
+                    try:
+                        head_resp = await client.head(auth_url, follow_redirects=False)
+                        if head_resp.status_code in (301, 302, 307, 308):
+                            r["coverUrl"] = str(head_resp.headers.get("location", auth_url))
+                        else:
+                            r["coverUrl"] = auth_url
+                    except Exception:
+                        r["coverUrl"] = auth_url
                 return {
                     "records": records,
-                    "total": page_data.get("total", 0),
-                    "pages": page_data.get("pages", 0),
+                    "total": total if total > 0 else len(records),
                 }
         except Exception as e:
             logger.error("Docmee list_templates error: %s", e)
