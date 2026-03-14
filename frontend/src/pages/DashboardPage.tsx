@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [pendingUrls, setPendingUrlsList] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [showUrlInput, setShowUrlInput] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
@@ -157,6 +158,7 @@ export default function DashboardPage() {
     setPendingFiles([]);
     setPendingUrlsList([]);
     setUrlInput('');
+    setUrlError(null);
     setShowUrlInput(false);
     setNotebookName('');
     setIsCreating(false);
@@ -197,12 +199,18 @@ export default function DashboardPage() {
   const handleAddUrl = () => {
     const url = urlInput.trim();
     if (!url) return;
+    try { new URL(url); } catch {
+      setUrlError('Please enter a valid URL starting with http:// or https://');
+      return;
+    }
     if (pendingUrls.includes(url)) {
       setUrlInput('');
+      setUrlError(null);
       return;
     }
     setPendingUrlsList(prev => [...prev, url]);
     setUrlInput('');
+    setUrlError(null);
   };
 
   const removePendingUrl = (index: number) => {
@@ -498,7 +506,7 @@ export default function DashboardPage() {
                   <div className="p-5">
                     <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
                     <div className="text-[13px] text-slate-500 font-medium">
-                      {notebook.user_role !== 'owner' ? `Shared with you` : `${notebook.member_count} members`}
+                      {notebook.user_role !== 'owner' ? `Shared with you` : `${notebook.member_count} ${notebook.member_count === 1 ? 'member' : 'members'}`}
                     </div>
                   </div>
                 </div>
@@ -566,6 +574,7 @@ export default function DashboardPage() {
                     type="text"
                     placeholder="Notebook name"
                     value={notebookName}
+                    maxLength={100}
                     onChange={(e) => setNotebookName(e.target.value)}
                     className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
                     autoFocus
@@ -613,26 +622,31 @@ export default function DashboardPage() {
 
                 {/* URL input field */}
                 {showUrlInput && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input
-                        type="url"
-                        placeholder="https://example.com"
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
-                        className="w-full h-10 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
-                      />
+                  <div className="mt-3">
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="url"
+                          placeholder="https://example.com"
+                          value={urlInput}
+                          onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
+                          className={`w-full h-10 pl-9 pr-3 rounded-xl border bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${urlError ? 'border-red-400 focus:border-red-400 focus:ring-red-400/20' : 'border-slate-200 focus:border-[#5b8c15] focus:ring-[#5b8c15]/20'}`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleAddUrl}
+                        disabled={!urlInput.trim()}
+                        className="h-10 px-4 rounded-xl bg-[#5b8c15] text-white text-sm font-medium hover:bg-[#4a7311] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Add
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleAddUrl}
-                      disabled={!urlInput.trim()}
-                      className="h-10 px-4 rounded-xl bg-[#5b8c15] text-white text-sm font-medium hover:bg-[#4a7311] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      Add
-                    </button>
+                    {urlError && (
+                      <p className="mt-1.5 text-xs text-red-500">{urlError}</p>
+                    )}
                   </div>
                 )}
 

@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
+NAME_MAX_LENGTH = 100
+
 
 class NotebookCreate(BaseModel):
     name: str
@@ -15,6 +17,8 @@ class NotebookCreate(BaseModel):
         stripped = v.strip()
         if not stripped:
             raise ValueError('Notebook name must not be empty or whitespace-only')
+        if len(stripped) > NAME_MAX_LENGTH:
+            raise ValueError(f'Notebook name must not exceed {NAME_MAX_LENGTH} characters')
         return stripped
 
 
@@ -31,6 +35,8 @@ class NotebookUpdate(BaseModel):
         stripped = v.strip()
         if not stripped:
             raise ValueError('Notebook name must not be empty or whitespace-only')
+        if len(stripped) > NAME_MAX_LENGTH:
+            raise ValueError(f'Notebook name must not exceed {NAME_MAX_LENGTH} characters')
         return stripped
 
 
