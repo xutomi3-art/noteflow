@@ -355,10 +355,17 @@ class ApiClient {
 
   // Studio generation
   async generateStudioContent(notebookId: string, contentType: string): Promise<string> {
-    const data = await this.request<{ content: string }>(`/notebooks/${notebookId}/studio/${contentType}`, {
-      method: "POST",
-    });
-    return data.content;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000);
+    try {
+      const data = await this.request<{ content: string }>(`/notebooks/${notebookId}/studio/${contentType}`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+      return data.content;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async generatePodcast(notebookId: string): Promise<string> {
