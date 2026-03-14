@@ -162,6 +162,14 @@ async def remove_member(
     if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, "manage_members"):
         raise HTTPException(status_code=403, detail="Only the owner can remove members")
 
+    # Pending invites have manufactured IDs like "invite-{link_id}"
+    if target_user_id.startswith("invite-"):
+        link_id = target_user_id[len("invite-"):]
+        success = await sharing_service.revoke_invite_link(db, uuid.UUID(link_id))
+        if not success:
+            raise HTTPException(status_code=404, detail="Invite not found")
+        return {"data": {"message": "Invite revoked"}}
+
     success = await sharing_service.remove_member(db, uuid.UUID(notebook_id), uuid.UUID(target_user_id))
     if not success:
         raise HTTPException(status_code=404, detail="Member not found")
