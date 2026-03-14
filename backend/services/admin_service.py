@@ -154,17 +154,39 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     except Exception as e:
         services["mineru"] = {"status": "error", "latency_ms": 0, "message": str(e)}
 
-    # Elasticsearch (RAGFlow's ES on port 9200)
-    services["elasticsearch"] = await _check_http("http://ragflow-es:9200")
+    # Elasticsearch — check cluster health (green/yellow = ok, red = error)
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            start = datetime.now()
+            resp = await client.get("http://ragflow-es:9200/_cluster/health")
+            latency = (datetime.now() - start).total_seconds() * 1000
+            if resp.status_code == 200:
+                cluster = resp.json()
+                es_status = cluster.get("status", "unknown")
+                if es_status in ("green", "yellow"):
+                    services["elasticsearch"] = {"status": "ok", "latency_ms": round(latency), "message": f"cluster: {es_status}"}
+                else:
+                    services["elasticsearch"] = {"status": "error", "latency_ms": round(latency), "message": f"cluster: {es_status}"}
+            else:
+                services["elasticsearch"] = {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}"}
+    except Exception as e:
+        services["elasticsearch"] = {"status": "error", "latency_ms": 0, "message": str(e)}
 
-    # Redis (RAGFlow's Redis on port 6379)
+    # Redis — AUTH + PING, expect +PONG response
     try:
         import socket
         start = datetime.now()
         sock = socket.create_connection(("ragflow-redis", 6379), timeout=3)
+        # RAGFlow Redis requires auth
+        redis_pass = getattr(settings, "RAGFLOW_REDIS_PASSWORD", "infini_rag_flow")
+        sock.sendall(f"AUTH {redis_pass}\r\nPING\r\n".encode())
+        reply = sock.recv(128)
         sock.close()
         latency = (datetime.now() - start).total_seconds() * 1000
-        services["redis"] = {"status": "ok", "latency_ms": round(latency), "message": None}
+        if b"+PONG" in reply:
+            services["redis"] = {"status": "ok", "latency_ms": round(latency), "message": None}
+        else:
+            services["redis"] = {"status": "error", "latency_ms": round(latency), "message": f"unexpected reply: {reply.decode(errors='replace')}"}
     except Exception as e:
         services["redis"] = {"status": "error", "latency_ms": 0, "message": str(e)}
 
