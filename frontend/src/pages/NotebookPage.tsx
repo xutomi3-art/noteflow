@@ -46,6 +46,7 @@ import ShareModal from "@/components/sharing/ShareModal";
 import PptConfigModal from "@/components/PptConfigModal";
 import type { PptConfig } from "@/components/PptConfigModal";
 import MarkdownContent from "@/components/MarkdownContent";
+import MindMap from "@/components/MindMap";
 
 /* ─── helpers ─── */
 
@@ -118,7 +119,7 @@ function renderContent(text: string): string {
   return html;
 }
 
-/** Renders mind map content: JSON as tree view, otherwise markdown */
+/** Renders mind map content: JSON as visual mind map, otherwise markdown */
 function MindMapContent({ content }: { content: string }) {
   let raw = content.trim();
   // Strip ```json fences
@@ -128,7 +129,7 @@ function MindMapContent({ content }: { content: string }) {
 
   try {
     const parsed = JSON.parse(raw);
-    return <MindMapTree data={parsed} />;
+    return <MindMap data={parsed} />;
   } catch {
     return (
       <MarkdownContent
@@ -137,106 +138,6 @@ function MindMapContent({ content }: { content: string }) {
       />
     );
   }
-}
-
-const LEVEL_COLORS = [
-  "bg-pink-400",
-  "bg-purple-400",
-  "bg-indigo-400",
-  "bg-cyan-400",
-  "bg-teal-400",
-  "bg-emerald-400",
-];
-
-function buildTreeFromFlat(nodes: Record<string, unknown>[]): Record<string, unknown>[] {
-  // Convert flat adjacency list (id/label/level/parent) to nested tree
-  const map = new Map<string, Record<string, unknown>>();
-  const roots: Record<string, unknown>[] = [];
-  for (const n of nodes) {
-    const copy = { ...n, children: [] as Record<string, unknown>[] };
-    map.set(String(n.id || ""), copy);
-  }
-  for (const n of nodes) {
-    const copy = map.get(String(n.id || ""))!;
-    const parentId = n.parent as string | undefined;
-    if (parentId && map.has(parentId)) {
-      (map.get(parentId)!.children as Record<string, unknown>[]).push(copy);
-    } else {
-      roots.push(copy);
-    }
-  }
-  return roots;
-}
-
-function isFlatNodeList(arr: unknown[]): boolean {
-  if (arr.length === 0) return false;
-  const first = arr[0];
-  return !!first && typeof first === "object" && ("parent" in (first as object) || "level" in (first as object));
-}
-
-function MindMapTree({ data }: { data: unknown }) {
-  const renderNode = (node: unknown, depth: number = 0): React.ReactNode => {
-    if (typeof node === "string") {
-      return (
-        <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: depth * 16 }}>
-          <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[depth % LEVEL_COLORS.length]}`} />
-          <span className="text-[13px] text-slate-700">{node}</span>
-        </div>
-      );
-    }
-    if (Array.isArray(node)) {
-      const items = isFlatNodeList(node) ? buildTreeFromFlat(node as Record<string, unknown>[]) : node;
-      return <>{items.map((item, i) => <React.Fragment key={i}>{renderNode(item, depth)}</React.Fragment>)}</>;
-    }
-    if (node && typeof node === "object") {
-      const obj = node as Record<string, unknown>;
-      // Check for common mind map structures: label/name/topic + children
-      const label = (obj.label || obj.name || obj.topic || obj.title || obj.text || "") as string;
-      const children = (obj.children || obj.nodes || obj.items || []) as unknown[];
-      if (label) {
-        return (
-          <div>
-            <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: depth * 16 }}>
-              <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[depth % LEVEL_COLORS.length]}`} />
-              <span className={`text-[13px] ${depth === 0 ? "font-semibold text-slate-900" : "text-slate-700"}`}>{label}</span>
-            </div>
-            {Array.isArray(children) && children.length > 0 && (
-              <div>{children.map((child, i) => <React.Fragment key={i}>{renderNode(child, depth + 1)}</React.Fragment>)}</div>
-            )}
-          </div>
-        );
-      }
-      // No label but has a children/nodes/items array — unwrap and render directly
-      if (Array.isArray(children) && children.length > 0) {
-        const items = isFlatNodeList(children as unknown[])
-          ? buildTreeFromFlat(children as Record<string, unknown>[])
-          : children;
-        return <>{items.map((child, i) => <React.Fragment key={i}>{renderNode(child, depth)}</React.Fragment>)}</>;
-      }
-      // Fallback: render each key-value
-      return (
-        <div>
-          {Object.entries(obj).map(([key, value]) => (
-            <div key={key}>
-              <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: depth * 16 }}>
-                <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[depth % LEVEL_COLORS.length]}`} />
-                <span className="text-[13px] font-medium text-slate-800">{key}</span>
-              </div>
-              {typeof value === "object" && value !== null ? renderNode(value, depth + 1) : (
-                <div className="flex items-start gap-2 py-0.5" style={{ paddingLeft: (depth + 1) * 16 }}>
-                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${LEVEL_COLORS[(depth + 1) % LEVEL_COLORS.length]}`} />
-                  <span className="text-[13px] text-slate-600">{String(value)}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return <span className="text-[13px] text-slate-600">{String(node)}</span>;
-  };
-
-  return <div className="text-[13px] text-slate-700 leading-relaxed">{renderNode(data)}</div>;
 }
 
 function timeAgo(dateStr: string): string {
