@@ -28,7 +28,7 @@ QUESTIONS:
 2. <second question>
 3. <third question>
 
-IMPORTANT: Write in the same language as the documents. If the documents contain Chinese text, write in Chinese. If in English, write in English.
+CRITICAL LANGUAGE RULE: You MUST detect the primary language of the documents below and respond in that SAME language. If the documents are primarily in English, you MUST write your entire response in English. If the documents are primarily in Chinese, write in Chinese. Do NOT translate — match the source language exactly.
 
 DOCUMENTS:
 {context}"""

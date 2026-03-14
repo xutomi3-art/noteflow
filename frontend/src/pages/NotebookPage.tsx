@@ -78,9 +78,9 @@ function isProcessingStatus(status: Source["status"]): boolean {
 }
 
 function statusLabel(status: Source["status"]): string {
-  if (status === "uploading") return "Uploading...";
-  if (status === "parsing") return "Parsing...";
-  if (status === "vectorizing") return "Vectorizing...";
+  if (status === "uploading") return "Processing...";
+  if (status === "parsing") return "Processing...";
+  if (status === "vectorizing") return "Processing...";
   if (status === "failed") return "Failed";
   return "";
 }
@@ -447,10 +447,20 @@ export default function NotebookPage() {
     prevReadyRef.current = readyCount;
   }, [id, readyCount, overview]);
 
-  // Auto-scroll chat
+  // Auto-scroll chat — only if user is near the bottom
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!userScrolledUpRef.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, streamingContent, reasoningContent]);
+  // Reset scroll lock when streaming ends
+  useEffect(() => {
+    if (!streamingContent && !reasoningContent) {
+      userScrolledUpRef.current = false;
+    }
+  }, [streamingContent, reasoningContent]);
 
   // Scroll to and highlight excerpt in source content viewer
   useEffect(() => {
@@ -1406,7 +1416,17 @@ export default function NotebookPage() {
             <h2 className="text-[13px] font-semibold text-slate-700">Chat</h2>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-8 pb-32">
+          <div
+            ref={chatScrollRef}
+            className="flex-1 overflow-y-auto p-8 pb-32"
+            onScroll={() => {
+              const el = chatScrollRef.current;
+              if (!el) return;
+              // User scrolled up if they're more than 150px from bottom
+              const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+              userScrolledUpRef.current = distFromBottom > 150;
+            }}
+          >
             <div className="max-w-3xl mx-auto" onClick={handleCitationClick}>
               {/* Notebook Overview */}
               <div className="mb-10 text-center">
