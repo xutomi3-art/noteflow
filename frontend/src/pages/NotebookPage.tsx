@@ -1213,7 +1213,7 @@ export default function NotebookPage() {
                         {upload.name}
                       </p>
                       {upload.status === 'uploading' && (
-                        <p className="text-[11px] text-[#5b8c15] font-medium">{upload.progress}%</p>
+                        <p className="text-[11px] text-[#5b8c15] font-medium">uploading... {upload.progress}%</p>
                       )}
                       {upload.status === 'cancelled' && (
                         <p className="text-[11px] text-slate-400">cancelled</p>
