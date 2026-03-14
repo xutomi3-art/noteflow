@@ -76,6 +76,9 @@ async def upload_source(
     content = await file.read()
     file_size = len(content)
 
+    if file_size == 0:
+        raise HTTPException(status_code=400, detail='File is empty')
+
     max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
     if file_size > max_bytes:
         raise HTTPException(status_code=400, detail=f'File too large. Maximum: {settings.MAX_FILE_SIZE_MB}MB')
