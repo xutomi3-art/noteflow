@@ -513,6 +513,10 @@ export default function NotebookPage() {
 
   const handleAddUrl = useCallback(async () => {
     if (!urlInput.trim() || !id) return;
+    try { new URL(urlInput.trim()); } catch {
+      setUrlError("Please enter a valid URL starting with http:// or https://");
+      return;
+    }
     setIsAddingUrl(true);
     setUrlError(null);
     try {
