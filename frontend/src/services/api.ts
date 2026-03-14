@@ -95,26 +95,52 @@ class ApiClient {
   }
 
   // Sources
-  uploadSource(notebookId: string, file: File, signal?: AbortSignal): Promise<Source> {
-    const formData = new FormData();
-    formData.append("file", file);
+  uploadSource(
+    notebookId: string,
+    file: File,
+    signal?: AbortSignal,
+    onProgress?: (progress: number) => void,
+  ): Promise<Source> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append("file", file);
 
-    const headers: Record<string, string> = {};
-    if (this.accessToken) {
-      headers["Authorization"] = `Bearer ${this.accessToken}`;
-    }
-
-    return fetch(`${API_BASE}/notebooks/${notebookId}/sources`, {
-      method: "POST",
-      headers,
-      body: formData,
-      signal,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `Upload failed: ${res.status}`);
+      if (signal) {
+        signal.addEventListener("abort", () => xhr.abort());
       }
-      return res.json();
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { reject(new Error("Invalid response")); }
+        } else {
+          try {
+            const body = JSON.parse(xhr.responseText);
+            reject(new Error(body.detail || `Upload failed: ${xhr.status}`));
+          } catch {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        }
+      });
+
+      xhr.addEventListener("error", () => reject(new Error("Network error")));
+      xhr.addEventListener("abort", () => {
+        const err = new DOMException("Upload aborted", "AbortError");
+        reject(err);
+      });
+
+      xhr.open("POST", `${API_BASE}/notebooks/${notebookId}/sources`);
+      if (this.accessToken) {
+        xhr.setRequestHeader("Authorization", `Bearer ${this.accessToken}`);
+      }
+      xhr.send(formData);
     });
   }
 

@@ -291,7 +291,7 @@ export default function NotebookPage() {
   const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [pendingUploads, setPendingUploads] = useState<{ id: number; name: string; status: 'uploading' | 'done' | 'error' | 'cancelled' }[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<{ id: number; name: string; status: 'uploading' | 'done' | 'error' | 'cancelled'; progress: number }[]>([]);
   const uploadControllersRef = useRef<Map<number, AbortController>>(new Map());
   const uploadIdCounterRef = useRef(0);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
@@ -394,8 +394,8 @@ export default function NotebookPage() {
 
     const fileIds = files.map(() => ++uploadIdCounterRef.current);
     const urlIds = urls.map(() => ++uploadIdCounterRef.current);
-    const fileUploads = files.map((f, i) => ({ id: fileIds[i], name: f.name, status: 'uploading' as const }));
-    const urlUploads = urls.map((u, i) => ({ id: urlIds[i], name: u, status: 'uploading' as const }));
+    const fileUploads = files.map((f, i) => ({ id: fileIds[i], name: f.name, status: 'uploading' as const, progress: 0 }));
+    const urlUploads = urls.map((u, i) => ({ id: urlIds[i], name: u, status: 'uploading' as const, progress: 0 }));
     setPendingUploads([...fileUploads, ...urlUploads]);
 
     (async () => {
@@ -593,16 +593,18 @@ export default function NotebookPage() {
       // Assign stable unique IDs to each upload so cancel lookups are always correct
       const uploadIds = accepted.map(() => ++uploadIdCounterRef.current);
       // Show uploading state immediately
-      const newUploads = accepted.map((f, i) => ({ id: uploadIds[i], name: f.name, status: 'uploading' as const }));
+      const newUploads = accepted.map((f, i) => ({ id: uploadIds[i], name: f.name, status: 'uploading' as const, progress: 0 }));
       setPendingUploads(prev => [...prev, ...newUploads]);
       for (let i = 0; i < accepted.length; i++) {
         const controller = new AbortController();
         const uploadId = uploadIds[i];
         uploadControllersRef.current.set(uploadId, controller);
         try {
-          await api.uploadSource(id, accepted[i], controller.signal);
+          await api.uploadSource(id, accepted[i], controller.signal, (progress) => {
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, progress } : u));
+          });
           fetchSources(id);
-          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const } : u));
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'done' as const, progress: 100 } : u));
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') {
             setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'cancelled' as const } : u));
@@ -1185,9 +1187,13 @@ export default function NotebookPage() {
             <div className="space-y-1">
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => (
-                <div key={`pending-${upload.id}`} className="relative overflow-hidden rounded-xl">
+                <div key={`pending-${upload.id}`} className="relative overflow-hidden rounded-xl bg-slate-50">
+                  {/* Progress bar fill */}
                   {upload.status === 'uploading' && (
-                    <div className="absolute inset-0 bg-[#dcfce7] animate-pulse" />
+                    <div
+                      className="absolute inset-y-0 left-0 bg-[#dcfce7] transition-all duration-300 ease-out"
+                      style={{ width: `${upload.progress}%` }}
+                    />
                   )}
                   {upload.status === 'done' && (
                     <div className="absolute inset-0 bg-[#dcfce7]" />
@@ -1207,7 +1213,7 @@ export default function NotebookPage() {
                         {upload.name}
                       </p>
                       {upload.status === 'uploading' && (
-                        <p className="text-[11px] text-[#5b8c15] font-medium">uploading...</p>
+                        <p className="text-[11px] text-[#5b8c15] font-medium">{upload.progress}%</p>
                       )}
                       {upload.status === 'cancelled' && (
                         <p className="text-[11px] text-slate-400">cancelled</p>
