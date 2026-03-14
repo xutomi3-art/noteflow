@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { User } from "@/types/api";
-import { api } from "@/services/api";
+import { api, ApiError } from "@/services/api";
 
 interface AuthState {
   user: User | null;
@@ -62,26 +62,36 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const user = await api.getMe();
       set({ user, isAuthenticated: true, isLoading: false });
-    } catch {
-      // Try refresh
-      const refreshToken = localStorage.getItem("refresh_token");
-      if (refreshToken) {
-        try {
-          const tokens = await api.refreshToken(refreshToken);
-          localStorage.setItem("access_token", tokens.access_token);
-          localStorage.setItem("refresh_token", tokens.refresh_token);
-          api.setToken(tokens.access_token);
-          const user = await api.getMe();
-          set({ user, isAuthenticated: true, isLoading: false });
-          return;
-        } catch {
-          // Refresh failed
+    } catch (err) {
+      // Only clear tokens on actual 401 (auth failure).
+      // Network errors / timeouts should NOT log the user out.
+      const isAuthError =
+        err instanceof ApiError && err.status === 401;
+
+      if (isAuthError) {
+        // Try refresh
+        const refreshToken = localStorage.getItem("refresh_token");
+        if (refreshToken) {
+          try {
+            const tokens = await api.refreshToken(refreshToken);
+            localStorage.setItem("access_token", tokens.access_token);
+            localStorage.setItem("refresh_token", tokens.refresh_token);
+            api.setToken(tokens.access_token);
+            const user = await api.getMe();
+            set({ user, isAuthenticated: true, isLoading: false });
+            return;
+          } catch {
+            // Refresh also failed — clear tokens
+          }
         }
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        api.setToken(null);
+        set({ isLoading: false });
+      } else {
+        // Network error / timeout — keep tokens, assume still authenticated
+        set({ isAuthenticated: true, isLoading: false });
       }
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
-      api.setToken(null);
-      set({ isLoading: false });
     }
   },
 }));

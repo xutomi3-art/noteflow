@@ -3,6 +3,16 @@ import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth
 
 const API_BASE = "/api";
 
+/** Error subclass that carries the HTTP status code so callers can branch on it. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 class ApiClient {
   private accessToken: string | null = null;
 
@@ -35,7 +45,7 @@ class ApiClient {
       const message = Array.isArray(detail)
         ? detail.map((d: { msg?: string }) => d.msg || String(d)).join('; ')
         : detail || `Request failed: ${res.status}`;
-      throw new Error(message);
+      throw new ApiError(message, res.status);
     }
 
     return res.json();
