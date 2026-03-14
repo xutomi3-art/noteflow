@@ -208,7 +208,10 @@ function MindMapTree({ data }: { data: unknown }) {
       }
       // No label but has a children/nodes/items array — unwrap and render directly
       if (Array.isArray(children) && children.length > 0) {
-        return <>{children.map((child, i) => <React.Fragment key={i}>{renderNode(child, depth)}</React.Fragment>)}</>;
+        const items = isFlatNodeList(children as unknown[])
+          ? buildTreeFromFlat(children as Record<string, unknown>[])
+          : children;
+        return <>{items.map((child, i) => <React.Fragment key={i}>{renderNode(child, depth)}</React.Fragment>)}</>;
       }
       // Fallback: render each key-value
       return (

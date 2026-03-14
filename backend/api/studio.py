@@ -297,7 +297,18 @@ async def get_ppt_generation_options(
     result = await docmee_client.get_generation_options()
     if not result or (not result.get("lang") and not result.get("scene") and not result.get("audience")):
         return _FALLBACK_GENERATION_OPTIONS
-    return result
+
+    # Docmee returns 'name' instead of 'label' — normalize for frontend.
+    # Use Docmee lang options (native names are fine) but English fallbacks for scene/audience.
+    normalized: dict = {}
+    lang_items = result.get("lang", [])
+    if lang_items:
+        normalized["lang"] = [{"label": item.get("name", item.get("label", "")), "value": item.get("value", "")} for item in lang_items]
+    else:
+        normalized["lang"] = _FALLBACK_GENERATION_OPTIONS["lang"]
+    normalized["scene"] = _FALLBACK_GENERATION_OPTIONS["scene"]
+    normalized["audience"] = _FALLBACK_GENERATION_OPTIONS["audience"]
+    return normalized
 
 
 @router.post("/ppt")
