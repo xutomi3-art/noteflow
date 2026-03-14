@@ -11,7 +11,10 @@ class RegisterRequest(BaseModel):
     def name_not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError('Name is required')
-        return v.strip()
+        v = v.strip()
+        if len(v) > 100:
+            raise ValueError('Name must be 100 characters or less')
+        return v
 
     @field_validator('password')
     @classmethod

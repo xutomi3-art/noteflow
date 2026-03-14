@@ -84,7 +84,7 @@ export default function AdminDashboardPage() {
               <div key={key} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">
                 <div className={`w-2 h-2 rounded-full ${h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
                 <span className="text-sm text-gray-700">{SERVICE_LABELS[key] || key}</span>
-                {h.status === 'ok' && h.latency_ms > 0 && (
+                {h.status === 'ok' && h.latency_ms != null && (
                   <span className="text-[10px] text-gray-400">{h.latency_ms}ms</span>
                 )}
               </div>

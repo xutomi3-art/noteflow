@@ -539,8 +539,8 @@ export default function DashboardPage() {
 
       {/* Create Modal */}
       {createModalType && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[32px] w-full max-w-2xl p-10 relative shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeModal}>
+          <div className="bg-white rounded-[32px] w-full max-w-2xl p-10 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={closeModal}
               className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"

@@ -116,6 +116,15 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
     [handleAddByEmail],
   );
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const nonOwnerMembers = members.filter((m) => m.role !== "owner");

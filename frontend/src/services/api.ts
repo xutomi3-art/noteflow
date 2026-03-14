@@ -31,7 +31,11 @@ class ApiClient {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || `Request failed: ${res.status}`);
+      const detail = body.detail;
+      const message = Array.isArray(detail)
+        ? detail.map((d: { msg?: string }) => d.msg || String(d)).join('; ')
+        : detail || `Request failed: ${res.status}`;
+      throw new Error(message);
     }
 
     return res.json();
