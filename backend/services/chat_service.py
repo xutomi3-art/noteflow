@@ -276,7 +276,31 @@ Rules:
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
         # 3. Build messages for Qwen
-        if excel_context is not None:
+        # Combine all available data sources into a single prompt
+        has_excel = excel_context is not None or sql_answer is not None
+        has_rag = bool(context)
+
+        if has_excel and has_rag:
+            # Both Excel and document sources — combine them
+            excel_section = ""
+            if excel_context is not None:
+                excel_section = f"Spreadsheet data:\n{excel_context}"
+            elif sql_answer is not None:
+                excel_section = f"Structured data query result:\n{sql_answer}"
+
+            user_content = f"""{excel_section}
+
+Context from other source documents:
+{context}
+
+Question: {message}
+
+Rules:
+- Answer based on ALL the data above (both spreadsheet and documents).
+- Use [1], [2], etc. to cite specific document sources.
+- For spreadsheet data, be precise with numbers and show calculations if summing.
+- If the data doesn't contain relevant information, say so."""
+        elif excel_context is not None:
             user_content = f"""The following is the complete content of a spreadsheet file. Read it carefully and answer the question based on this data.
 
 {excel_context}
