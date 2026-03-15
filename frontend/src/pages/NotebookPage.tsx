@@ -793,14 +793,22 @@ export default function NotebookPage() {
       setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading' || u.status === 'processing')), 2000);
     }
 
-    // Add URLs
-    for (const url of urlsToAdd) {
-      try {
-        await api.addUrlSource(id, url);
-        fetchSources(id);
-      } catch {
-        // silently skip failed URLs
+    // Add URLs — show immediately in pending list
+    if (urlsToAdd.length > 0) {
+      const urlUploadIds = urlsToAdd.map(() => ++uploadIdCounterRef.current);
+      const urlUploads = urlsToAdd.map((u, i) => ({ id: urlUploadIds[i], name: u, status: 'uploading' as const, progress: 0 }));
+      setPendingUploads(prev => [...prev, ...urlUploads]);
+      for (let i = 0; i < urlsToAdd.length; i++) {
+        const uploadId = urlUploadIds[i];
+        try {
+          const uploaded = await api.addUrlSource(id, urlsToAdd[i]);
+          fetchSources(id);
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'processing' as const, progress: 100, sourceId: uploaded.id } : u));
+        } catch {
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
+        }
       }
+      setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading' || u.status === 'processing')), 2000);
     }
   }, [id, modalFiles, modalUrls, closeAddSourceModal, fetchSources]);
 
@@ -1252,6 +1260,7 @@ export default function NotebookPage() {
                     </span>
                   </span>
                 </span>
+                <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
               </button>
             )}
 
