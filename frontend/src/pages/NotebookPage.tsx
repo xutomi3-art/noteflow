@@ -445,6 +445,17 @@ export default function NotebookPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Warn before page unload if uploads are in progress
+  const hasActiveUploads = pendingUploads.some(u => u.status === 'uploading');
+  useEffect(() => {
+    if (!hasActiveUploads) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasActiveUploads]);
+
   // Remove pending uploads whose linked source has reached "ready" status
   useEffect(() => {
     if (pendingUploads.length === 0) return;
