@@ -35,6 +35,7 @@ import {
   Square,
   Upload,
   Link as LinkIcon,
+  ChevronRight,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -294,6 +295,7 @@ export default function NotebookPage() {
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [showAddSourceModal, setShowAddSourceModal] = useState(false);
+  const [showAllNotes, setShowAllNotes] = useState(false);
   const [modalFiles, setModalFiles] = useState<File[]>([]);
   const [modalUrls, setModalUrls] = useState<string[]>([]);
   const [modalUrlInput, setModalUrlInput] = useState("");
@@ -1987,10 +1989,18 @@ export default function NotebookPage() {
             <div className="mt-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[11px] font-bold text-slate-400 tracking-wider">SAVED NOTES</h3>
+                {notes.length > 3 && (
+                  <button
+                    onClick={() => setShowAllNotes(!showAllNotes)}
+                    className="flex items-center gap-1 text-[12px] text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showAllNotes ? 'Show less' : 'See all'} <ChevronRight className={`w-3.5 h-3.5 transition-transform ${showAllNotes ? '-rotate-90' : ''}`} />
+                  </button>
+                )}
               </div>
 
               <div className="space-y-3">
-                {notes.map((note) => {
+                {(showAllNotes ? notes : notes.slice(0, 3)).map((note) => {
                   const isExpanded = expandedNoteId === note.id;
                   return (
                     <div
