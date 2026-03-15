@@ -14,8 +14,22 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const passwordErrors = (() => {
+    if (!password) return [];
+    const errs: string[] = [];
+    if (password.length < 8) errs.push('at least 8 characters');
+    if (!/[a-z]/.test(password)) errs.push('a lowercase letter');
+    if (!/[A-Z]/.test(password)) errs.push('an uppercase letter');
+    if (!/[0-9]/.test(password)) errs.push('a digit');
+    return errs;
+  })();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (passwordErrors.length > 0) {
+      setError('Password must contain: ' + passwordErrors.join(', '));
+      return;
+    }
     setError('');
     setLoading(true);
     try {
@@ -91,6 +105,20 @@ export default function RegisterPage() {
                 placeholder="Create a password"
                 className="w-full h-11 px-4 rounded-xl border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
               />
+              {password && (
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  {[
+                    { ok: password.length >= 8, label: '8+ chars' },
+                    { ok: /[a-z]/.test(password), label: 'lowercase' },
+                    { ok: /[A-Z]/.test(password), label: 'uppercase' },
+                    { ok: /[0-9]/.test(password), label: 'digit' },
+                  ].map(r => (
+                    <span key={r.label} className={r.ok ? 'text-green-600' : 'text-gray-400'}>
+                      {r.ok ? '✓' : '○'} {r.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <button
