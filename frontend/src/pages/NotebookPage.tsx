@@ -1081,8 +1081,10 @@ export default function NotebookPage() {
     );
   }
 
-  // Show loading while permission check is in progress — prevents flash of notebook content
-  if (!notebook) {
+  // Show loading while permission check is in progress — prevents flash of notebook content.
+  // Check notebook.id matches URL id to prevent stale data flash on client-side navigation
+  // (useEffect runs AFTER render, so stale notebook from previous route would flash for one frame).
+  if (!notebook || notebook.id !== id) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] font-sans">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#5b8c15] border-t-transparent" />
