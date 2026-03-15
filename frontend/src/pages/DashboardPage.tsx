@@ -451,7 +451,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {personalNotebooks.length > 6 && (
+          {personalNotebooks.length > 4 && (
             <div className="mt-8 flex justify-end">
               <button
                 onClick={() => setShowAllPersonal(!showAllPersonal)}
@@ -530,7 +530,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {teamNotebooks.length > 6 && (
+          {teamNotebooks.length > 4 && (
             <div className="mt-8 flex justify-end">
               <button
                 onClick={() => setShowAllTeam(!showAllTeam)}
