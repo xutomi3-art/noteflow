@@ -369,23 +369,29 @@ export default function NotebookPage() {
   const hasProcessingSelected = sources.some((s) => selectedIds.has(s.id) && isProcessingStatus(s.status));
   const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && readySources.length > 0 && selectedIds.size > 0;
 
-  // Data loading
+  // Data loading — verify access FIRST, then load data
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
 
     api.getNotebook(id).then((nb) => {
+      if (cancelled) return;
       setNotebook(nb);
       if (nb.is_shared) fetchMembers(id);
-    }).catch(() => { setNotFound(true); });
-    fetchSources(id);
-    subscribeStatus(id);
-    fetchHistory(id);
-    fetchNotes(id);
-    api.getOverview(id).then(data => {
-      if (data.overview) setOverview(data);
-    }).catch(() => {});
+      // Only load data after permission check passes
+      fetchSources(id);
+      subscribeStatus(id);
+      fetchHistory(id);
+      fetchNotes(id);
+      api.getOverview(id).then(data => {
+        if (!cancelled && data.overview) setOverview(data);
+      }).catch(() => {});
+    }).catch(() => {
+      if (!cancelled) setNotFound(true);
+    });
 
     return () => {
+      cancelled = true;
       cleanup();
       resetChat();
       resetStudio();
@@ -1066,6 +1072,15 @@ export default function NotebookPage() {
             Back to Dashboard
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // Show loading while permission check is in progress — prevents flash of notebook content
+  if (!notebook) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f0f2f5] font-sans">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#5b8c15] border-t-transparent" />
       </div>
     );
   }
