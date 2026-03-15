@@ -374,6 +374,11 @@ export default function NotebookPage() {
     if (!id) return;
     let cancelled = false;
 
+    // Reset state immediately so stale data from a previous notebook is never shown
+    setNotebook(null);
+    setNotFound(false);
+    setOverview(null);
+
     api.getNotebook(id).then((nb) => {
       if (cancelled) return;
       setNotebook(nb);
