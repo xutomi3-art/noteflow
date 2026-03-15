@@ -613,22 +613,38 @@ export default function NotebookPage() {
   );
 
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const ALLOWED_EXTENSIONS = new Set([
+    'pdf', 'docx', 'pptx', 'txt', 'md',
+    'xlsx', 'xls', 'csv',
+    'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp',
+  ]);
 
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!id || !e.target.files) return;
       const files = Array.from(e.target.files);
-      const rejected: string[] = [];
+      const rejectedType: string[] = [];
+      const rejectedSize: string[] = [];
       const accepted: File[] = [];
       for (const file of files) {
-        if (file.size > MAX_FILE_SIZE) {
-          rejected.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
+        const ext = file.name.split('.').pop()?.toLowerCase() || '';
+        if (!ALLOWED_EXTENSIONS.has(ext)) {
+          rejectedType.push(file.name);
+        } else if (file.size > MAX_FILE_SIZE) {
+          rejectedSize.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
         } else {
           accepted.push(file);
         }
       }
-      if (rejected.length > 0) {
-        alert(`The following files exceed the 50 MB limit and were skipped:\n\n${rejected.join('\n')}`);
+      const messages: string[] = [];
+      if (rejectedType.length > 0) {
+        messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp`);
+      }
+      if (rejectedSize.length > 0) {
+        messages.push(`Exceeds 50 MB limit:\n${rejectedSize.join('\n')}`);
+      }
+      if (messages.length > 0) {
+        alert(messages.join('\n\n'));
       }
       // Assign stable unique IDs to each upload so cancel lookups are always correct
       const uploadIds = accepted.map(() => ++uploadIdCounterRef.current);
