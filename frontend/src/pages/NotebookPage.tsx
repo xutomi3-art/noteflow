@@ -33,6 +33,8 @@ import {
   Sparkles,
   Minimize2,
   Square,
+  Upload,
+  Link as LinkIcon,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -291,6 +293,12 @@ export default function NotebookPage() {
   const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [showAddSourceModal, setShowAddSourceModal] = useState(false);
+  const [modalFiles, setModalFiles] = useState<File[]>([]);
+  const [modalUrls, setModalUrls] = useState<string[]>([]);
+  const [modalUrlInput, setModalUrlInput] = useState("");
+  const [modalUrlError, setModalUrlError] = useState<string | null>(null);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
   const [pendingUploads, setPendingUploads] = useState<{ id: number; name: string; status: 'uploading' | 'processing' | 'error' | 'cancelled'; progress: number; sourceId?: string }[]>([]);
   const uploadControllersRef = useRef<Map<number, AbortController>>(new Map());
   const uploadIdCounterRef = useRef(0);
@@ -699,6 +707,102 @@ export default function NotebookPage() {
       setIsAddingUrl(false);
     }
   }, [id, urlInput, fetchSources]);
+
+  // ─── Add Source Modal helpers ───
+  const closeAddSourceModal = useCallback(() => {
+    setShowAddSourceModal(false);
+    setModalFiles([]);
+    setModalUrls([]);
+    setModalUrlInput("");
+    setModalUrlError(null);
+  }, []);
+
+  const handleModalFilesSelected = useCallback((files: FileList | null) => {
+    if (!files) return;
+    const newFiles = Array.from(files);
+    const rejectedType: string[] = [];
+    const rejectedSize: string[] = [];
+    const accepted: File[] = [];
+    for (const file of newFiles) {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      if (!ALLOWED_EXTENSIONS.has(ext)) {
+        rejectedType.push(file.name);
+      } else if (file.size > MAX_FILE_SIZE) {
+        rejectedSize.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`);
+      } else {
+        accepted.push(file);
+      }
+    }
+    const messages: string[] = [];
+    if (rejectedType.length > 0) {
+      messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp`);
+    }
+    if (rejectedSize.length > 0) {
+      messages.push(`Exceeds 50 MB limit:\n${rejectedSize.join('\n')}`);
+    }
+    if (messages.length > 0) alert(messages.join('\n\n'));
+    if (accepted.length > 0) setModalFiles(prev => [...prev, ...accepted]);
+  }, []);
+
+  const handleModalAddUrl = useCallback(() => {
+    const url = modalUrlInput.trim();
+    if (!url) return;
+    try { new URL(url); } catch {
+      setModalUrlError('Please enter a valid URL starting with http:// or https://');
+      return;
+    }
+    if (modalUrls.includes(url)) { setModalUrlInput(''); setModalUrlError(null); return; }
+    setModalUrls(prev => [...prev, url]);
+    setModalUrlInput('');
+    setModalUrlError(null);
+  }, [modalUrlInput, modalUrls]);
+
+  const handleModalSubmit = useCallback(async () => {
+    if (!id || (modalFiles.length === 0 && modalUrls.length === 0)) return;
+
+    // Start file uploads
+    const filesToUpload = [...modalFiles];
+    const urlsToAdd = [...modalUrls];
+    closeAddSourceModal();
+
+    // Upload files
+    if (filesToUpload.length > 0) {
+      const uploadIds = filesToUpload.map(() => ++uploadIdCounterRef.current);
+      const newUploads = filesToUpload.map((f, i) => ({ id: uploadIds[i], name: f.name, status: 'uploading' as const, progress: 0 }));
+      setPendingUploads(prev => [...prev, ...newUploads]);
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const controller = new AbortController();
+        const uploadId = uploadIds[i];
+        uploadControllersRef.current.set(uploadId, controller);
+        try {
+          const uploaded = await api.uploadSource(id, filesToUpload[i], controller.signal, (progress) => {
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, progress } : u));
+          });
+          fetchSources(id);
+          setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'processing' as const, progress: 100, sourceId: uploaded.id } : u));
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'cancelled' as const } : u));
+          } else {
+            setPendingUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'error' as const } : u));
+          }
+        } finally {
+          uploadControllersRef.current.delete(uploadId);
+        }
+      }
+      setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading' || u.status === 'processing')), 2000);
+    }
+
+    // Add URLs
+    for (const url of urlsToAdd) {
+      try {
+        await api.addUrlSource(id, url);
+        fetchSources(id);
+      } catch {
+        // silently skip failed URLs
+      }
+    }
+  }, [id, modalFiles, modalUrls, closeAddSourceModal, fetchSources]);
 
   const handleSuggestedQuestion = useCallback(
     (q: string) => {
@@ -1133,101 +1237,22 @@ export default function NotebookPage() {
           ) : (
           <div className="p-4 flex-1 overflow-y-auto" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
             {notebook?.user_role !== "viewer" && (
-              <>
-                <input
-                  id="notebook-file-input"
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp"
-                  className="sr-only"
-                  onChange={handleFileUpload}
-                />
-                {!showUrlInput ? (
-                  <label
-                    htmlFor="notebook-file-input"
-                    className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-2"
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (e.dataTransfer.files.length > 0) {
-                        const dt = new DataTransfer();
-                        Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
-                        if (fileInputRef.current) {
-                          fileInputRef.current.files = dt.files;
-                          fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                      }
-                    }}
-                  >
-                    <Plus className="w-4 h-4 text-slate-400" />
-                    <span className="text-[13px] font-medium text-slate-600">Add sources</span>
-                    <span className="text-[10px] text-slate-400">
-                      pdf, images, docs,{' '}
-                      <span className="relative group/tip inline-block">
-                        <span className="underline decoration-dotted underline-offset-2 cursor-default">and more</span>
-                        <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg bg-slate-900 text-white text-[10px] leading-relaxed px-2.5 py-2 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
-                          Supported: pdf, txt, md, docx, pptx, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp
-                        </span>
-                      </span>
+              <button
+                onClick={() => setShowAddSourceModal(true)}
+                className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-4"
+              >
+                <Plus className="w-4 h-4 text-slate-400" />
+                <span className="text-[13px] font-medium text-slate-600">Add sources</span>
+                <span className="text-[10px] text-slate-400">
+                  pdf, images, docs,{' '}
+                  <span className="relative group/tip inline-block">
+                    <span className="underline decoration-dotted underline-offset-2 cursor-default">and more</span>
+                    <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg bg-slate-900 text-white text-[10px] leading-relaxed px-2.5 py-2 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
+                      Supported: pdf, txt, md, docx, pptx, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp
                     </span>
-                    <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
-                  </label>
-                ) : (
-                  <div className="w-full flex flex-col gap-2 p-3 border-2 border-dashed border-[#5b8c15]/30 bg-slate-50/50 rounded-2xl mb-2">
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-slate-400 shrink-0" />
-                      <input
-                        type="text"
-                        value={urlInput}
-                        onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); }}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleAddUrl(); }}
-                        placeholder="https://example.com/article"
-                        className="flex-1 text-[13px] bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#5b8c15]/40 focus:border-[#5b8c15]/40"
-                        autoFocus
-                        disabled={isAddingUrl}
-                      />
-                    </div>
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => { setShowUrlInput(false); setUrlInput(""); }}
-                        className="text-[12px] text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
-                        disabled={isAddingUrl}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleAddUrl}
-                        disabled={!urlInput.trim() || isAddingUrl}
-                        className="text-[12px] font-medium text-white bg-[#5b8c15] hover:bg-[#4a7312] disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1 rounded-lg transition-colors flex items-center gap-1.5"
-                      >
-                        {isAddingUrl ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                        Add
-                      </button>
-                    </div>
-                    {urlError && (
-                      <p className="text-[11px] text-red-500 mt-1 px-1">{urlError}</p>
-                    )}
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowUrlInput(!showUrlInput)}
-                  className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[12px] text-slate-500 hover:text-[#5b8c15] hover:bg-slate-50 rounded-xl transition-colors mb-4"
-                >
-                  {showUrlInput ? (
-                    <>
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Upload file instead</span>
-                    </>
-                  ) : (
-                    <>
-                      <Globe className="w-3.5 h-3.5" />
-                      <span>Add URL</span>
-                    </>
-                  )}
-                </button>
-              </>
+                  </span>
+                </span>
+              </button>
             )}
 
             <div className="flex items-center gap-3 p-2 mb-1">
@@ -2044,6 +2069,148 @@ export default function NotebookPage() {
           }
         }}
       />
+
+      {/* Add Source Modal */}
+      {showAddSourceModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeAddSourceModal}>
+          <div className="bg-white rounded-[32px] w-full max-w-2xl p-10 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={closeAddSourceModal}
+              className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="text-center mb-8">
+              <h2 className="text-[32px] font-bold text-slate-900 leading-tight">Add sources to</h2>
+              <h2 className="text-[32px] font-bold text-[#a3e635] leading-tight">your notebook</h2>
+            </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={modalFileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp"
+              className="sr-only"
+              onChange={(e) => {
+                handleModalFilesSelected(e.target.files);
+                e.target.value = '';
+              }}
+            />
+
+            {/* Drop zone */}
+            <label
+              className="border-2 border-dashed border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center text-center bg-slate-50/50 cursor-pointer hover:border-[#5b8c15]/40 transition-colors"
+              onClick={() => modalFileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleModalFilesSelected(e.dataTransfer.files);
+              }}
+            >
+              <Upload className="w-10 h-10 text-slate-300 mb-4" />
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
+              <p className="text-sm text-slate-500 mb-1">
+                pdf, images, docs,{' '}
+                <span className="relative group/tip inline-block">
+                  <span className="underline decoration-dotted underline-offset-2 cursor-default">and more</span>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-lg bg-slate-900 text-white text-xs leading-relaxed px-3 py-2.5 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
+                    Supported: pdf, txt, md, docx, pptx, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp
+                  </span>
+                </span>
+              </p>
+              <p className="text-sm text-[#5b8c15] font-medium">or click to browse</p>
+            </label>
+
+            {/* URL input */}
+            <div className="mt-4 flex items-center gap-3">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="flex items-center gap-1.5 text-sm font-medium text-[#5b8c15]">
+                <Globe className="w-4 h-4" />
+                Add website URL
+              </span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+            <div className="mt-3">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="url"
+                    placeholder="https://example.com"
+                    value={modalUrlInput}
+                    onChange={(e) => { setModalUrlInput(e.target.value); setModalUrlError(null); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleModalAddUrl(); } }}
+                    className={`w-full h-10 pl-9 pr-3 rounded-xl border bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${modalUrlError ? 'border-red-400 focus:border-red-400 focus:ring-red-400/20' : 'border-slate-200 focus:border-[#5b8c15] focus:ring-[#5b8c15]/20'}`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleModalAddUrl}
+                  disabled={!modalUrlInput.trim()}
+                  className="h-10 px-4 rounded-xl bg-[#5b8c15] text-white text-sm font-medium hover:bg-[#4a7311] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+              </div>
+              {modalUrlError && (
+                <p className="mt-1.5 text-xs text-red-500">{modalUrlError}</p>
+              )}
+            </div>
+
+            {/* Pending URLs list */}
+            {modalUrls.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {modalUrls.map((url, i) => (
+                  <div key={i} className="px-3 py-2 bg-blue-50 rounded-xl text-sm">
+                    <div className="flex items-center gap-3">
+                      <Globe className="w-4 h-4 text-blue-500 shrink-0" />
+                      <span className="flex-1 truncate text-slate-700">{url}</span>
+                      <button onClick={() => setModalUrls(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-slate-600 shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Selected files list */}
+            {modalFiles.length > 0 && (
+              <div className="mt-4 max-h-40 overflow-y-auto space-y-1.5">
+                {modalFiles.map((file, i) => (
+                  <div key={i} className="px-3 py-2 bg-slate-50 rounded-xl text-sm">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="flex-1 truncate text-slate-700">{file.name}</span>
+                      <span className="text-xs text-slate-400 shrink-0">{file.size < 1024 ? `${file.size} B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / 1024 / 1024).toFixed(1)} MB`}</span>
+                      <button onClick={() => setModalFiles(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-slate-600 shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Upload button */}
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <button
+                onClick={handleModalSubmit}
+                disabled={modalFiles.length === 0 && modalUrls.length === 0}
+                className="w-full max-w-xs bg-[#5b8c15] text-white py-3 rounded-xl font-semibold hover:bg-[#4a7311] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {modalFiles.length + modalUrls.length > 0
+                  ? `Upload ${modalFiles.length + modalUrls.length} source${modalFiles.length + modalUrls.length > 1 ? 's' : ''}`
+                  : 'Upload Sources'}
+              </button>
+            </div>
+            <p className="text-center text-xs text-slate-400 mt-4">Up to 50 files, 50 MB each.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
