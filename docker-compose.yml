@@ -3,8 +3,10 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - frontend
       - backend
@@ -42,7 +44,7 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost}
+      - APP_BASE_URL=${APP_BASE_URL:-https://111.229.247.26}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-test@noteflow.dev}
       - DOCMEE_API_KEY=ak_rJJlxF3vvFvvF2sujD
     volumes:
