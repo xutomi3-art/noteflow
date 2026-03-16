@@ -152,17 +152,9 @@ async def process_document(
                 content = await _read_text_file(file_path)
                 _save_parsed_content(file_path, content)
             else:
-                # Use MinerU for PDF, DOCX, PPTX
-                content = await mineru_client.parse_document(file_path, filename)
-                if content is not None:
-                    _save_parsed_content(file_path, content)
-                if content is None:
-                    # Fallback: upload raw file to RAGFlow (it has built-in parsers)
-                    logger.warning(
-                        "MinerU unavailable, falling back to RAGFlow parsing for %s",
-                        filename,
-                    )
-                    content = None  # Signal to upload raw file
+                # Upload raw file to RAGFlow — it has built-in parsers for PDF/DOCX/PPTX
+                logger.info("Using RAGFlow built-in parser for %s", filename)
+                content = None  # Signal to upload raw file directly
 
             # Step 3b: Convert PPTX/DOCX to PDF for inline viewing
             if file_type in ("pptx", "docx"):
