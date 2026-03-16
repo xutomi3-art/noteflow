@@ -78,6 +78,7 @@ Group related action items together under clear category headers.
 DOCUMENTS:
 {context}""",
     "mindmap": """Generate a mind map JSON structure from the source documents.
+IMPORTANT: Node labels must be in the SAME language as the source documents. Do NOT translate.
 Return ONLY valid JSON in this exact format:
 {{
   "nodes": [
@@ -588,8 +589,12 @@ async def generate_content(
         raise HTTPException(status_code=400, detail="No ready sources available for generation")
 
     prompt = PROMPTS[content_type].format(context=context)
+    if content_type == "mindmap":
+        system_msg = "You are an expert at creating mind map structures from documents. Return ONLY valid JSON. Node labels must be in the same language as the source documents."
+    else:
+        system_msg = "You are an AI assistant that generates educational content from source documents. Always respond in the same language as the source documents — never translate or switch to a different language. Do NOT include any meta-commentary about the language you are using; just output the content directly."
     messages = [
-        {"role": "system", "content": "You are an AI assistant that generates educational content from source documents. Always respond in the same language as the source documents — never translate or switch to a different language. Do NOT include any meta-commentary about the language you are using; just output the content directly."},
+        {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},
     ]
     content = await qwen_client.generate(messages)
