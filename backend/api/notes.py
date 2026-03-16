@@ -25,6 +25,7 @@ async def save_note(
     note = await note_service.create_note(
         db=db,
         notebook_id=uuid.UUID(notebook_id),
+        user_id=user.id,
         content=req.content,
         source_message_id=uuid.UUID(req.source_message_id) if req.source_message_id else None,
     )
@@ -46,7 +47,7 @@ async def list_notes(
     if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'view'):
         raise HTTPException(status_code=403, detail='No access to this notebook')
 
-    notes = await note_service.list_notes(db, uuid.UUID(notebook_id))
+    notes = await note_service.list_notes(db, uuid.UUID(notebook_id), user.id)
     return [
         SavedNoteResponse(
             id=str(n.id),
