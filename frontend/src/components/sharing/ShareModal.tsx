@@ -95,7 +95,19 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
 
   const handleCopyLink = useCallback(() => {
     if (!generatedLink) return;
-    navigator.clipboard.writeText(generatedLink);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(generatedLink).catch(() => {});
+    } else {
+      // Fallback for HTTP (non-secure context)
+      const el = document.createElement("textarea");
+      el.value = generatedLink;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [generatedLink]);
