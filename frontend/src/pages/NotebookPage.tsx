@@ -1844,20 +1844,6 @@ export default function NotebookPage() {
                 <div className="text-[11px] font-bold text-pink-900">Mind Map</div>
               </button>
 
-              {/* Podcast */}
-              <button
-                onClick={() => handleStudioAction("podcast")}
-                disabled={podcastLoading}
-                className="bg-[#f5f3ff] hover:bg-purple-100 border border-purple-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
-              >
-                {podcastLoading ? (
-                  <Loader2 className="w-4 h-4 text-purple-600 mb-2 animate-spin" />
-                ) : (
-                  <Mic className="w-4 h-4 text-purple-600 mb-2" />
-                )}
-                <div className="text-[11px] font-bold text-purple-900">Podcast</div>
-              </button>
-
               {/* Action Items */}
               <button
                 onClick={() => handleStudioAction("action_items")}
@@ -1974,14 +1960,6 @@ export default function NotebookPage() {
                     />
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Podcast Player */}
-            {podcastUrl && (
-              <div className="mb-6 p-3 bg-purple-50 rounded-xl border border-purple-100">
-                <h4 className="text-[11px] font-bold text-purple-600 mb-2">PODCAST</h4>
-                <audio controls className="w-full" src={podcastUrl} />
               </div>
             )}
 
