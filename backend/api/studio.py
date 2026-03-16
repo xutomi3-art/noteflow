@@ -35,7 +35,9 @@ router = APIRouter(prefix="/notebooks/{notebook_id}/studio", tags=["studio"])
 ppt_router = APIRouter(prefix="/ppt", tags=["ppt"])
 
 PROMPTS = {
-    "summary": """Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points. Write in the same language as the documents.
+    "summary": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+
+Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points.
 
 Formatting rules:
 - Use ## for main section headers and ### for sub-sections. Do NOT use #### or deeper headings.
@@ -44,32 +46,34 @@ Formatting rules:
 
 DOCUMENTS:
 {context}""",
-    "faq": """Based on the following document contents, generate a list of 8-10 frequently asked questions with detailed answers. Each Q&A should cover an important concept from the documents. Format as:
+    "faq": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+
+Based on the following document contents, generate a list of 8-10 frequently asked questions with detailed answers. Each Q&A should cover an important concept from the documents. Format as:
 
 Q: [question]
 A: [answer]
 
-Write in the same language as the documents.
-
 DOCUMENTS:
 {context}""",
-    "study_guide": """Based on the following document contents, create a comprehensive study guide that includes:
+    "study_guide": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+
+Based on the following document contents, create a comprehensive study guide that includes:
 1. Key concepts and definitions
 2. Important relationships between ideas
 3. Summary of each major section
 4. Review questions for self-assessment
 
-Write in the same language as the documents.
-
 DOCUMENTS:
 {context}""",
-    "action_items": """Based on the following document contents, extract all action items, tasks, to-dos, next steps, and follow-up items. For each action item, include:
+    "action_items": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+
+Based on the following document contents, extract all action items, tasks, to-dos, next steps, and follow-up items. For each action item, include:
 - The specific task or action required
 - Who is responsible (if mentioned)
 - Deadline or timeline (if mentioned)
 - Priority level (High/Medium/Low) based on context
 
-Group related action items together under clear category headers. Write in the same language as the documents.
+Group related action items together under clear category headers.
 
 DOCUMENTS:
 {context}""",
@@ -585,7 +589,7 @@ async def generate_content(
 
     prompt = PROMPTS[content_type].format(context=context)
     messages = [
-        {"role": "system", "content": "You are an AI assistant that generates educational content from source documents."},
+        {"role": "system", "content": "You are an AI assistant that generates educational content from source documents. Always respond in the same language as the source documents — never translate or switch to a different language."},
         {"role": "user", "content": prompt},
     ]
     content = await qwen_client.generate(messages)
