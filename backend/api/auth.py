@@ -6,14 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+from sqlalchemy import select
+
 from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.deps import get_current_user
-from backend.core.security import create_access_token, create_refresh_token
+from backend.core.security import create_access_token, create_refresh_token, create_password_reset_token, decode_password_reset_token, hash_password
 from backend.models.user import User
-from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse
+from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
 from backend.services import auth_service
 from backend.services import google_auth_service
+from backend.services.email_service import is_smtp_configured, send_password_reset_email
 from backend.services.notebook_service import create_notebook
 from backend.services.note_service import create_note
 from backend.schemas.notebook import NotebookCreate
@@ -86,6 +89,51 @@ async def me(user: User = Depends(get_current_user)):
         is_admin=user.is_admin,
         auth_provider=user.auth_provider,
     )
+
+
+@router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Send a password reset email. Always returns 200 to avoid user enumeration."""
+    result = await db.execute(select(User).where(User.email == req.email))
+    user = result.scalar_one_or_none()
+    if user and user.password_hash and is_smtp_configured():
+        token = create_password_reset_token(str(user.id), user.password_hash)
+        reset_url = f"{settings.APP_BASE_URL}/reset-password?token={token}"
+        try:
+            await send_password_reset_email(user.email, reset_url)
+        except Exception:
+            logger.exception("Failed to send password reset email to %s", user.email)
+    return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Validate the reset token and update the user's password."""
+    # We need to find the user without knowing their ID yet — decode the token's sub claim
+    # by first doing a lightweight decode (no signature check) just to extract user_id,
+    # then loading the user and re-verifying with the correct secret.
+    from jose import jwt as _jwt
+    try:
+        unverified = _jwt.get_unverified_claims(req.token)
+        user_id = unverified.get("sub")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.password_hash:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    verified_id = decode_password_reset_token(req.token, user.password_hash)
+    if not verified_id or verified_id != str(user.id):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.password_hash = hash_password(req.new_password)
+    await db.commit()
+    return {"message": "Password updated successfully."}
 
 
 @router.get("/google")

@@ -16,6 +16,8 @@ import AdminSystemPage from '@/pages/admin/AdminSystemPage';
 import AdminUsagePage from '@/pages/admin/AdminUsagePage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import PrivacyPolicyPage from '@/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '@/pages/TermsOfServicePage';
 import HelpCenterPage from '@/pages/HelpCenterPage';
@@ -117,6 +119,8 @@ function App() {
           <Route path="/help" element={<HelpCenterPage />} />
           <Route path="/login" element={<GuestGuard><LoginPage /></GuestGuard>} />
           <Route path="/register" element={<GuestGuard><RegisterPage /></GuestGuard>} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/join/:token" element={<AuthGuard><JoinPage /></AuthGuard>} />
           <Route path="/notebook/:id" element={<AuthGuard><NotebookPage /></AuthGuard>} />
           <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
