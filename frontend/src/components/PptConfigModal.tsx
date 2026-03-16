@@ -57,24 +57,30 @@ export default function PptConfigModal({
 
   const pageSize = 8;
 
-  // Load templates (re-fetch when language changes)
+  // Load templates — only for Chinese; other languages use clean default template
+  const isChinese = language === "zh";
   useEffect(() => {
     if (!isOpen) return;
+    if (!isChinese) {
+      setTemplates([]);
+      setTemplateTotal(0);
+      setTemplateId("");
+      return;
+    }
     setTemplateLoading(true);
     setTemplateId("");
     api
-      .listPptTemplates(templatePage, pageSize, language)
+      .listPptTemplates(templatePage, pageSize)
       .then((data) => {
         setTemplates(data.records || []);
         setTemplateTotal(data.total || 0);
-        // Auto-select first template
         if (data.records?.length > 0) {
           setTemplateId(data.records[0].id);
         }
       })
       .catch(() => setTemplates([]))
       .finally(() => setTemplateLoading(false));
-  }, [isOpen, templatePage, language]);
+  }, [isOpen, templatePage, isChinese]);
 
   // Load generation options
   useEffect(() => {
@@ -127,6 +133,27 @@ export default function PptConfigModal({
         </div>
 
         <div className="px-6 pb-6 space-y-5 max-h-[80vh] overflow-y-auto">
+          {/* Language — shown first so template list adapts */}
+          {options.lang && options.lang.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Language
+              </label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                disabled={isGenerating}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
+              >
+                {options.lang.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Template selector */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -275,27 +302,6 @@ export default function PptConfigModal({
               })}
             </div>
           </div>
-
-          {/* Language */}
-          {options.lang && options.lang.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Language
-              </label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                disabled={isGenerating}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] disabled:opacity-60 disabled:bg-slate-50 appearance-none"
-              >
-                {options.lang.map((l) => (
-                  <option key={l.value} value={l.value}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           {/* Generate button */}
           <button
