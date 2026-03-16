@@ -56,10 +56,18 @@ export default function PptConfigModal({
   const [optionsLoaded, setOptionsLoaded] = useState(false);
 
   const pageSize = 8;
+  // Docmee only has Chinese templates; other languages use python-pptx fallback
+  const isChinese = language === "zh" || language === "zh-Hant";
 
-  // Load templates for selected language (uses international API for non-Chinese)
+  // Load templates only for Chinese; other languages skip (use clean default)
   useEffect(() => {
     if (!isOpen) return;
+    if (!isChinese) {
+      setTemplates([]);
+      setTemplateTotal(0);
+      setTemplateId("");
+      return;
+    }
     setTemplateLoading(true);
     setTemplateId("");
     api
@@ -73,7 +81,7 @@ export default function PptConfigModal({
       })
       .catch(() => setTemplates([]))
       .finally(() => setTemplateLoading(false));
-  }, [isOpen, templatePage, language]);
+  }, [isOpen, templatePage, isChinese, language]);
 
   // Load generation options
   useEffect(() => {
@@ -160,7 +168,9 @@ export default function PptConfigModal({
               </div>
             ) : templates.length === 0 ? (
               <div className="py-4 px-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <p className="text-sm text-slate-500">Default template will be used</p>
+                <p className="text-sm text-slate-500">
+                  {isChinese ? "No templates found" : "Clean default template will be used"}
+                </p>
               </div>
             ) : (
               <>
