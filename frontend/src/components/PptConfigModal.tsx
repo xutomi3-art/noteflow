@@ -57,23 +57,24 @@ export default function PptConfigModal({
 
   const pageSize = 8;
 
-  // Load templates
+  // Load templates (re-fetch when language changes)
   useEffect(() => {
     if (!isOpen) return;
     setTemplateLoading(true);
+    setTemplateId("");
     api
-      .listPptTemplates(templatePage, pageSize)
+      .listPptTemplates(templatePage, pageSize, language)
       .then((data) => {
         setTemplates(data.records || []);
         setTemplateTotal(data.total || 0);
-        // Auto-select first template if none selected
-        if (!templateId && data.records?.length > 0) {
+        // Auto-select first template
+        if (data.records?.length > 0) {
           setTemplateId(data.records[0].id);
         }
       })
       .catch(() => setTemplates([]))
       .finally(() => setTemplateLoading(false));
-  }, [isOpen, templatePage]);
+  }, [isOpen, templatePage, language]);
 
   // Load generation options
   useEffect(() => {

@@ -422,12 +422,14 @@ class ApiClient {
     return URL.createObjectURL(blob);
   }
 
-  async listPptTemplates(page: number = 1, size: number = 20): Promise<{
+  async listPptTemplates(page: number = 1, size: number = 20, lang: string = ""): Promise<{
     records: { id: string; coverUrl: string; name?: string }[];
     total: number;
     pages: number;
   }> {
-    return this.request(`/ppt/templates?page=${page}&size=${size}`);
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (lang) params.set("lang", lang);
+    return this.request(`/ppt/templates?${params}`);
   }
 
   async getPptGenerationOptions(): Promise<{

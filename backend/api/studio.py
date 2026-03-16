@@ -274,10 +274,12 @@ _FALLBACK_GENERATION_OPTIONS = {
 async def list_ppt_templates(
     page: int = 1,
     size: int = 20,
+    lang: str = "",
     current_user: User = Depends(get_current_user),
 ):
     """List available Docmee PPT templates."""
-    result = await docmee_client.list_templates(page=page, size=size)
+    filters = {"lang": lang} if lang else None
+    result = await docmee_client.list_templates(page=page, size=size, filters=filters)
     return result
 
 
