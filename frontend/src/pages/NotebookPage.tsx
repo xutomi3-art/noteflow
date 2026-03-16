@@ -421,6 +421,18 @@ export default function NotebookPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Re-fetch notebook on window focus so role/permission changes are reflected without refresh
+  useEffect(() => {
+    if (!id) return;
+    const onFocus = () => {
+      api.getNotebook(id).then((nb) => {
+        setNotebook(nb);
+      }).catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [id]);
+
   // Consume pending files and URLs from create-notebook flow and upload them
   useEffect(() => {
     if (!id) return;
@@ -1070,15 +1082,28 @@ export default function NotebookPage() {
       if (!msg) return;
 
       const citation = msg.citations.find((c) => c.index === citationIndex);
-      if (!citation || !citation.source_id) return;
+      if (!citation) return;
+
+      // Resolve source_id: use the one from citation, or fall back to filename matching
+      let sourceId = citation.source_id;
+      if (!sourceId && citation.filename) {
+        const citStem = citation.filename.replace(/\.[^.]+$/, "").toLowerCase();
+        const matched = sources.find((s) => {
+          const sStem = s.filename.replace(/\.[^.]+$/, "").toLowerCase();
+          return sStem === citStem || s.filename.toLowerCase() === citation.filename.toLowerCase()
+            || sStem.includes(citStem) || citStem.includes(sStem);
+        });
+        if (matched) sourceId = matched.id;
+      }
+      if (!sourceId) return;
 
       // Open source content in left panel with excerpt highlight
       if (id) {
-        setActiveSource(id, citation.source_id, citation.excerpt || null);
+        setActiveSource(id, sourceId, citation.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
-    [messages, id, setActiveSource],
+    [messages, id, sources, setActiveSource],
   );
 
   if (notFound) {
