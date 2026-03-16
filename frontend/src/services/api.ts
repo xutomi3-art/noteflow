@@ -344,7 +344,7 @@ class ApiClient {
     });
   }
 
-  async sendEmailInvite(notebookId: string, email: string, role: string): Promise<{ message: string }> {
+  async sendEmailInvite(notebookId: string, email: string, role: string): Promise<{ message: string; join_url?: string }> {
     return this.request(`/notebooks/${notebookId}/share/email`, {
       method: "POST",
       body: JSON.stringify({ email, role }),

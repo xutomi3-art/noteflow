@@ -85,7 +85,7 @@ async def send_email_invite(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
-    return EmailInviteResponse(message=f"Invite sent to {req.email}")
+    return EmailInviteResponse(message=f"Invite sent to {req.email}", join_url=join_url)
 
 
 @router.delete("/notebooks/{notebook_id}/share")

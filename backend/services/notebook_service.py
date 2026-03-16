@@ -38,7 +38,7 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
             Notebook,
             func.count(Source.id).label("source_count"),
             literal("owner").label("user_role"),
-            func.coalesce(member_count_subq.c.member_count, 1).label("member_count"),
+            (func.coalesce(member_count_subq.c.member_count, 0) + 1).label("member_count"),
         )
         .outerjoin(Source, Source.notebook_id == Notebook.id)
         .outerjoin(member_count_subq, member_count_subq.c.notebook_id == Notebook.id)
@@ -54,7 +54,7 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
             Notebook,
             func.count(Source.id).label("source_count"),
             NotebookMember.role.label("user_role"),
-            func.coalesce(member_count_subq.c.member_count, 1).label("member_count"),
+            (func.coalesce(member_count_subq.c.member_count, 0) + 1).label("member_count"),
         )
         .join(NotebookMember, NotebookMember.notebook_id == Notebook.id)
         .outerjoin(Source, Source.notebook_id == Notebook.id)

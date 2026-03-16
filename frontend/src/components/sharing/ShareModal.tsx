@@ -51,7 +51,12 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
 
     try {
       // Send email invite directly (backend creates invite link + sends email)
-      await sendEmailInvite(notebookId, email, inviteRole);
+      const result = await sendEmailInvite(notebookId, email, inviteRole);
+      // Always show the invite link as backup (email may be filtered)
+      if (result.join_url) {
+        setGeneratedLink(result.join_url);
+        setShowLinkSection(true);
+      }
       setInvitedEmails((prev) =>
         prev.map((e) => (e.email === email ? { ...e, status: "sent" } : e)),
       );

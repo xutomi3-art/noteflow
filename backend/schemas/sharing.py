@@ -41,3 +41,4 @@ class EmailInviteRequest(BaseModel):
 
 class EmailInviteResponse(BaseModel):
     message: str
+    join_url: str | None = None
