@@ -360,6 +360,15 @@ export default function NotebookPage() {
   } = useStudioStore();
   const { members, fetchMembers, removeMember } = useSharingStore();
 
+  // Auto-expand Studio panel when new content is generated
+  useEffect(() => {
+    const hasContent = Object.values(studioContent).some(v => v && typeof v === "string" && v.length > 0);
+    if (hasContent && !isRightCollapsed) {
+      setRightWidth(w => Math.max(w, Math.min(520, window.innerWidth * 0.35)));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studioContent]);
+
   // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
