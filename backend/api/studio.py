@@ -278,8 +278,7 @@ async def list_ppt_templates(
     current_user: User = Depends(get_current_user),
 ):
     """List available Docmee PPT templates."""
-    filters = {"lang": lang} if lang else None
-    result = await docmee_client.list_templates(page=page, size=size, filters=filters)
+    result = await docmee_client.list_templates(page=page, size=size, lang=lang)
     return result
 
 
@@ -348,7 +347,7 @@ async def generate_ppt(
         )
         if ppt_info:
             ppt_id = ppt_info.get("id", "")
-            pptx_bytes = await docmee_client.download_pptx(ppt_id)
+            pptx_bytes = await docmee_client.download_pptx(ppt_id, lang=cfg.language)
             if pptx_bytes:
                 buf = io.BytesIO(pptx_bytes)
                 return StreamingResponse(

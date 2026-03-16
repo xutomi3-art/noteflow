@@ -57,20 +57,13 @@ export default function PptConfigModal({
 
   const pageSize = 8;
 
-  // Load templates — only for Chinese; other languages use clean default template
-  const isChinese = language === "zh";
+  // Load templates for selected language (uses international API for non-Chinese)
   useEffect(() => {
     if (!isOpen) return;
-    if (!isChinese) {
-      setTemplates([]);
-      setTemplateTotal(0);
-      setTemplateId("");
-      return;
-    }
     setTemplateLoading(true);
     setTemplateId("");
     api
-      .listPptTemplates(templatePage, pageSize)
+      .listPptTemplates(templatePage, pageSize, language)
       .then((data) => {
         setTemplates(data.records || []);
         setTemplateTotal(data.total || 0);
@@ -80,7 +73,7 @@ export default function PptConfigModal({
       })
       .catch(() => setTemplates([]))
       .finally(() => setTemplateLoading(false));
-  }, [isOpen, templatePage, isChinese]);
+  }, [isOpen, templatePage, language]);
 
   // Load generation options
   useEffect(() => {

@@ -1,4 +1,7 @@
-"""Docmee (文多多) AiPPT API client for PPT generation."""
+"""Docmee (文多多) AiPPT API client for PPT generation.
+
+Uses https://docmee.cn for Chinese and https://app.xpptx.com for international.
+"""
 
 import logging
 from typing import Any
@@ -9,20 +12,26 @@ from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://docmee.cn"
+BASE_URL_CN = "https://docmee.cn"
+BASE_URL_INTL = "https://app.xpptx.com"
 TIMEOUT = httpx.Timeout(120.0, connect=10.0)
+
+
+def _base_url(lang: str = "zh") -> str:
+    """Return CN base URL for Chinese, international URL for everything else."""
+    return BASE_URL_CN if lang in ("zh", "zh-Hant", "") else BASE_URL_INTL
 
 
 class DocmeeClient:
     def __init__(self) -> None:
         self.api_key = settings.DOCMEE_API_KEY
 
-    async def _create_token(self) -> str | None:
+    async def _create_token(self, base_url: str = BASE_URL_CN) -> str | None:
         """Create a short-lived API token from the Api-Key."""
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 resp = await client.post(
-                    f"{BASE_URL}/api/user/createApiToken",
+                    f"{base_url}/api/user/createApiToken",
                     headers={"Api-Key": self.api_key},
                     json={"uid": "noteflow", "limit": 1, "timeOfHours": 2},
                 )
@@ -44,7 +53,7 @@ class DocmeeClient:
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 resp = await client.get(
-                    f"{BASE_URL}/api/ppt/template/options",
+                    f"{BASE_URL_CN}/api/ppt/template/options",
                     headers={"token": token},
                 )
                 resp.raise_for_status()
@@ -60,19 +69,23 @@ class DocmeeClient:
         self,
         page: int = 1,
         size: int = 20,
+        lang: str = "zh",
         filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """List available templates with pagination."""
-        token = await self._create_token()
+        """List available templates with pagination. Uses international API for non-Chinese."""
+        base_url = _base_url(lang)
+        token = await self._create_token(base_url)
         if not token:
             return {"records": [], "total": 0}
         try:
             body: dict[str, Any] = {"page": page, "size": size}
+            if lang:
+                body["lang"] = lang
             if filters:
                 body.update(filters)
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 resp = await client.post(
-                    f"{BASE_URL}/api/ppt/templates",
+                    f"{base_url}/api/ppt/templates",
                     headers={"token": token},
                     json=body,
                 )
@@ -86,7 +99,6 @@ class DocmeeClient:
                 records = raw if isinstance(raw, list) else raw.get("records", [])
                 total = len(records) if isinstance(raw, list) else raw.get("total", 0)
                 # Resolve coverUrl redirects to get final CDN URLs
-                # chatmee.cn URLs need token and return 302 → Alibaba OSS
                 for r in records:
                     cover = r.get("coverUrl", "")
                     if not cover:
@@ -117,9 +129,9 @@ class DocmeeClient:
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 resp = await client.get(
-                    f"{BASE_URL}/api/ppt/v2/options",
+                    f"{BASE_URL_CN}/api/ppt/v2/options",
                     headers={"token": token},
-                    params={"lang": "zh"},
+                    params={"lang": "en"},
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -143,7 +155,8 @@ class DocmeeClient:
 
         Returns pptInfo dict with id, subject, coverUrl, etc. or None on failure.
         """
-        token = await self._create_token()
+        base_url = _base_url(lang)
+        token = await self._create_token(base_url)
         if not token:
             return None
 
@@ -151,7 +164,7 @@ class DocmeeClient:
             async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
                 # Step 1: Create task (type=1: smart generation from theme/requirements)
                 resp = await client.post(
-                    f"{BASE_URL}/api/ppt/v2/createTask",
+                    f"{base_url}/api/ppt/v2/createTask",
                     headers={"token": token, "Content-Type": "application/x-www-form-urlencoded"},
                     data={"type": "1", "content": content[:1000]},
                 )
@@ -176,7 +189,7 @@ class DocmeeClient:
                     gen_body["audience"] = audience
 
                 resp = await client.post(
-                    f"{BASE_URL}/api/ppt/v2/generateContent",
+                    f"{base_url}/api/ppt/v2/generateContent",
                     headers={"token": token},
                     json=gen_body,
                 )
@@ -193,7 +206,7 @@ class DocmeeClient:
 
                 # Step 3: Generate PPT from outline + template
                 resp = await client.post(
-                    f"{BASE_URL}/api/ppt/v2/generatePptx",
+                    f"{base_url}/api/ppt/v2/generatePptx",
                     headers={"token": token},
                     json={
                         "id": task_id,
@@ -214,15 +227,16 @@ class DocmeeClient:
             logger.error("Docmee generate_ppt error: %s", e)
             return None
 
-    async def download_pptx(self, ppt_id: str) -> bytes | None:
+    async def download_pptx(self, ppt_id: str, lang: str = "zh") -> bytes | None:
         """Download the generated PPTX file."""
-        token = await self._create_token()
+        base_url = _base_url(lang)
+        token = await self._create_token(base_url)
         if not token:
             return None
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 resp = await client.post(
-                    f"{BASE_URL}/api/ppt/downloadPptx",
+                    f"{base_url}/api/ppt/downloadPptx",
                     headers={"token": token},
                     json={"id": ppt_id},
                 )
