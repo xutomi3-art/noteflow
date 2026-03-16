@@ -99,13 +99,28 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     const { unsubscribe: prev } = get();
     if (prev) prev();
 
+    // Debounce timer for unknown-source refetch to avoid duplicate requests
+    let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+
     const unsub = api.subscribeToSourceStatus(notebookId, (event) => {
       if (event.type === "source_status") {
-        const { sources } = get();
+        const { sources, isLoading } = get();
         const known = sources.some((s) => s.id === event.source_id);
         if (!known) {
-          // Unknown source — another user uploaded it; reload the full list
-          get().fetchSources(notebookId);
+          // Unknown source — another user uploaded it; debounce the reload
+          if (!isLoading && !refetchTimer) {
+            refetchTimer = setTimeout(() => {
+              refetchTimer = null;
+              // After reload, auto-select any newly ready sources
+              get().fetchSources(notebookId).then(() => {
+                set((state) => {
+                  const selectedIds = new Set(state.selectedIds);
+                  state.sources.filter((s) => s.status === "ready").forEach((s) => selectedIds.add(s.id));
+                  return { selectedIds };
+                });
+              });
+            }, 500);
+          }
           return;
         }
         set((state) => {
