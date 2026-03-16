@@ -36,6 +36,7 @@ import {
   Upload,
   Link as LinkIcon,
   ChevronRight,
+  ChevronUp,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -2005,12 +2006,23 @@ export default function NotebookPage() {
                             </p>
                           </div>
                         </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); id && deleteNote(id, note.id); }}
-                          className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {isExpanded && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setExpandedNoteId(null); }}
+                              className="text-slate-400 hover:text-slate-600 transition-colors"
+                              title="Collapse"
+                            >
+                              <ChevronUp className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); id && deleteNote(id, note.id); }}
+                            className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
