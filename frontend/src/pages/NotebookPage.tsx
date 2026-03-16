@@ -726,14 +726,16 @@ export default function NotebookPage() {
 
   const handleAddUrl = useCallback(async () => {
     if (!urlInput.trim() || !id) return;
-    try { new URL(urlInput.trim()); } catch {
-      setUrlError("Please enter a valid URL starting with http:// or https://");
+    let normalizedUrl = urlInput.trim();
+    if (!/^https?:\/\//i.test(normalizedUrl)) normalizedUrl = "https://" + normalizedUrl;
+    try { new URL(normalizedUrl); } catch {
+      setUrlError("请输入有效的域名或网址");
       return;
     }
     setIsAddingUrl(true);
     setUrlError(null);
     try {
-      await api.addUrlSource(id, urlInput.trim());
+      await api.addUrlSource(id, normalizedUrl);
       setUrlInput("");
       setShowUrlInput(false);
       setUrlError(null);
@@ -782,10 +784,11 @@ export default function NotebookPage() {
   }, []);
 
   const handleModalAddUrl = useCallback(() => {
-    const url = modalUrlInput.trim();
+    let url = modalUrlInput.trim();
     if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     try { new URL(url); } catch {
-      setModalUrlError('Please enter a valid URL starting with http:// or https://');
+      setModalUrlError('请输入有效的域名或网址');
       return;
     }
     if (modalUrls.includes(url)) { setModalUrlInput(''); setModalUrlError(null); return; }
@@ -2181,7 +2184,7 @@ export default function NotebookPage() {
                   <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="url"
-                    placeholder="https://example.com"
+                    placeholder="example.com"
                     value={modalUrlInput}
                     onChange={(e) => { setModalUrlInput(e.target.value); setModalUrlError(null); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleModalAddUrl(); } }}

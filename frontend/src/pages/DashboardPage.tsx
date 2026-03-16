@@ -213,10 +213,11 @@ export default function DashboardPage() {
   };
 
   const handleAddUrl = () => {
-    const url = urlInput.trim();
+    let url = urlInput.trim();
     if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     try { new URL(url); } catch {
-      setUrlError('Please enter a valid URL starting with http:// or https://');
+      setUrlError('请输入有效的域名或网址');
       return;
     }
     if (pendingUrls.includes(url)) {
@@ -644,7 +645,7 @@ export default function DashboardPage() {
                         <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input
                           type="url"
-                          placeholder="https://example.com"
+                          placeholder="example.com"
                           value={urlInput}
                           onChange={(e) => { setUrlInput(e.target.value); setUrlError(null); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddUrl(); } }}
