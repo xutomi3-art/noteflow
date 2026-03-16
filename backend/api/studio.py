@@ -35,7 +35,7 @@ router = APIRouter(prefix="/notebooks/{notebook_id}/studio", tags=["studio"])
 ppt_router = APIRouter(prefix="/ppt", tags=["ppt"])
 
 PROMPTS = {
-    "summary": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+    "summary": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
 
 Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points.
 
@@ -46,7 +46,7 @@ Formatting rules:
 
 DOCUMENTS:
 {context}""",
-    "faq": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+    "faq": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
 
 Based on the following document contents, generate a list of 8-10 frequently asked questions with detailed answers. Each Q&A should cover an important concept from the documents. Format as:
 
@@ -55,7 +55,7 @@ A: [answer]
 
 DOCUMENTS:
 {context}""",
-    "study_guide": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+    "study_guide": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
 
 Based on the following document contents, create a comprehensive study guide that includes:
 1. Key concepts and definitions
@@ -65,7 +65,7 @@ Based on the following document contents, create a comprehensive study guide tha
 
 DOCUMENTS:
 {context}""",
-    "action_items": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate or switch languages.
+    "action_items": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
 
 Based on the following document contents, extract all action items, tasks, to-dos, next steps, and follow-up items. For each action item, include:
 - The specific task or action required
@@ -589,7 +589,7 @@ async def generate_content(
 
     prompt = PROMPTS[content_type].format(context=context)
     messages = [
-        {"role": "system", "content": "You are an AI assistant that generates educational content from source documents. Always respond in the same language as the source documents — never translate or switch to a different language."},
+        {"role": "system", "content": "You are an AI assistant that generates educational content from source documents. Always respond in the same language as the source documents — never translate or switch to a different language. Do NOT include any meta-commentary about the language you are using; just output the content directly."},
         {"role": "user", "content": prompt},
     ]
     content = await qwen_client.generate(messages)
