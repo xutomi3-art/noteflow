@@ -101,8 +101,15 @@ export const useSourceStore = create<SourceState>((set, get) => ({
 
     const unsub = api.subscribeToSourceStatus(notebookId, (event) => {
       if (event.type === "source_status") {
+        const { sources } = get();
+        const known = sources.some((s) => s.id === event.source_id);
+        if (!known) {
+          // Unknown source — another user uploaded it; reload the full list
+          get().fetchSources(notebookId);
+          return;
+        }
         set((state) => {
-          const sources = state.sources.map((s) =>
+          const updatedSources = state.sources.map((s) =>
             s.id === event.source_id
               ? {
                   ...s,
@@ -116,7 +123,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
           if (event.status === "ready") {
             selectedIds.add(event.source_id);
           }
-          return { sources, selectedIds };
+          return { sources: updatedSources, selectedIds };
         });
       }
     });
