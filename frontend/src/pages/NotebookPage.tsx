@@ -289,6 +289,8 @@ export default function NotebookPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
   const [overviewSaved, setOverviewSaved] = useState(false);
+  const [copiedMessageIds, setCopiedMessageIds] = useState<Set<string>>(new Set());
+  const [messageFeedback, setMessageFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -890,6 +892,36 @@ export default function NotebookPage() {
     },
     [handleSaveNote],
   );
+
+  const handleCopyMessage = useCallback((msgId: string, text: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    } else {
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopiedMessageIds((prev) => new Set([...prev, msgId]));
+    setTimeout(() => {
+      setCopiedMessageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(msgId);
+        return next;
+      });
+    }, 2000);
+  }, []);
+
+  const handleMessageFeedback = useCallback((msgId: string, vote: 'up' | 'down') => {
+    setMessageFeedback((prev) => ({
+      ...prev,
+      [msgId]: prev[msgId] === vote ? null : vote,
+    }));
+  }, []);
 
   const handleCopyToClipboard = useCallback((text: string) => {
     if (navigator.clipboard) {
@@ -1678,15 +1710,24 @@ export default function NotebookPage() {
                               </button>
                             )}
                             <button
-                              onClick={() => handleCopyToClipboard(msg.content)}
-                              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
+                              onClick={() => handleCopyMessage(msg.id, msg.content)}
+                              className={`p-1.5 rounded-full transition-colors ${copiedMessageIds.has(msg.id) ? "text-green-600 bg-green-50" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
+                              title="Copy"
                             >
-                              <Copy className="w-3.5 h-3.5" />
+                              {copiedMessageIds.has(msg.id) ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
-                            <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+                            <button
+                              onClick={() => handleMessageFeedback(msg.id, 'up')}
+                              className={`p-1.5 rounded-full transition-colors ${messageFeedback[msg.id] === 'up' ? "text-green-600 bg-green-50" : "text-slate-400 hover:text-green-600 hover:bg-green-50"}`}
+                              title="Helpful"
+                            >
                               <ThumbsUp className="w-3.5 h-3.5" />
                             </button>
-                            <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+                            <button
+                              onClick={() => handleMessageFeedback(msg.id, 'down')}
+                              className={`p-1.5 rounded-full transition-colors ${messageFeedback[msg.id] === 'down' ? "text-red-500 bg-red-50" : "text-slate-400 hover:text-red-500 hover:bg-red-50"}`}
+                              title="Not helpful"
+                            >
                               <ThumbsDown className="w-3.5 h-3.5" />
                             </button>
                           </div>
