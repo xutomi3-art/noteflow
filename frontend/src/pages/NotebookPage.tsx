@@ -1827,7 +1827,7 @@ export default function NotebookPage() {
                 ) : (
                   <Presentation className="w-4 h-4 text-orange-600 mb-2" />
                 )}
-                <div className="text-[11px] font-bold text-orange-900">Slide Deck</div>
+                <div className="text-[11px] font-bold text-orange-900">{pptLoading ? 'Generating...' : 'Slide Deck'}</div>
               </button>
 
               {/* Mind Map */}
@@ -2086,17 +2086,13 @@ export default function NotebookPage() {
         isOpen={pptModalOpen}
         onClose={() => setPptModalOpen(false)}
         isGenerating={pptLoading}
-        onGenerate={async (config: PptConfig) => {
+        onGenerate={(config: PptConfig) => {
           if (!id) return;
+          setPptModalOpen(false);
           setPptLoading(true);
-          try {
-            await api.downloadPPT(id, config);
-            setPptModalOpen(false);
-          } catch (err) {
-            console.error("PPT generation failed:", err);
-          } finally {
-            setPptLoading(false);
-          }
+          api.downloadPPT(id, config)
+            .catch((err) => console.error("PPT generation failed:", err))
+            .finally(() => setPptLoading(false));
         }}
       />
 
