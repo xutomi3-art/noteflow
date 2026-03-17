@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = ""
 
+    # Microsoft OAuth (Entra ID / Azure AD)
+    MICROSOFT_CLIENT_ID: str = ""
+    MICROSOFT_CLIENT_SECRET: str = ""
+    MICROSOFT_TENANT_ID: str = "common"
+    MICROSOFT_REDIRECT_URI: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

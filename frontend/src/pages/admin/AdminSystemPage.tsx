@@ -46,6 +46,13 @@ const GOOGLE_OAUTH_FIELDS: ConfigField[] = [
   { key: 'google_redirect_uri', label: 'Redirect URI', placeholder: 'http://10.200.0.112/api/auth/google/callback' },
 ];
 
+const MICROSOFT_OAUTH_FIELDS: ConfigField[] = [
+  { key: 'microsoft_client_id', label: 'Application (Client) ID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+  { key: 'microsoft_client_secret', label: 'Client Secret', placeholder: 'your-client-secret', secret: true },
+  { key: 'microsoft_tenant_id', label: 'Tenant ID', placeholder: 'common (or your-tenant-id)' },
+  { key: 'microsoft_redirect_uri', label: 'Redirect URI', placeholder: 'https://noteflow.jotoai.com/api/auth/microsoft/callback' },
+];
+
 const DEEPSEEK_FIELDS: ConfigField[] = [
   { key: 'deepseek_api_key', label: 'API Key', placeholder: 'sk-...', secret: true },
   { key: 'deepseek_base_url', label: 'Base URL', placeholder: 'https://api.deepseek.com/v1' },
@@ -421,6 +428,16 @@ export default function AdminSystemPage() {
         settings={settings}
         saveSettings={handleSaveConfig}
         saveLabel="Save Google OAuth"
+      />
+
+      {/* Microsoft OAuth Settings */}
+      <ConfigSection
+        title="Microsoft OAuth (Entra ID)"
+        description="Configure Microsoft Sign-In for users (Azure AD / Entra ID)"
+        fields={MICROSOFT_OAUTH_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save Microsoft OAuth"
       />
     </div>
   );

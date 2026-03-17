@@ -19,10 +19,11 @@ CONFIGURABLE_KEYS = {
     "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
     "alibaba_tts_appkey", "alibaba_tts_token",
     "google_client_id", "google_client_secret", "google_redirect_uri",
+    "microsoft_client_id", "microsoft_client_secret", "microsoft_tenant_id", "microsoft_redirect_uri",
 }
 
 # Keys that contain sensitive values — mask on read
-SENSITIVE_KEYS = {"llm_api_key", "deepseek_api_key", "qwen_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret"}
+SENSITIVE_KEYS = {"llm_api_key", "deepseek_api_key", "qwen_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret", "microsoft_client_secret"}
 
 # Mapping from setting key to Settings attribute
 _ENV_MAP = {
@@ -48,6 +49,10 @@ _ENV_MAP = {
     "google_client_id": "GOOGLE_CLIENT_ID",
     "google_client_secret": "GOOGLE_CLIENT_SECRET",
     "google_redirect_uri": "GOOGLE_REDIRECT_URI",
+    "microsoft_client_id": "MICROSOFT_CLIENT_ID",
+    "microsoft_client_secret": "MICROSOFT_CLIENT_SECRET",
+    "microsoft_tenant_id": "MICROSOFT_TENANT_ID",
+    "microsoft_redirect_uri": "MICROSOFT_REDIRECT_URI",
 }
 
 

@@ -123,6 +123,21 @@ export default function LoginPage() {
               </svg>
               Sign in with Google
             </button>
+
+            {/* Microsoft Sign-In */}
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/api/auth/microsoft'; }}
+              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+            >
+              <svg width="18" height="18" viewBox="0 0 23 23">
+                <path fill="#f35325" d="M1 1h10v10H1z"/>
+                <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                <path fill="#ffba08" d="M12 12h10v10H12z"/>
+              </svg>
+              Sign in with Microsoft
+            </button>
           </form>
         </div>
 

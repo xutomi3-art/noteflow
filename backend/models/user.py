@@ -18,6 +18,7 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar: Mapped[str | None] = mapped_column(String(500), nullable=True)
     google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    microsoft_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     auth_provider: Mapped[str] = mapped_column(String(20), default="local", server_default="local")
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
     is_disabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())

@@ -26,7 +26,8 @@ async def login(db: AsyncSession, req: LoginRequest) -> TokenResponse:
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
     if user and not user.password_hash:
-        raise ValueError("This account uses Google sign-in. Please use the Google button.")
+        provider = user.auth_provider.title()
+        raise ValueError(f"This account uses {provider} sign-in. Please use the {provider} button.")
     if not user or not verify_password(req.password, user.password_hash):
         raise ValueError("Invalid email or password")
 
@@ -64,6 +65,42 @@ async def find_or_create_google_user(db: AsyncSession, google_id: str, email: st
         avatar=avatar,
         google_id=google_id,
         auth_provider="google",
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, email: str, name: str, avatar: str | None) -> User:
+    """Find or create a user for Microsoft OAuth sign-in."""
+    # 1. Lookup by microsoft_id first
+    result = await db.execute(select(User).where(User.microsoft_id == microsoft_id))
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+
+    # 2. Lookup by email — link existing account to Microsoft
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user:
+        user.microsoft_id = microsoft_id
+        if user.auth_provider == "local":
+            user.auth_provider = "microsoft"
+        if avatar and not user.avatar:
+            user.avatar = avatar
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    # 3. Create new Microsoft-only user
+    user = User(
+        email=email,
+        name=name,
+        password_hash=None,
+        avatar=avatar,
+        microsoft_id=microsoft_id,
+        auth_provider="microsoft",
     )
     db.add(user)
     await db.commit()

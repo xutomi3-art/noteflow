@@ -16,6 +16,7 @@ from backend.models.user import User
 from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
 from backend.services import auth_service
 from backend.services import google_auth_service
+from backend.services import microsoft_auth_service
 from backend.services.email_service import is_smtp_configured, send_password_reset_email
 from backend.services.notebook_service import create_notebook
 from backend.services.note_service import create_note
@@ -176,3 +177,45 @@ async def google_callback(code: str = "", error: str = "", db: AsyncSession = De
     except Exception:
         logger.exception("Google OAuth callback failed")
         return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=google_failed")
+
+
+@router.get("/microsoft")
+async def microsoft_login(db: AsyncSession = Depends(get_db)):
+    """Redirect to Microsoft OAuth consent screen."""
+    client_id, _secret, tenant_id, redirect_uri = await microsoft_auth_service.get_microsoft_config(db)
+    if not client_id or not redirect_uri:
+        raise HTTPException(status_code=503, detail="Microsoft OAuth is not configured")
+    url = microsoft_auth_service.build_microsoft_auth_url(client_id, tenant_id, redirect_uri)
+    return RedirectResponse(url=url)
+
+
+@router.get("/microsoft/callback")
+async def microsoft_callback(code: str = "", error: str = "", db: AsyncSession = Depends(get_db)):
+    """Handle Microsoft OAuth callback, exchange code, issue JWT, redirect to frontend."""
+    if error or not code:
+        return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=microsoft_denied")
+
+    try:
+        client_id, client_secret, tenant_id, redirect_uri = await microsoft_auth_service.get_microsoft_config(db)
+        tokens = await microsoft_auth_service.exchange_code_for_tokens(code, client_id, client_secret, tenant_id, redirect_uri)
+        user_info = await microsoft_auth_service.get_microsoft_user_info(tokens["access_token"])
+
+        microsoft_id = user_info.get("id")
+        email = user_info.get("mail") or user_info.get("userPrincipalName")
+        name = user_info.get("displayName") or email
+        avatar = None  # Microsoft Graph /me doesn't return avatar URL
+
+        if not microsoft_id or not email:
+            return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=microsoft_missing_info")
+
+        user = await auth_service.find_or_create_microsoft_user(db, microsoft_id, email, name, avatar)
+
+        access_token = create_access_token(str(user.id))
+        refresh_token = create_refresh_token(str(user.id))
+
+        return RedirectResponse(
+            url=f"{settings.APP_BASE_URL}/auth/callback?token={access_token}&refresh={refresh_token}"
+        )
+    except Exception:
+        logger.exception("Microsoft OAuth callback failed")
+        return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=microsoft_failed")
