@@ -23,6 +23,7 @@ class QwenClient:
         self.client = AsyncOpenAI(
             api_key=settings.LLM_API_KEY or settings.QWEN_API_KEY,
             base_url=settings.LLM_BASE_URL if settings.LLM_API_KEY else "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            timeout=120.0,  # 2 min timeout for large context requests
         )
         self.model = settings.LLM_MODEL if settings.LLM_API_KEY else settings.QWEN_MODEL
 

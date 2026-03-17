@@ -352,7 +352,10 @@ The uploaded documents do not contain information relevant to this question. Ple
         t_llm_start = time.time()
         if thinking:
             yield f"data: {json.dumps({'type': 'thinking_start'})}\n\n"
+        last_token_time = time.time()
+        STREAM_TIMEOUT = 60  # seconds without any token = stream stalled
         async for token in qwen_client.stream_chat(messages, thinking=thinking):
+            last_token_time = time.time()
             if token.startswith("__REASONING__:"):
                 reasoning_text = token[len("__REASONING__:"):]
                 yield f"data: {json.dumps({'type': 'reasoning', 'content': reasoning_text})}\n\n"
@@ -362,6 +365,10 @@ The uploaded documents do not contain information relevant to this question. Ple
                 full_response += token
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
         t_llm_end = time.time()
+        if not full_response and (t_llm_end - t_llm_start) > STREAM_TIMEOUT:
+            logger.warning("LLM stream timed out after %.1fs with no output", t_llm_end - t_llm_start)
+            full_response = "[AI response timed out. Please try again with fewer sources selected.]"
+            yield f"data: {json.dumps({'type': 'token', 'content': full_response})}\n\n"
 
         # 5. Parse citation references from response
         used_indices = set(int(m) for m in re.findall(r'\[(\d+)\]', full_response))
