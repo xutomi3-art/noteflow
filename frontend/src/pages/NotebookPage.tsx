@@ -1739,9 +1739,13 @@ export default function NotebookPage() {
                         <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                         <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
-                      {sources.some(s => selectedIds.has(s.id) && ['xlsx', 'xls', 'csv'].includes(s.file_type)) && (
-                        <span className="text-[11px] text-slate-400 ml-1">Analyzing spreadsheet data, this may take a moment...</span>
-                      )}
+                      <span className="text-[11px] text-slate-400 ml-1">
+                        {selectedIds.size > 10
+                          ? `${selectedIds.size} sources selected — selecting fewer sources gives faster, more focused answers.`
+                          : sources.some(s => selectedIds.has(s.id) && ['xlsx', 'xls', 'csv'].includes(s.file_type))
+                            ? 'Analyzing spreadsheet data, this may take a moment...'
+                            : ''}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -1814,12 +1818,7 @@ export default function NotebookPage() {
                 </div>
               </div>
               <div className="text-center mt-3 text-[10px] text-slate-400">
-                {(() => {
-                  const excelCount = sources.filter(s => selectedIds.has(s.id) && ['xlsx', 'xls', 'csv'].includes(s.file_type)).length;
-                  if (selectedIds.size > 10) return `${selectedIds.size} sources selected — selecting fewer sources gives faster, more focused answers.`;
-                  if (excelCount > 0) return `${excelCount} spreadsheet${excelCount > 1 ? 's' : ''} selected — large tables may take longer to process.`;
-                  return 'AI can be inaccurate; please double-check its responses.';
-                })()}
+                AI can be inaccurate; please double-check its responses.
               </div>
             </div>
           </div>
