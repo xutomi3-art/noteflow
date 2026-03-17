@@ -62,6 +62,12 @@ export default function DashboardPage() {
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
   });
+  const [seenNotebookIds, setSeenNotebookIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('seenNotebooks');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch { return new Set(); }
+  });
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -120,6 +126,7 @@ export default function DashboardPage() {
   const NEW_INVITE_DAYS = 7;
   const isNewInvite = (nb: Notebook) => {
     if (!nb.joined_at || nb.user_role === 'owner') return false;
+    if (seenNotebookIds.has(nb.id)) return false;
     const joinedMs = new Date(nb.joined_at).getTime();
     return Date.now() - joinedMs < NEW_INVITE_DAYS * 86400000;
   };
@@ -177,6 +184,15 @@ export default function DashboardPage() {
   };
 
   const handleOpenNotebook = (notebook: Notebook) => {
+    // Mark as seen (removes "New" badge)
+    if (isNewInvite(notebook)) {
+      setSeenNotebookIds(prev => {
+        const next = new Set(prev);
+        next.add(notebook.id);
+        localStorage.setItem('seenNotebooks', JSON.stringify([...next]));
+        return next;
+      });
+    }
     navigate('/notebook/' + notebook.id);
   };
 
