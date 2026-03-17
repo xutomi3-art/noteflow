@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     RAGFLOW_API_KEY: str = ""
 
     # MinerU
-    MINERU_BASE_URL: str = "http://mineru-api:8000"
+    MINERU_BASE_URL: str = "http://cloud.jototech.cn:17860"
 
     # Docmee (文多多 AiPPT)
     DOCMEE_API_KEY: str = ""
