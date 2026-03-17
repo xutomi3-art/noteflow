@@ -35,9 +35,7 @@ router = APIRouter(prefix="/notebooks/{notebook_id}/studio", tags=["studio"])
 ppt_router = APIRouter(prefix="/ppt", tags=["ppt"])
 
 PROMPTS = {
-    "summary": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
-
-Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points.
+    "summary": """Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points. Write in the same language as the documents.
 
 Formatting rules:
 - Use ## for main section headers and ### for sub-sections. Do NOT use #### or deeper headings.
@@ -46,39 +44,34 @@ Formatting rules:
 
 DOCUMENTS:
 {context}""",
-    "faq": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
-
-Based on the following document contents, generate a list of 8-10 frequently asked questions with detailed answers. Each Q&A should cover an important concept from the documents. Format as:
+    "faq": """Based on the following document contents, generate a list of 8-10 frequently asked questions with detailed answers. Each Q&A should cover an important concept from the documents. Write in the same language as the documents. Format as:
 
 Q: [question]
 A: [answer]
 
 DOCUMENTS:
 {context}""",
-    "study_guide": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
-
-Based on the following document contents, create a comprehensive study guide that includes:
+    "study_guide": """Based on the following document contents, create a comprehensive study guide that includes:
 1. Key concepts and definitions
 2. Important relationships between ideas
 3. Summary of each major section
 4. Review questions for self-assessment
 
+Write in the same language as the documents.
+
 DOCUMENTS:
 {context}""",
-    "action_items": """IMPORTANT: Detect the language of the documents below and write your entire response in that SAME language. Do NOT translate, switch languages, or add any meta-commentary about language. Output content directly.
-
-Based on the following document contents, extract all action items, tasks, to-dos, next steps, and follow-up items. For each action item, include:
+    "action_items": """Based on the following document contents, extract all action items, tasks, to-dos, next steps, and follow-up items. For each action item, include:
 - The specific task or action required
 - Who is responsible (if mentioned)
 - Deadline or timeline (if mentioned)
 - Priority level (High/Medium/Low) based on context
 
-Group related action items together under clear category headers.
+Group related action items together under clear category headers. Write in the same language as the documents.
 
 DOCUMENTS:
 {context}""",
-    "mindmap": """Generate a mind map JSON structure from the source documents.
-IMPORTANT: Node labels must be in the SAME language as the source documents. Do NOT translate.
+    "mindmap": """Generate a mind map JSON structure from the source documents. Node labels should be in the same language as the documents.
 Return ONLY valid JSON in this exact format:
 {{
   "nodes": [
@@ -590,9 +583,9 @@ async def generate_content(
 
     prompt = PROMPTS[content_type].format(context=context)
     if content_type == "mindmap":
-        system_msg = "You are an expert at creating mind map structures from documents. Return ONLY valid JSON. Node labels must be in the same language as the source documents."
+        system_msg = "You are an expert at creating mind map structures from documents. Return ONLY valid JSON."
     else:
-        system_msg = "You are an AI assistant that generates educational content from source documents. Always respond in the same language as the source documents — never translate or switch to a different language. Do NOT include any meta-commentary about the language you are using; just output the content directly."
+        system_msg = "You are a helpful assistant that generates content from source documents. Write in the same language as the document content."
     messages = [
         {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},
