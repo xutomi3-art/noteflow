@@ -375,8 +375,8 @@ Answer the question ONLY based on the context above. Use [1], [2], etc. to cite 
 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
-        # Safety cap: DeepSeek limit is 131K tokens (~260K chars). Reserve 20K for system + history + output.
-        MAX_USER_CONTENT_CHARS = 240000
+        # Safety cap: DeepSeek limit is 131K tokens (~260K chars). Reserve 30K tokens for system + history + output.
+        MAX_USER_CONTENT_CHARS = 200000
         if len(user_content) > MAX_USER_CONTENT_CHARS:
             logger.warning("User content too long (%d chars), truncating to %d", len(user_content), MAX_USER_CONTENT_CHARS)
             # Keep question at the end — truncate context in the middle
