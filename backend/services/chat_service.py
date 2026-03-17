@@ -207,7 +207,6 @@ async def stream_chat(
         # Step 2b: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
         # If so, send only those matched Excel tables in full to LLM.
         # For data computation questions, also try SQL on matched tables.
-        MAX_LLM_EXCEL_CHARS = 60000  # total budget for all matched Excel tables (~30K tokens)
         t_excel_start = time.time()
         if excel_sources:
             # Build a map of Excel ragflow_doc_id → Source
@@ -236,6 +235,16 @@ async def stream_chat(
                         matched_excel[str(src.id)] = src
 
             if matched_excel:
+                # Dynamic budget: more generous when fewer Excel files matched
+                n = len(matched_excel)
+                if n == 1:
+                    max_excel_chars = 60000   # ~30K tokens — full table
+                elif n == 2:
+                    max_excel_chars = 80000   # 40K each
+                else:
+                    max_excel_chars = min(25000 * n, 80000)
+                logger.info("Excel budget: %d matched tables, %d char limit", n, max_excel_chars)
+
                 # Send matched Excel tables in full to LLM
                 excel_parts = []
                 total_chars = 0
@@ -244,7 +253,7 @@ async def stream_chat(
                         continue
                     try:
                         md = excel_to_markdown(src.storage_url)
-                        if total_chars + len(md) <= MAX_LLM_EXCEL_CHARS:
+                        if total_chars + len(md) <= max_excel_chars:
                             excel_parts.append(f"Data from file: {src.filename}\n\n{md}")
                             total_chars += len(md)
                             logger.info("Including matched Excel: %s (%d chars)", src.filename, len(md))

@@ -1733,10 +1733,15 @@ export default function NotebookPage() {
                 {/* Streaming without content yet — typing indicator */}
                 {isStreaming && !streamingContent && (
                   <div className="flex justify-start">
-                    <div className="flex items-center gap-1 px-4 py-3">
-                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    <div className="flex items-center gap-2 px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                      {sources.some(s => selectedIds.has(s.id) && ['xlsx', 'xls', 'csv'].includes(s.file_type)) && (
+                        <span className="text-[11px] text-slate-400 ml-1">Analyzing spreadsheet data, this may take a moment...</span>
+                      )}
                     </div>
                   </div>
                 )}
