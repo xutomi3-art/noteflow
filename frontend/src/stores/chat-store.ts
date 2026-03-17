@@ -63,71 +63,83 @@ export const useChatStore = create<ChatState>((set, get) => ({
       abortStream: null,
     }));
 
-    const { abort, promise } = api.sendChatMessage(
-      notebookId,
-      message,
-      sourceIds,
-      // onToken
-      (token: string) => {
-        set(state => ({
-          streamingContent: state.streamingContent + token,
-          isThinkingPhase: false,
-        }));
-      },
-      // onDone
-      (data: { id: string; citations: Citation[] }) => {
-        const { streamingContent } = get();
-        const assistantMsg: ChatMessage = {
-          id: data.id,
-          notebook_id: notebookId,
-          user_id: "",
-          role: "assistant",
-          content: streamingContent,
-          citations: data.citations,
-          created_at: new Date().toISOString(),
-        };
+    let retried = false;
 
-        set(state => ({
-          messages: [...state.messages, assistantMsg],
-          isStreaming: false,
-          streamingContent: "",
-          abortStream: null,
-        }));
-      },
-      // onError (6th param)
-      (error: string) => {
-        const errorMsg: ChatMessage = {
-          id: `error-${Date.now()}`,
-          notebook_id: notebookId,
-          user_id: "",
-          role: "assistant",
-          content: `Error: ${error}`,
-          citations: [],
-          created_at: new Date().toISOString(),
-        };
+    const startStream = async () => {
+      const { abort, promise } = api.sendChatMessage(
+        notebookId,
+        message,
+        sourceIds,
+        // onToken
+        (token: string) => {
+          set(state => ({
+            streamingContent: state.streamingContent + token,
+            isThinkingPhase: false,
+          }));
+        },
+        // onDone
+        (data: { id: string; citations: Citation[] }) => {
+          const { streamingContent } = get();
+          const assistantMsg: ChatMessage = {
+            id: data.id,
+            notebook_id: notebookId,
+            user_id: "",
+            role: "assistant",
+            content: streamingContent,
+            citations: data.citations,
+            created_at: new Date().toISOString(),
+          };
 
-        set(state => ({
-          messages: [...state.messages, errorMsg],
-          isStreaming: false,
-          streamingContent: "",
-          abortStream: null,
-        }));
-      },
-      thinking,
-      // onThinkingStart
-      () => {
-        set({ isThinkingPhase: true });
-      },
-      // onReasoning
-      (content: string) => {
-        set(state => ({
-          reasoningContent: state.reasoningContent + content,
-        }));
-      },
-    );
+          set(state => ({
+            messages: [...state.messages, assistantMsg],
+            isStreaming: false,
+            streamingContent: "",
+            abortStream: null,
+          }));
+        },
+        // onError — auto-retry once on network failure
+        (error: string) => {
+          if (!retried && (error.includes("Failed to fetch") || error.includes("network"))) {
+            retried = true;
+            set({ streamingContent: "", reasoningContent: "", isThinkingPhase: false });
+            setTimeout(() => startStream(), 1000);
+            return;
+          }
+          const errorMsg: ChatMessage = {
+            id: `error-${Date.now()}`,
+            notebook_id: notebookId,
+            user_id: "",
+            role: "assistant",
+            content: `Error: ${error}`,
+            citations: [],
+            created_at: new Date().toISOString(),
+          };
 
-    set({ abortStream: abort });
-    await promise;
+          set(state => ({
+            messages: [...state.messages, errorMsg],
+            isStreaming: false,
+            streamingContent: "",
+            abortStream: null,
+          }));
+        },
+        thinking,
+        // onThinkingStart
+        () => {
+          set({ isThinkingPhase: true });
+        },
+        // onReasoning
+        (content: string) => {
+          set(state => ({
+            reasoningContent: state.reasoningContent + content,
+          }));
+        },
+      );
+
+      set({ abortStream: abort });
+      await promise;
+    };
+
+    await startStream();
   },
 
   stopStream: () => {
