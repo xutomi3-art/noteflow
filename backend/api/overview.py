@@ -1,3 +1,4 @@
+import hashlib
 import os
 import uuid
 
@@ -33,15 +34,27 @@ QUESTIONS:
 DOCUMENTS:
 {context}"""
 
+# In-memory cache: notebook_id -> (source_hash, parsed_result)
+_overview_cache: dict[str, tuple[str, dict]] = {}
 
-async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID) -> str:
+
+def _compute_source_hash(sources: list[Source]) -> str:
+    """Hash of sorted ready source IDs — changes when sources are added/removed."""
+    ids = sorted(str(s.id) for s in sources if s.status == "ready")
+    return hashlib.md5(",".join(ids).encode()).hexdigest()
+
+
+async def _get_ready_sources(db: AsyncSession, notebook_id: uuid.UUID) -> list[Source]:
     result = await db.execute(
         select(Source).where(
             Source.notebook_id == notebook_id,
             Source.status == "ready",
         )
     )
-    sources = list(result.scalars().all())
+    return list(result.scalars().all())
+
+
+async def _get_source_context(sources: list[Source]) -> str:
     if not sources:
         return ""
 
@@ -55,10 +68,8 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID) -> str:
                 with open(source.storage_url, "r", encoding="utf-8", errors="replace") as f:
                     content = f.read()[:8000]
             elif source.file_type in ("xlsx", "xls", "csv"):
-                # Convert Excel/CSV to markdown for overview context
                 content = excel_to_markdown(source.storage_url)[:8000]
             else:
-                # For PDF/DOCX/PPTX: try reading the MinerU-parsed .md file
                 md_path = source.storage_url.rsplit(".", 1)[0] + ".md"
                 if os.path.isfile(md_path):
                     with open(md_path, "r", encoding="utf-8", errors="replace") as f:
@@ -92,7 +103,6 @@ def _parse_overview_response(text: str) -> dict:
                 if q:
                     questions.append(q)
     else:
-        # Fallback: use entire text as overview
         overview = text.strip()
 
     return {
@@ -107,7 +117,19 @@ async def get_overview(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    context = await _get_source_context(db, uuid.UUID(notebook_id))
+    sources = await _get_ready_sources(db, uuid.UUID(notebook_id))
+    if not sources:
+        return {"overview": "", "suggested_questions": []}
+
+    source_hash = _compute_source_hash(sources)
+
+    # Return cached result if sources haven't changed
+    cached = _overview_cache.get(notebook_id)
+    if cached and cached[0] == source_hash:
+        return cached[1]
+
+    # Generate new overview
+    context = await _get_source_context(sources)
     if not context:
         return {"overview": "", "suggested_questions": []}
 
@@ -117,4 +139,9 @@ async def get_overview(
         {"role": "user", "content": prompt},
     ]
     raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
-    return _parse_overview_response(raw)
+    result = _parse_overview_response(raw)
+
+    # Cache the result
+    _overview_cache[notebook_id] = (source_hash, result)
+
+    return result
