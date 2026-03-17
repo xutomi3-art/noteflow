@@ -375,6 +375,13 @@ Answer the question ONLY based on the context above. Use [1], [2], etc. to cite 
 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
+        # Safety cap: DeepSeek limit is 131K tokens (~260K chars). Reserve 20K for system + history + output.
+        MAX_USER_CONTENT_CHARS = 240000
+        if len(user_content) > MAX_USER_CONTENT_CHARS:
+            logger.warning("User content too long (%d chars), truncating to %d", len(user_content), MAX_USER_CONTENT_CHARS)
+            # Keep question at the end — truncate context in the middle
+            user_content = user_content[:MAX_USER_CONTENT_CHARS - 200] + f"\n\n[Context truncated due to length]\n\nQuestion: {message}"
+
         # Fetch conversation history — up to 10 rounds (20 messages) but capped at ~8000 tokens (~16K chars)
         MAX_HISTORY_ROUNDS = 10
         MAX_HISTORY_CHARS = 16000
