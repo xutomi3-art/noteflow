@@ -71,9 +71,23 @@ _DEFAULT_NOTEBOOKS = [
 ]
 
 
+async def _bump_notebook_updated_at(notebook_id: str) -> None:
+    """Bump a notebook's updated_at to now (run as background task after all sources processed)."""
+    from backend.core.database import async_session
+    from backend.models.notebook import Notebook
+    from datetime import datetime, timezone
+    async with async_session() as db:
+        result = await db.execute(select(Notebook).where(Notebook.id == _uuid.UUID(notebook_id)))
+        nb = result.scalar_one_or_none()
+        if nb:
+            nb.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+
+
 async def _create_default_notebooks(db: AsyncSession, user: User, background_tasks: BackgroundTasks | None = None) -> None:
     """Create default starter notebooks with demo sources, notes for a new user."""
     source_tasks: list[tuple[str, str, str, str, str]] = []  # (source_id, notebook_id, file_path, filename, file_type)
+    getting_started_id: str | None = None
 
     for nb_data in _DEFAULT_NOTEBOOKS:
         try:
@@ -83,6 +97,8 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
                 req=NotebookCreate(name=nb_data["name"], emoji=nb_data["emoji"], cover_color=nb_data["cover_color"]),
             )
             nb_id = str(nb.id)
+            if nb_data["name"] == "Getting Started":
+                getting_started_id = nb_id
 
             # Create demo sources
             for filename in nb_data.get("sources", []):
@@ -129,6 +145,9 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
     if background_tasks:
         for sid, nid, fpath, fname, ftype in source_tasks:
             background_tasks.add_task(process_document, source_id=sid, notebook_id=nid, file_path=fpath, filename=fname, file_type=ftype)
+        # Ensure Getting Started has the newest updated_at (appears first on dashboard)
+        if getting_started_id:
+            background_tasks.add_task(_bump_notebook_updated_at, getting_started_id)
 
 
 @router.post("/register", response_model=TokenResponse)
