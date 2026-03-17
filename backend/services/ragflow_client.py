@@ -178,7 +178,8 @@ class RAGFlowClient:
         """Delete a document from RAGFlow."""
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-                resp = await client.delete(
+                resp = await client.request(
+                    "DELETE",
                     f"{self.base_url}/api/v1/datasets/{dataset_id}/documents",
                     headers=self._headers,
                     json={"ids": [document_id]},
