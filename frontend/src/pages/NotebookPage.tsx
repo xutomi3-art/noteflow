@@ -950,51 +950,13 @@ export default function NotebookPage() {
     async (contentType: string, content: string, label: string) => {
       let noteContent = content;
 
-      // For mindmap, convert JSON to a readable text tree
+      // For mindmap, save raw JSON so NoteContent renders it as MindMapTreeView
       if (contentType === "mindmap") {
         let raw = content.trim();
         if (raw.startsWith("```")) {
           raw = raw.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
         }
-        try {
-          const parsed = JSON.parse(raw);
-          const lines: string[] = [];
-          const walk = (node: unknown, depth: number) => {
-            const indent = "  ".repeat(depth);
-            if (typeof node === "string") {
-              lines.push(`${indent}- ${node}`);
-            } else if (Array.isArray(node)) {
-              node.forEach((item) => walk(item, depth));
-            } else if (node && typeof node === "object") {
-              const obj = node as Record<string, unknown>;
-              const nodeLabel = (obj.label || obj.name || obj.topic || obj.title || obj.text || "") as string;
-              const children = (obj.children || obj.nodes || obj.items || []) as unknown[];
-              if (nodeLabel) {
-                if (depth === 0) {
-                  lines.push(`# ${nodeLabel}`);
-                } else {
-                  lines.push(`${indent}- ${nodeLabel}`);
-                }
-                if (Array.isArray(children)) {
-                  children.forEach((child) => walk(child, depth + 1));
-                }
-              } else {
-                Object.entries(obj).forEach(([key, value]) => {
-                  lines.push(`${indent}- **${key}**`);
-                  if (typeof value === "object" && value !== null) {
-                    walk(value, depth + 1);
-                  } else {
-                    lines.push(`${indent}  ${String(value)}`);
-                  }
-                });
-              }
-            }
-          };
-          walk(parsed, 0);
-          noteContent = lines.join("\n");
-        } catch {
-          // If JSON parse fails, keep original content
-        }
+        noteContent = raw;
       }
 
       // Save to notes with a label prefix
