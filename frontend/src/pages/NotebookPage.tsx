@@ -1809,7 +1809,12 @@ export default function NotebookPage() {
                 </div>
               </div>
               <div className="text-center mt-3 text-[10px] text-slate-400">
-                AI can be inaccurate; please double-check its responses.
+                {(() => {
+                  const excelCount = sources.filter(s => selectedIds.has(s.id) && ['xlsx', 'xls', 'csv'].includes(s.file_type)).length;
+                  if (selectedIds.size > 10) return `${selectedIds.size} sources selected — selecting fewer sources gives faster, more focused answers.`;
+                  if (excelCount > 0) return `${excelCount} spreadsheet${excelCount > 1 ? 's' : ''} selected — large tables may take longer to process.`;
+                  return 'AI can be inaccurate; please double-check its responses.';
+                })()}
               </div>
             </div>
           </div>
