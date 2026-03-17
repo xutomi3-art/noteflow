@@ -59,6 +59,7 @@ services:
       - APP_BASE_URL=${APP_BASE_URL:-https://noteflow.jotoai.com}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-test@noteflow.dev}
       - DOCMEE_API_KEY=ak_rJJlxF3vvFvvF2sujD
+      - GOOGLE_PROXY=${GOOGLE_PROXY:-}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-https://noteflow.jotoai.com/api/auth/google/callback}
