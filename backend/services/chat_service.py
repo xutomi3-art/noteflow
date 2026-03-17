@@ -367,30 +367,30 @@ Answer the question ONLY based on the context above. Use [1], [2], etc. to cite 
 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
-        # Safety cap: DeepSeek limit is 131K tokens (~260K chars). Reserve 30K tokens for system + history + output.
-        MAX_USER_CONTENT_CHARS = 500000  # TEMP: raised to test token overflow friendly error
-        if len(user_content) > MAX_USER_CONTENT_CHARS:
-            logger.warning("User content too long (%d chars), truncating to %d", len(user_content), MAX_USER_CONTENT_CHARS)
-            # Keep question at the end — truncate context in the middle
-            user_content = user_content[:MAX_USER_CONTENT_CHARS - 200] + f"\n\n[Context truncated due to length]\n\nQuestion: {message}"
-
         # Fetch conversation history — up to 10 rounds (20 messages) but capped at ~8000 tokens (~16K chars)
         MAX_HISTORY_ROUNDS = 10
         MAX_HISTORY_CHARS = 16000
         history = await get_chat_history(db, notebook_id, user_id)
         history = [h for h in history if h.id != user_msg.id]
         recent = history[-(MAX_HISTORY_ROUNDS * 2):]
-        # Trim from oldest until within char budget
         history_messages = []
-        total_chars = 0
+        history_chars = 0
         for h in reversed(recent):
             msg_chars = len(h.content)
-            if total_chars + msg_chars > MAX_HISTORY_CHARS:
+            if history_chars + msg_chars > MAX_HISTORY_CHARS:
                 break
             history_messages.append({"role": h.role, "content": h.content})
-            total_chars += msg_chars
+            history_chars += msg_chars
         history_messages.reverse()
-        logger.info("Chat history: %d messages, %d chars", len(history_messages), total_chars)
+        logger.info("Chat history: %d messages, %d chars", len(history_messages), history_chars)
+
+        # Safety cap: DeepSeek limit is 131K tokens (~260K chars).
+        # Budget = total limit - system prompt - history - output reserve
+        MAX_TOTAL_CHARS = 240000
+        max_user_chars = MAX_TOTAL_CHARS - len(SYSTEM_PROMPT) - history_chars
+        if len(user_content) > max_user_chars:
+            logger.warning("User content too long (%d chars), truncating to %d (history=%d)", len(user_content), max_user_chars, history_chars)
+            user_content = user_content[:max_user_chars - 200] + f"\n\n[Context truncated due to length]\n\nQuestion: {message}"
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
