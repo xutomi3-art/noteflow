@@ -34,9 +34,14 @@ from backend.services.docmee_client import docmee_client
 router = APIRouter(prefix="/notebooks/{notebook_id}/studio", tags=["studio"])
 ppt_router = APIRouter(prefix="/ppt", tags=["ppt"])
 
-PROMPTS = {
-    "summary": """Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points. Write in the same language as the documents.
+def _detect_language(text: str) -> str:
+    """Detect if text is primarily Chinese or English based on character ratio."""
+    cjk_count = sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff')
+    return "Chinese" if cjk_count > len(text) * 0.05 else "English"
 
+
+PROMPTS = {
+    "summary": """Based on the following document contents, write a comprehensive summary that covers all key topics and main points. Structure it with clear sections and bullet points. 
 Formatting rules:
 - Use ## for main section headers and ### for sub-sections. Do NOT use #### or deeper headings.
 - Use bullet points (- ) for details under each section.
@@ -57,7 +62,6 @@ DOCUMENTS:
 3. Summary of each major section
 4. Review questions for self-assessment
 
-Write in the same language as the documents.
 
 DOCUMENTS:
 {context}""",
@@ -67,8 +71,7 @@ DOCUMENTS:
 - Deadline or timeline (if mentioned)
 - Priority level (High/Medium/Low) based on context
 
-Group related action items together under clear category headers. Write in the same language as the documents.
-
+Group related action items together under clear category headers. 
 DOCUMENTS:
 {context}""",
     "mindmap": """Generate a mind map JSON structure from the source documents. Node labels should be in the same language as the documents.
@@ -581,11 +584,12 @@ async def generate_content(
     if not context:
         raise HTTPException(status_code=400, detail="No ready sources available for generation")
 
+    lang = _detect_language(context)
     prompt = PROMPTS[content_type].format(context=context)
     if content_type == "mindmap":
-        system_msg = "You are an expert at creating mind map structures from documents. Return ONLY valid JSON."
+        system_msg = f"You are an expert at creating mind map structures from documents. Return ONLY valid JSON. You MUST write all labels in {lang}."
     else:
-        system_msg = "You are a helpful assistant that generates content from source documents. Write in the same language as the document content."
+        system_msg = f"You are a helpful assistant that generates content from source documents. You MUST write your entire response in {lang}. Do NOT use any other language."
     messages = [
         {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},

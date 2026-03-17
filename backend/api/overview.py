@@ -15,7 +15,13 @@ from backend.services.excel_service import excel_to_markdown
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/overview", tags=["overview"])
 
-OVERVIEW_PROMPT = """Based on the following document contents, write in English:
+
+def _detect_language(text: str) -> str:
+    """Detect if text is primarily Chinese or English based on character ratio."""
+    cjk_count = sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff')
+    return "Chinese" if cjk_count > len(text) * 0.05 else "English"
+
+OVERVIEW_PROMPT = """Based on the following document contents, write:
 
 1. A brief overview (2-3 sentences) describing what these documents are about.
 2. Exactly 3 practical suggested questions that a user might want to ask. Keep them simple, useful, and beginner-friendly.
@@ -131,9 +137,10 @@ async def get_overview(
     if not context:
         return {"overview": "", "suggested_questions": []}
 
+    lang = _detect_language(context)
     prompt = OVERVIEW_PROMPT.format(context=context)
     messages = [
-        {"role": "system", "content": "You are a helpful assistant that analyzes documents. Always respond in English."},
+        {"role": "system", "content": f"You are a helpful assistant that analyzes documents. You MUST write your entire response in {lang}. Do NOT use any other language."},
         {"role": "user", "content": prompt},
     ]
     raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
