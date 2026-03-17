@@ -43,13 +43,15 @@ async def batch_delete_users(
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete multiple users and all their data. Cannot delete yourself."""
+    """Delete users. Personal notebooks are deleted. Shared notebooks transfer ownership."""
     import uuid as _uuid
     from backend.models.notebook import Notebook
     from backend.models.source import Source
     from backend.models.chat_message import ChatMessage
     from backend.models.saved_note import SavedNote
     from backend.models.chat_log import ChatLog
+    from backend.models.notebook_member import NotebookMember
+    from backend.models.invite_link import InviteLink
 
     safe_ids = [uid for uid in user_ids if uid != str(admin.id)]
     if not safe_ids:
@@ -57,29 +59,59 @@ async def batch_delete_users(
 
     uuids = [_uuid.UUID(uid) for uid in safe_ids]
 
-    # Get notebook IDs owned by these users
-    nb_result = await db.execute(select(Notebook.id).where(Notebook.owner_id.in_(uuids)))
-    nb_ids = [row[0] for row in nb_result.all()]
+    # Get all notebooks owned by these users
+    nb_result = await db.execute(select(Notebook).where(Notebook.owner_id.in_(uuids)))
+    notebooks = list(nb_result.scalars().all())
 
-    if nb_ids:
-        # Delete data in notebooks owned by these users
-        await db.execute(delete(Source).where(Source.notebook_id.in_(nb_ids)))
-        await db.execute(delete(ChatMessage).where(ChatMessage.notebook_id.in_(nb_ids)))
-        await db.execute(delete(SavedNote).where(SavedNote.notebook_id.in_(nb_ids)))
-        await db.execute(delete(ChatLog).where(ChatLog.notebook_id.in_(nb_ids)))
+    personal_nb_ids = []
+    for nb in notebooks:
+        if nb.is_shared:
+            # Shared notebook: transfer ownership to next member
+            members_result = await db.execute(
+                select(NotebookMember)
+                .where(NotebookMember.notebook_id == nb.id, NotebookMember.user_id.notin_(uuids))
+                .order_by(NotebookMember.joined_at)
+            )
+            next_member = members_result.scalars().first()
+            if next_member:
+                # Transfer ownership
+                nb.owner_id = next_member.user_id
+                next_member.role = "owner"
+            else:
+                # No other members — treat as personal, delete it
+                personal_nb_ids.append(nb.id)
+        else:
+            personal_nb_ids.append(nb.id)
 
-    # Delete notebook memberships, invite links, and notebooks
-    from backend.models.notebook_member import NotebookMember
-    from backend.models.invite_link import InviteLink
+    # Delete data in personal notebooks
+    if personal_nb_ids:
+        await db.execute(delete(Source).where(Source.notebook_id.in_(personal_nb_ids)))
+        await db.execute(delete(ChatMessage).where(ChatMessage.notebook_id.in_(personal_nb_ids)))
+        await db.execute(delete(SavedNote).where(SavedNote.notebook_id.in_(personal_nb_ids)))
+        await db.execute(delete(ChatLog).where(ChatLog.notebook_id.in_(personal_nb_ids)))
+        await db.execute(delete(NotebookMember).where(NotebookMember.notebook_id.in_(personal_nb_ids)))
+        await db.execute(delete(InviteLink).where(InviteLink.notebook_id.in_(personal_nb_ids)))
+        await db.execute(delete(Notebook).where(Notebook.id.in_(personal_nb_ids)))
+
+    # Remove user from shared notebooks they don't own
     await db.execute(delete(NotebookMember).where(NotebookMember.user_id.in_(uuids)))
+
+    # Clean up user-level references
     await db.execute(delete(InviteLink).where(InviteLink.created_by.in_(uuids)))
-    await db.execute(delete(SavedNote).where(SavedNote.user_id.in_(uuids)))
+
+    # For sources in shared notebooks uploaded by deleted users, transfer to new owner
+    from sqlalchemy import update
+    for nb in notebooks:
+        if nb.is_shared and nb.id not in personal_nb_ids:
+            await db.execute(
+                update(Source)
+                .where(Source.notebook_id == nb.id, Source.uploaded_by.in_(uuids))
+                .values(uploaded_by=nb.owner_id)
+            )
+
+    await db.execute(update(SavedNote).where(SavedNote.user_id.in_(uuids)).values(user_id=None))
     await db.execute(delete(ChatLog).where(ChatLog.user_id.in_(uuids)))
     await db.execute(delete(ChatMessage).where(ChatMessage.user_id.in_(uuids)))
-    await db.execute(delete(Source).where(Source.uploaded_by.in_(uuids)))
-
-    if nb_ids:
-        await db.execute(delete(Notebook).where(Notebook.id.in_(nb_ids)))
 
     # Finally delete users
     await db.execute(delete(User).where(User.id.in_(uuids)))
