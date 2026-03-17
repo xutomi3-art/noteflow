@@ -309,6 +309,9 @@ class ApiClient {
                 onToken(data.content);
               } else if (data.type === "done") {
                 onDone({ id: data.id, citations: data.citations || [] });
+              } else if (data.type === "error") {
+                onError(data.message);
+                return;
               }
             } catch { /* ignore parse errors */ }
           }

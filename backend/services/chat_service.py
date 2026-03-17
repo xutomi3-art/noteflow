@@ -368,7 +368,7 @@ Answer the question ONLY based on the context above. Use [1], [2], etc. to cite 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
         # Safety cap: DeepSeek limit is 131K tokens (~260K chars). Reserve 30K tokens for system + history + output.
-        MAX_USER_CONTENT_CHARS = 200000
+        MAX_USER_CONTENT_CHARS = 500000  # TEMP: raised to test token overflow friendly error
         if len(user_content) > MAX_USER_CONTENT_CHARS:
             logger.warning("User content too long (%d chars), truncating to %d", len(user_content), MAX_USER_CONTENT_CHARS)
             # Keep question at the end — truncate context in the middle
@@ -408,6 +408,10 @@ The uploaded documents do not contain information relevant to this question. Ple
             if token.startswith("__REASONING__:"):
                 reasoning_text = token[len("__REASONING__:"):]
                 yield f"data: {json.dumps({'type': 'reasoning', 'content': reasoning_text})}\n\n"
+            elif token.startswith("\n\n[Error:") and "maximum context length" in token:
+                friendly = "Selected sources contain too much data. Please select fewer sources and try again."
+                yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
+                return
             else:
                 if t_first_token is None:
                     t_first_token = time.time()
