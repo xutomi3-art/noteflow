@@ -30,7 +30,6 @@ async def chat(
             user_id=user.id,
             message=req.message,
             source_ids=req.source_ids,
-            thinking=req.thinking,
         ),
         media_type='text/event-stream',
         headers={

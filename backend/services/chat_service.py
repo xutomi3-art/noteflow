@@ -146,7 +146,6 @@ async def stream_chat(
     user_id: uuid.UUID,
     message: str,
     source_ids: list[str] | None = None,
-    thinking: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Stream AI response with citations. Yields SSE-formatted data."""
     # Initialize timing variables
@@ -201,7 +200,7 @@ async def stream_chat(
         chunks = []
         if dataset_ids:
             filter_doc_ids = document_ids if source_ids and document_ids else None
-            chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=6, document_ids=filter_doc_ids)
+            chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=10, document_ids=filter_doc_ids)
         t_ragflow_end = time.time()
 
         # Step 2b: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
@@ -235,14 +234,14 @@ async def stream_chat(
                         matched_excel[str(src.id)] = src
 
             if matched_excel:
-                # Dynamic budget: more generous when fewer Excel files matched
+                # Dynamic budget: generous with Qwen3.5-Plus 1M context
                 n = len(matched_excel)
                 if n == 1:
-                    max_excel_chars = 60000   # ~30K tokens — full table
+                    max_excel_chars = 200000   # ~100K tokens — full large table
                 elif n == 2:
-                    max_excel_chars = 80000   # 40K each
+                    max_excel_chars = 300000   # 150K each
                 else:
-                    max_excel_chars = min(25000 * n, 80000)
+                    max_excel_chars = min(150000 * n, 600000)
                 logger.info("Excel budget: %d matched tables, %d char limit", n, max_excel_chars)
 
                 # Send matched Excel tables in full to LLM
@@ -367,9 +366,9 @@ Answer the question ONLY based on the context above. Use [1], [2], etc. to cite 
 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
-        # Fetch conversation history — up to 10 rounds (20 messages) but capped at ~8000 tokens (~16K chars)
-        MAX_HISTORY_ROUNDS = 10
-        MAX_HISTORY_CHARS = 16000
+        # Fetch conversation history — up to 30 rounds (60 messages) but capped at ~30K tokens (~60K chars)
+        MAX_HISTORY_ROUNDS = 30
+        MAX_HISTORY_CHARS = 60000
         history = await get_chat_history(db, notebook_id, user_id)
         history = [h for h in history if h.id != user_msg.id]
         recent = history[-(MAX_HISTORY_ROUNDS * 2):]
@@ -384,9 +383,11 @@ The uploaded documents do not contain information relevant to this question. Ple
         history_messages.reverse()
         logger.info("Chat history: %d messages, %d chars", len(history_messages), history_chars)
 
-        # Safety cap: DeepSeek limit is 131K tokens (~260K chars).
-        # Budget = total limit - system prompt - history - output reserve
-        MAX_TOTAL_CHARS = 240000
+        # Safety cap: Qwen3.5-Plus has 1M context.
+        # Normal questions: cap at ~250K tokens (≤256K pricing tier)
+        # Excel questions: cap at ~800K tokens (utilize 1M context)
+        has_excel_data = excel_context is not None or sql_answer is not None
+        MAX_TOTAL_CHARS = 1600000 if has_excel_data else 500000
         max_user_chars = MAX_TOTAL_CHARS - len(SYSTEM_PROMPT) - history_chars
         if len(user_content) > max_user_chars:
             logger.warning("User content too long (%d chars), truncating to %d (history=%d)", len(user_content), max_user_chars, history_chars)
@@ -402,13 +403,8 @@ The uploaded documents do not contain information relevant to this question. Ple
         yield ": keepalive\n\n"
         full_response = ""
         t_llm_start = time.time()
-        if thinking:
-            yield f"data: {json.dumps({'type': 'thinking_start'})}\n\n"
-        async for token in qwen_client.stream_chat(messages, thinking=thinking):
-            if token.startswith("__REASONING__:"):
-                reasoning_text = token[len("__REASONING__:"):]
-                yield f"data: {json.dumps({'type': 'reasoning', 'content': reasoning_text})}\n\n"
-            elif token.startswith("\n\n[Error:") and "maximum context length" in token:
+        async for token in qwen_client.stream_chat(messages):
+            if token.startswith("\n\n[Error:") and "maximum context length" in token:
                 friendly = "Selected sources contain too much data. Please select fewer sources and try again."
                 yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
                 return
@@ -448,9 +444,9 @@ The uploaded documents do not contain information relevant to this question. Ple
                 llm_first_token=round(t_first_token - t_llm_start, 2) if t_first_token else None,
                 source_count=len(sources_map),
                 chunk_count=len(chunks),
-                thinking_mode=thinking,
+                thinking_mode=False,
                 has_excel=bool(excel_sources),
-                llm_model=settings.LLM_THINKING_MODEL if thinking else settings.LLM_MODEL,
+                llm_model=settings.LLM_MODEL,
                 token_count=len(full_response),  # approximate by char count
                 status="ok",
             )
@@ -472,7 +468,7 @@ The uploaded documents do not contain information relevant to this question. Ple
                 total_duration=round(time.time() - t_start, 2),
                 status="error",
                 error_message=str(e)[:500],
-                thinking_mode=thinking,
+                thinking_mode=False,
             )
             db.add(error_log)
             await db.commit()

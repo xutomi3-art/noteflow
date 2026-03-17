@@ -26,7 +26,6 @@ import {
   AlignLeft,
   Image as ImageIcon,
   LogOut,
-  Brain,
   GripVertical,
   ListChecks,
   MessageSquare,
@@ -347,7 +346,7 @@ export default function NotebookPage() {
   const { user, logout } = useAuthStore();
   const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt } =
     useSourceStore();
-  const { messages, isStreaming, streamingContent, thinking, setThinking, reasoningContent, isThinkingPhase, fetchHistory, sendMessage, stopStream, reset: resetChat } = useChatStore();
+  const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, reset: resetChat } = useChatStore();
   const {
     content: studioContent,
     isGenerating,
@@ -530,13 +529,13 @@ export default function NotebookPage() {
     if (!userScrolledUpRef.current) {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamingContent, reasoningContent]);
+  }, [messages, streamingContent]);
   // Reset scroll lock when streaming ends
   useEffect(() => {
-    if (!streamingContent && !reasoningContent) {
+    if (!streamingContent) {
       userScrolledUpRef.current = false;
     }
-  }, [streamingContent, reasoningContent]);
+  }, [streamingContent]);
 
   // Scroll to and highlight excerpt in source content viewer
   useEffect(() => {
@@ -653,9 +652,9 @@ export default function NotebookPage() {
   // Handlers
   const handleSend = useCallback(() => {
     if (!id || !canSend) return;
-    sendMessage(id, chatInput.trim(), [...selectedIds], thinking);
+    sendMessage(id, chatInput.trim(), [...selectedIds]);
     setChatInput("");
-  }, [id, canSend, chatInput, selectedIds, sendMessage, thinking]);
+  }, [id, canSend, chatInput, selectedIds, sendMessage]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -879,9 +878,9 @@ export default function NotebookPage() {
   const handleSuggestedQuestion = useCallback(
     (q: string) => {
       if (!id || isStreaming) return;
-      sendMessage(id, q, [...selectedIds], thinking);
+      sendMessage(id, q, [...selectedIds]);
     },
-    [id, isStreaming, selectedIds, sendMessage, thinking],
+    [id, isStreaming, selectedIds, sendMessage],
   );
 
   const handleSaveNote = useCallback(
@@ -1710,16 +1709,6 @@ export default function NotebookPage() {
                   </div>
                 ))}
 
-                {/* Thinking indicator */}
-                {isStreaming && isThinkingPhase && (
-                  <div className="flex justify-start">
-                    <div className="inline-flex items-center gap-1.5 bg-purple-50 border border-purple-100 rounded-full px-3 py-1.5 text-[12px] text-purple-600 font-medium">
-                      <Brain className="w-3.5 h-3.5 animate-pulse" />
-                      Thinking...
-                    </div>
-                  </div>
-                )}
-
                 {/* Streaming bubble */}
                 {isStreaming && streamingContent && (
                   <div className="flex justify-start">
@@ -1781,17 +1770,6 @@ export default function NotebookPage() {
                   disabled={isStreaming || hasProcessingSelected || readySources.length === 0}
                 />
                 <div className="flex items-center gap-2 pr-1">
-                  <button
-                    onClick={() => setThinking(!thinking)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                      thinking
-                        ? "bg-purple-100 text-purple-700 ring-1 ring-purple-300"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                    }`}
-                  >
-                    <Brain className="w-3 h-3" />
-                    {thinking ? "Thinking" : "Think"}
-                  </button>
                   <span className="text-[11px] text-slate-400 font-medium px-2">
                     {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
                   </span>

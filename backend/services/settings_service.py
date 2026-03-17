@@ -9,8 +9,7 @@ from backend.models.system_setting import SystemSetting
 
 # Keys that can be configured via admin panel
 CONFIGURABLE_KEYS = {
-    "llm_api_key", "llm_base_url", "llm_model",
-    "deepseek_api_key", "deepseek_base_url", "deepseek_model",
+    "llm_base_url", "llm_model", "llm_max_output_tokens",
     "qwen_api_key",
     "ragflow_api_key", "ragflow_base_url",
     "docmee_api_key",
@@ -23,16 +22,13 @@ CONFIGURABLE_KEYS = {
 }
 
 # Keys that contain sensitive values — mask on read
-SENSITIVE_KEYS = {"llm_api_key", "deepseek_api_key", "qwen_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret", "microsoft_client_secret"}
+SENSITIVE_KEYS = {"qwen_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret", "microsoft_client_secret"}
 
 # Mapping from setting key to Settings attribute
 _ENV_MAP = {
-    "llm_api_key": "LLM_API_KEY",
     "llm_base_url": "LLM_BASE_URL",
     "llm_model": "LLM_MODEL",
-    "deepseek_api_key": "LLM_API_KEY",
-    "deepseek_base_url": "LLM_BASE_URL",
-    "deepseek_model": "LLM_MODEL",
+    "llm_max_output_tokens": "LLM_MAX_OUTPUT_TOKENS",
     "qwen_api_key": "QWEN_API_KEY",
     "ragflow_api_key": "RAGFLOW_API_KEY",
     "ragflow_base_url": "RAGFLOW_BASE_URL",

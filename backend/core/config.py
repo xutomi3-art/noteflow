@@ -13,15 +13,13 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # LLM API (primary: DeepSeek for chat, fallback: Qwen for embedding/vision)
-    LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = "https://api.deepseek.com/v1"
-    LLM_MODEL: str = "deepseek-chat"
-    LLM_THINKING_MODEL: str = "deepseek-reasoner"
+    # LLM API (Qwen3.5-Plus via DashScope OpenAI-compatible API)
+    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    LLM_MODEL: str = "qwen3.5-plus"
+    LLM_MAX_OUTPUT_TOKENS: int = 8192
 
-    # Qwen API (kept for embedding + vision, which DeepSeek doesn't offer)
+    # Qwen API key (shared across chat, embedding, vision)
     QWEN_API_KEY: str = ""
-    QWEN_MODEL: str = "qwen-plus"
     QWEN_EMBEDDING_MODEL: str = "text-embedding-v3"
 
     # RAGFlow

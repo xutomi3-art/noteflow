@@ -237,3 +237,66 @@ async def get_logs(
         })
 
     return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@router.get("/token-usage")
+async def get_token_usage(
+    period: int = Query(7, ge=1, le=90),
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get per-user token consumption stats."""
+    from datetime import datetime, timedelta, timezone
+    from backend.models.chat_log import ChatLog
+    from backend.models.user import User as UserModel
+
+    since = datetime.now(timezone.utc) - timedelta(days=period)
+
+    query = (
+        select(
+            ChatLog.user_id,
+            UserModel.email,
+            UserModel.name.label("user_name"),
+            func.count(ChatLog.id).label("request_count"),
+            func.coalesce(func.sum(ChatLog.token_count), 0).label("total_tokens"),
+        )
+        .join(UserModel, ChatLog.user_id == UserModel.id)
+        .where(ChatLog.created_at >= since, ChatLog.status == "ok")
+        .group_by(ChatLog.user_id, UserModel.email, UserModel.name)
+        .order_by(desc("total_tokens"))
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    def _estimate_cost(tokens: int) -> float:
+        """Estimate cost in CNY based on Qwen3.5-Plus tiered pricing."""
+        # Approximate: assume 80% input, 20% output
+        input_tokens = tokens * 0.8
+        output_tokens = tokens * 0.2
+        # Simplified: use ≤128K tier (most common)
+        input_cost = input_tokens / 1_000_000 * 0.8
+        output_cost = output_tokens / 1_000_000 * 4.8
+        return round(input_cost + output_cost, 2)
+
+    users = []
+    grand_total_tokens = 0
+    for row in rows:
+        total = int(row.total_tokens)
+        grand_total_tokens += total
+        users.append({
+            "user_id": str(row.user_id),
+            "email": row.email,
+            "name": row.user_name,
+            "request_count": row.request_count,
+            "total_tokens": total,
+            "avg_tokens_per_request": round(total / row.request_count) if row.request_count else 0,
+            "estimated_cost": _estimate_cost(total),
+        })
+
+    return {
+        "users": users,
+        "total_tokens": grand_total_tokens,
+        "total_cost": _estimate_cost(grand_total_tokens),
+        "period_days": period,
+    }

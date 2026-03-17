@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   MessageSquare,
   FileCheck,
   CheckCircle,
   HardDrive,
+  Coins,
 } from 'lucide-react';
 import {
   LineChart,
@@ -29,12 +30,49 @@ function formatDate(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+interface TokenUser {
+  user_id: string;
+  email: string;
+  name: string;
+  request_count: number;
+  total_tokens: number;
+  avg_tokens_per_request: number;
+  estimated_cost: number;
+}
+
+interface TokenUsageData {
+  users: TokenUser[];
+  total_tokens: number;
+  total_cost: number;
+  period_days: number;
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
 export default function AdminUsagePage() {
   const { usage, usagePeriod, fetchUsage, isLoading } = useAdminStore();
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageData | null>(null);
 
   useEffect(() => {
     fetchUsage(usagePeriod);
   }, [fetchUsage, usagePeriod]);
+
+  useEffect(() => {
+    const fetchTokenUsage = async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch(`/api/admin/token-usage?period=${usagePeriod}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) setTokenUsage(await res.json());
+      } catch { /* ignore */ }
+    };
+    fetchTokenUsage();
+  }, [usagePeriod]);
 
   const handlePeriod = (p: number) => {
     fetchUsage(p);
@@ -297,6 +335,52 @@ export default function AdminUsagePage() {
                 </table>
               )}
             </div>
+          </div>
+
+          {/* Token Usage per User */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-amber-50">
+                  <Coins size={18} className="text-amber-600" />
+                </div>
+                <h3 className="text-sm font-semibold text-gray-700">Token Usage per User</h3>
+              </div>
+              {tokenUsage && (
+                <div className="text-xs text-gray-400">
+                  Total: {formatTokens(tokenUsage.total_tokens)} tokens / ~¥{tokenUsage.total_cost}
+                </div>
+              )}
+            </div>
+            {!tokenUsage?.users?.length ? (
+              <p className="text-sm text-gray-400 py-4 text-center">No data</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
+                    <th className="pb-2 font-medium">User</th>
+                    <th className="pb-2 font-medium text-right">Requests</th>
+                    <th className="pb-2 font-medium text-right">Tokens</th>
+                    <th className="pb-2 font-medium text-right">Avg/Req</th>
+                    <th className="pb-2 font-medium text-right">Est. Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {tokenUsage.users.map((u) => (
+                    <tr key={u.user_id}>
+                      <td className="py-2.5">
+                        <div className="font-medium text-gray-900 truncate max-w-[180px]">{u.name || u.email}</div>
+                        {u.name && <div className="text-xs text-gray-400 truncate max-w-[180px]">{u.email}</div>}
+                      </td>
+                      <td className="py-2.5 text-right text-gray-700">{u.request_count}</td>
+                      <td className="py-2.5 text-right font-semibold text-gray-900">{formatTokens(u.total_tokens)}</td>
+                      <td className="py-2.5 text-right text-gray-500">{formatTokens(u.avg_tokens_per_request)}</td>
+                      <td className="py-2.5 text-right text-amber-600 font-medium">¥{u.estimated_cost}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </>
       )}

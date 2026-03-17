@@ -7,14 +7,10 @@ interface ChatState {
   isStreaming: boolean;
   streamingContent: string;
   isLoading: boolean;
-  thinking: boolean;
-  reasoningContent: string;
-  isThinkingPhase: boolean;
   abortStream: (() => void) | null;
 
-  setThinking: (value: boolean) => void;
   fetchHistory: (notebookId: string) => Promise<void>;
-  sendMessage: (notebookId: string, message: string, sourceIds: string[], thinking?: boolean) => Promise<void>;
+  sendMessage: (notebookId: string, message: string, sourceIds: string[]) => Promise<void>;
   stopStream: () => void;
   clearHistory: (notebookId: string) => Promise<void>;
   reset: () => void;
@@ -25,12 +21,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isStreaming: false,
   streamingContent: "",
   isLoading: false,
-  thinking: false,
-  reasoningContent: "",
-  isThinkingPhase: false,
   abortStream: null,
-
-  setThinking: (value: boolean) => set({ thinking: value }),
 
   fetchHistory: async (notebookId: string) => {
     set({ isLoading: true });
@@ -42,7 +33,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: async (notebookId: string, message: string, sourceIds: string[], thinking?: boolean) => {
+  sendMessage: async (notebookId: string, message: string, sourceIds: string[]) => {
     // Add optimistic user message
     const tempUserMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
@@ -58,8 +49,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...state.messages, tempUserMsg],
       isStreaming: true,
       streamingContent: "",
-      reasoningContent: "",
-      isThinkingPhase: false,
       abortStream: null,
     }));
 
@@ -74,7 +63,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
         (token: string) => {
           set(state => ({
             streamingContent: state.streamingContent + token,
-            isThinkingPhase: false,
           }));
         },
         // onDone
@@ -101,7 +89,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         (error: string) => {
           if (!retried && (error.includes("Failed to fetch") || error.includes("network"))) {
             retried = true;
-            set({ streamingContent: "", reasoningContent: "", isThinkingPhase: false });
+            set({ streamingContent: "" });
             setTimeout(() => startStream(), 1000);
             return;
           }
@@ -120,17 +108,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
             isStreaming: false,
             streamingContent: "",
             abortStream: null,
-          }));
-        },
-        thinking,
-        // onThinkingStart
-        () => {
-          set({ isThinkingPhase: true });
-        },
-        // onReasoning
-        (content: string) => {
-          set(state => ({
-            reasoningContent: state.reasoningContent + content,
           }));
         },
       );
@@ -179,6 +156,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   reset: () => {
     const { abortStream } = get();
     if (abortStream) abortStream();
-    set({ messages: [], isStreaming: false, streamingContent: "", isLoading: false, reasoningContent: "", isThinkingPhase: false, abortStream: null });
+    set({ messages: [], isStreaming: false, streamingContent: "", isLoading: false, abortStream: null });
   },
 }));

@@ -9,8 +9,7 @@ const SERVICE_LABELS: Record<string, string> = {
   redis: 'Redis',
   mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
-  deepseek: 'DeepSeek LLM',
-  qwen: 'Qwen (Embedding)',
+  qwen: 'Qwen3.5-Plus',
 };
 
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
@@ -20,8 +19,7 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   redis: 'Cache & session store',
   mineru: 'Document parsing service',
   docmee: 'AI PPT generation service',
-  deepseek: 'Chat LLM API',
-  qwen: 'Embedding & vision API',
+  qwen: 'Chat LLM, Embedding & Vision API',
 };
 
 interface ConfigField {
@@ -53,14 +51,11 @@ const MICROSOFT_OAUTH_FIELDS: ConfigField[] = [
   { key: 'microsoft_redirect_uri', label: 'Redirect URI', placeholder: 'https://noteflow.jotoai.com/api/auth/microsoft/callback' },
 ];
 
-const DEEPSEEK_FIELDS: ConfigField[] = [
-  { key: 'deepseek_api_key', label: 'API Key', placeholder: 'sk-...', secret: true },
-  { key: 'deepseek_base_url', label: 'Base URL', placeholder: 'https://api.deepseek.com/v1' },
-  { key: 'deepseek_model', label: 'Model', placeholder: 'deepseek-chat' },
-];
-
-const QWEN_FIELDS: ConfigField[] = [
+const LLM_FIELDS: ConfigField[] = [
   { key: 'qwen_api_key', label: 'API Key', placeholder: 'sk-...', secret: true },
+  { key: 'llm_base_url', label: 'Base URL', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { key: 'llm_model', label: 'Model', placeholder: 'qwen3.5-plus' },
+  { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: '65536' },
 ];
 
 const RAGFLOW_FIELDS: ConfigField[] = [
@@ -329,24 +324,14 @@ export default function AdminSystemPage() {
         </div>
       </div>
 
-      {/* LLM (DeepSeek) */}
+      {/* LLM (Qwen3.5-Plus) */}
       <ConfigSection
-        title="LLM (DeepSeek)"
-        description="Configure the DeepSeek LLM for chat and reasoning"
-        fields={DEEPSEEK_FIELDS}
+        title="LLM (Qwen3.5-Plus)"
+        description="Unified Qwen API for chat, embedding, and vision"
+        fields={LLM_FIELDS}
         settings={settings}
         saveSettings={handleSaveConfig}
         saveLabel="Save LLM"
-      />
-
-      {/* Qwen (Embedding) */}
-      <ConfigSection
-        title="Qwen (Embedding)"
-        description="Configure the Qwen API for text embedding"
-        fields={QWEN_FIELDS}
-        settings={settings}
-        saveSettings={handleSaveConfig}
-        saveLabel="Save Qwen"
       />
 
       {/* RAGFlow */}

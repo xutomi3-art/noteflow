@@ -11,19 +11,13 @@ interface FieldGroup {
 
 const GROUPS: FieldGroup[] = [
   {
-    title: 'DeepSeek (Chat LLM)',
-    description: 'Primary LLM for AI Q&A and content generation',
-    fields: [
-      { key: 'llm_api_key', label: 'API Key', secret: true },
-      { key: 'llm_base_url', label: 'Base URL' },
-      { key: 'llm_model', label: 'Model' },
-    ],
-  },
-  {
-    title: 'Qwen (Embedding & Vision)',
-    description: 'Used for text embedding and vision tasks (DeepSeek does not offer these)',
+    title: 'Qwen3.5-Plus (Chat LLM)',
+    description: 'Unified Qwen API for chat, embedding, and vision',
     fields: [
       { key: 'qwen_api_key', label: 'API Key', secret: true },
+      { key: 'llm_base_url', label: 'Base URL' },
+      { key: 'llm_model', label: 'Model' },
+      { key: 'llm_max_output_tokens', label: 'Max Output Tokens' },
     ],
   },
   {
@@ -136,6 +130,22 @@ export default function AdminLLMPage() {
           </div>
         </div>
       ))}
+
+      {/* Token Budget Info */}
+      <div className="bg-gray-50 rounded-xl border border-gray-100 p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Token Budget</h3>
+        <p className="text-sm text-gray-600 mb-3">
+          Model: <span className="font-medium">Qwen3.5-Plus</span> | Context: <span className="font-medium">1,000,000 tokens</span> | Max Output: <span className="font-medium">65,536 tokens</span>
+        </p>
+        <div className="text-sm text-gray-600">
+          <p className="font-medium text-gray-700 mb-1">Pricing (per million tokens):</p>
+          <div className="grid grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-gray-500">
+            <span>&le;128K:</span><span>&yen;0.8 input</span><span>&yen;4.8 output</span>
+            <span>128K&ndash;256K:</span><span>&yen;2.0 input</span><span>&yen;12 output</span>
+            <span>256K&ndash;1M:</span><span>&yen;4.0 input</span><span>&yen;24 output</span>
+          </div>
+        </div>
+      </div>
 
       <div className="flex items-center gap-3">
         <button
