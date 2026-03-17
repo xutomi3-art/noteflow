@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import uuid
 
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
 from backend.core.deps import get_current_user
+from backend.models.notebook import Notebook
 from backend.models.user import User
 from backend.models.source import Source
 from backend.services.qwen_client import qwen_client
@@ -37,9 +39,6 @@ QUESTIONS:
 
 DOCUMENTS:
 {context}"""
-
-# In-memory cache: notebook_id -> (source_hash, parsed_result)
-_overview_cache: dict[str, tuple[str, dict]] = {}
 
 
 def _compute_source_hash(sources: list[Source]) -> str:
@@ -121,18 +120,23 @@ async def get_overview(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    sources = await _get_ready_sources(db, uuid.UUID(notebook_id))
+    nb_uuid = uuid.UUID(notebook_id)
+    sources = await _get_ready_sources(db, nb_uuid)
     if not sources:
         return {"overview": "", "suggested_questions": []}
 
     source_hash = _compute_source_hash(sources)
 
-    # Return cached result if sources haven't changed
-    cached = _overview_cache.get(notebook_id)
-    if cached and cached[0] == source_hash:
-        return cached[1]
+    # Check DB cache first
+    nb_result = await db.execute(select(Notebook).where(Notebook.id == nb_uuid))
+    notebook = nb_result.scalar_one_or_none()
+    if notebook and notebook.overview_cache and notebook.overview_source_hash == source_hash:
+        try:
+            return json.loads(notebook.overview_cache)
+        except (json.JSONDecodeError, TypeError):
+            pass
 
-    # Generate new overview
+    # Generate new overview via LLM
     context = await _get_source_context(sources)
     if not context:
         return {"overview": "", "suggested_questions": []}
@@ -146,7 +150,10 @@ async def get_overview(
     raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
     result = _parse_overview_response(raw)
 
-    # Cache the result
-    _overview_cache[notebook_id] = (source_hash, result)
+    # Save to DB cache
+    if notebook:
+        notebook.overview_cache = json.dumps(result)
+        notebook.overview_source_hash = source_hash
+        await db.commit()
 
     return result
