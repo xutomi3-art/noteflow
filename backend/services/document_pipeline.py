@@ -152,9 +152,17 @@ async def process_document(
                 content = await _read_text_file(file_path)
                 _save_parsed_content(file_path, content)
             elif file_type in ("pdf", "docx", "pptx"):
+                # For PPTX/DOCX: convert to PDF first (MinerU only accepts PDF)
+                parse_path = file_path
+                if file_type in ("pptx", "docx"):
+                    pdf_path = _convert_to_pdf(file_path)
+                    if pdf_path:
+                        parse_path = pdf_path
+
                 # Use MinerU for high-quality document parsing
                 logger.info("Parsing %s via MinerU...", filename)
-                parsed = await mineru_client.parse_document(file_path, filename)
+                parse_name = os.path.splitext(filename)[0] + ".pdf" if parse_path != file_path else filename
+                parsed = await mineru_client.parse_document(parse_path, parse_name)
                 if parsed:
                     content = parsed
                     _save_parsed_content(file_path, content)
@@ -167,10 +175,6 @@ async def process_document(
                 # Unknown type — upload raw file to RAGFlow
                 logger.info("Using RAGFlow built-in parser for %s", filename)
                 content = None
-
-            # Step 3b: Convert PPTX/DOCX to PDF for inline viewing
-            if file_type in ("pptx", "docx"):
-                _convert_to_pdf(file_path)
 
             # Step 4: Upload to RAGFlow
             await update_source_status(db, sid, "vectorizing")
