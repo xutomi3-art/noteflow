@@ -156,3 +156,74 @@ Each test case corresponds to a bug that was found and fixed. These must pass on
   5. Open My Research → verify all 3 sources = "ready" (including .xlsx)
   6. Select a source → ask a question → verify AI answers with citations
 - **Expected:** All 7 demo sources process to "ready" and are queryable
+
+### TC-016: Contextual chat tips — Excel waiting indicator
+- **Bug:** Users didn't know why AI responses were slow when Excel files selected
+- **Fix:** Show "Analyzing spreadsheet data, this may take a moment..." next to 3-dot animation when Excel sources are selected
+- **Steps:**
+  1. Open a notebook with Excel sources selected
+  2. Send a question related to Excel data
+  3. While waiting for first token (3-dot animation visible), check tip text
+  4. Verify: "Analyzing spreadsheet data, this may take a moment..." appears next to dots
+  5. Open a notebook with NO Excel sources selected
+  6. Send a question → verify only 3 dots, no extra text
+- **Expected:** Excel tip only appears when Excel sources are in selection
+
+### TC-017: Contextual chat tips — many sources selected
+- **Bug:** No guidance when users selected too many sources causing slow responses
+- **Fix:** Show source count tip next to 3-dot animation when >10 sources selected
+- **Steps:**
+  1. Open a notebook with >10 sources, all selected
+  2. Send a question
+  3. While waiting (3-dot animation), verify tip: "X sources selected — selecting fewer sources gives faster, more focused answers."
+  4. Select only 5 sources → send question → verify no source count tip
+- **Expected:** Source count tip appears only when >10 sources selected; takes priority over Excel tip
+
+### TC-018: Bottom disclaimer always shows default text
+- **Bug:** Bottom text below chat input changed based on source selection (confusing)
+- **Fix:** Bottom always shows "AI can be inaccurate; please double-check its responses."
+- **Steps:**
+  1. Open notebook with >10 sources selected → check bottom text
+  2. Open notebook with Excel selected → check bottom text
+  3. Open notebook with 3 regular sources → check bottom text
+  4. All cases: verify bottom text is "AI can be inaccurate; please double-check its responses."
+- **Expected:** Bottom disclaimer is static, never changes
+
+### TC-019: Dynamic Excel token budget
+- **Bug:** Fixed 60K char budget for all Excel regardless of count — wasteful for 1 file, insufficient for many
+- **Fix:** Dynamic budget: 1 matched→60K, 2→80K, 3+→min(25K×n, 80K)
+- **Steps:**
+  1. Select 1 Excel source → ask question → check backend log: "Excel budget: 1 matched tables, 60000 char limit"
+  2. Ask question matching 2 Excel files → check log: "80000 char limit"
+  3. Ask question matching 5 Excel files → check log: "80000 char limit" (capped)
+- **Expected:** Budget adjusts based on matched Excel count, capped at 80K
+
+### TC-020: Token overflow shows friendly error
+- **Bug:** Raw API error "maximum context length is 131072 tokens" shown to user
+- **Fix:** Detect token overflow in stream and show "Selected sources contain too much data. Please select fewer sources and try again."
+- **Steps:**
+  1. Select many sources with large Excel files that exceed token limit
+  2. Send a broad question (e.g., "列出所有Excel文件中每个项目的详细费用明细")
+  3. Verify error message: "Error: Selected sources contain too much data. Please select fewer sources and try again."
+  4. Verify NO raw API error text visible (no "131072 tokens", no "invalid_request_error")
+- **Expected:** User sees friendly error message, not raw API error
+
+### TC-021: Dynamic user content cap accounts for chat history
+- **Bug:** Fixed 200K char cap on user_content didn't account for chat history length, causing overflow after many conversation rounds
+- **Fix:** Budget = 240K total - system_prompt - history_chars, applied dynamically
+- **Steps:**
+  1. In a notebook with many sources, have a long conversation (10+ rounds)
+  2. Ask an Excel-related question
+  3. Verify answer generates successfully (no token overflow)
+  4. Check backend log: "User content too long ... truncating to X (history=Y)" may appear
+- **Expected:** Long chat history doesn't cause token overflow; content is truncated to fit
+
+### TC-022: Frontend handles SSE error events
+- **Bug:** Backend sent SSE `error` type events but frontend only handled `token`, `done`, `thinking_start`, `reasoning` — errors were silently ignored, leaving UI stuck in loading state
+- **Fix:** Added `error` type handler in SSE parser that calls `onError` callback
+- **Steps:**
+  1. Trigger any backend error during chat (e.g., token overflow)
+  2. Verify error message appears in chat as assistant message
+  3. Verify streaming state ends (input re-enabled, stop button gone)
+  4. Verify no infinite loading spinner
+- **Expected:** Error events properly terminate streaming and show error to user
