@@ -25,40 +25,40 @@ from backend.schemas.notebook import NotebookCreate
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+async def _create_default_notebooks(db: AsyncSession, user: User) -> None:
+    """Create default starter notebooks for a new user."""
+    default_notebooks = [
+        {"name": "Meeting Notes", "emoji": "📋", "cover_color": "#fef08a"},
+        {"name": "My Research", "emoji": "🔬", "cover_color": "#dbeafe"},
+        {"name": "Getting Started", "emoji": "🚀", "cover_color": "#ecfccb"},
+    ]
+    for nb_data in default_notebooks:
+        try:
+            nb = await create_notebook(
+                db,
+                owner_id=user.id,
+                req=NotebookCreate(**nb_data),
+            )
+            if nb_data["name"] == "Getting Started":
+                welcome_notes = [
+                    "**Welcome to Noteflow!** 🎉\n\nNoteflow is your AI-powered knowledge base. Upload documents (PDF, DOCX, PPTX, TXT, Excel) and ask questions — AI will answer with citations pointing to the exact source.",
+                    "**Quick Start Guide:**\n\n1. Click **Add Sources** on the left to upload documents\n2. Select sources to chat with using the checkboxes\n3. Ask questions in the **Chat** panel — AI responds with inline citations [1][2]\n4. Use **Studio** on the right to generate Summaries, FAQs, Mind Maps, and Slide Decks\n5. Save important answers as **Notes** for quick reference",
+                    "**Tips & Tricks:**\n\n- Upload multiple file types together (PDF + Excel + TXT) for cross-document Q&A\n- Click on citation numbers [1] to jump to the source excerpt\n- Use **Share with Team** to collaborate with others on the same notebook\n- Try the **Think** button for deeper, step-by-step reasoning on complex questions",
+                ]
+                for note_content in welcome_notes:
+                    try:
+                        await create_note(db, nb.id, note_content)
+                    except Exception:
+                        pass
+        except Exception:
+            logger.warning("Failed to create default notebook '%s' for user %s", nb_data["name"], user.id)
+
+
 @router.post("/register", response_model=TokenResponse)
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     try:
         user = await auth_service.register(db, req)
-
-        # Create default starter notebooks for new users
-        # "Getting Started" is created LAST so it has the newest updated_at and appears first
-        default_notebooks = [
-            {"name": "Meeting Notes", "emoji": "📋", "cover_color": "#fef08a"},
-            {"name": "My Research", "emoji": "🔬", "cover_color": "#dbeafe"},
-            {"name": "Getting Started", "emoji": "🚀", "cover_color": "#ecfccb"},
-        ]
-        for nb_data in default_notebooks:
-            try:
-                nb = await create_notebook(
-                    db,
-                    owner_id=user.id,
-                    req=NotebookCreate(**nb_data),
-                )
-                # Populate "Getting Started" with welcome content
-                if nb_data["name"] == "Getting Started":
-                    welcome_notes = [
-                        "**Welcome to Noteflow!** 🎉\n\nNoteflow is your AI-powered knowledge base. Upload documents (PDF, DOCX, PPTX, TXT, Excel) and ask questions — AI will answer with citations pointing to the exact source.",
-                        "**Quick Start Guide:**\n\n1. Click **Add Sources** on the left to upload documents\n2. Select sources to chat with using the checkboxes\n3. Ask questions in the **Chat** panel — AI responds with inline citations [1][2]\n4. Use **Studio** on the right to generate Summaries, FAQs, Mind Maps, and Slide Decks\n5. Save important answers as **Notes** for quick reference",
-                        "**Tips & Tricks:**\n\n- Upload multiple file types together (PDF + Excel + TXT) for cross-document Q&A\n- Click on citation numbers [1] to jump to the source excerpt\n- Use **Share with Team** to collaborate with others on the same notebook\n- Try the **Think** button for deeper, step-by-step reasoning on complex questions",
-                    ]
-                    for note_content in welcome_notes:
-                        try:
-                            await create_note(db, nb.id, note_content)
-                        except Exception:
-                            pass
-            except Exception:
-                logger.warning("Failed to create default notebook '%s' for user %s", nb_data["name"], user.id)
-
+        await _create_default_notebooks(db, user)
         return await auth_service.login(db, LoginRequest(email=req.email, password=req.password))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -166,7 +166,9 @@ async def google_callback(code: str = "", error: str = "", db: AsyncSession = De
         if not google_id or not email:
             return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=google_missing_info")
 
-        user = await auth_service.find_or_create_google_user(db, google_id, email, name, avatar)
+        user, is_new = await auth_service.find_or_create_google_user(db, google_id, email, name, avatar)
+        if is_new:
+            await _create_default_notebooks(db, user)
 
         access_token = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))
@@ -208,7 +210,9 @@ async def microsoft_callback(code: str = "", error: str = "", db: AsyncSession =
         if not microsoft_id or not email:
             return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=microsoft_missing_info")
 
-        user = await auth_service.find_or_create_microsoft_user(db, microsoft_id, email, name, avatar)
+        user, is_new = await auth_service.find_or_create_microsoft_user(db, microsoft_id, email, name, avatar)
+        if is_new:
+            await _create_default_notebooks(db, user)
 
         access_token = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))

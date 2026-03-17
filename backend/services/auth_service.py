@@ -37,13 +37,13 @@ async def login(db: AsyncSession, req: LoginRequest) -> TokenResponse:
     )
 
 
-async def find_or_create_google_user(db: AsyncSession, google_id: str, email: str, name: str, avatar: str | None) -> User:
-    """Find or create a user for Google OAuth sign-in."""
+async def find_or_create_google_user(db: AsyncSession, google_id: str, email: str, name: str, avatar: str | None) -> tuple[User, bool]:
+    """Find or create a user for Google OAuth sign-in. Returns (user, is_new)."""
     # 1. Lookup by google_id first
     result = await db.execute(select(User).where(User.google_id == google_id))
     user = result.scalar_one_or_none()
     if user:
-        return user
+        return user, False
 
     # 2. Lookup by email — link existing local account to Google
     result = await db.execute(select(User).where(User.email == email))
@@ -55,7 +55,7 @@ async def find_or_create_google_user(db: AsyncSession, google_id: str, email: st
             user.avatar = avatar
         await db.commit()
         await db.refresh(user)
-        return user
+        return user, False
 
     # 3. Create new Google-only user
     user = User(
@@ -69,16 +69,16 @@ async def find_or_create_google_user(db: AsyncSession, google_id: str, email: st
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return user
+    return user, True
 
 
-async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, email: str, name: str, avatar: str | None) -> User:
-    """Find or create a user for Microsoft OAuth sign-in."""
+async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, email: str, name: str, avatar: str | None) -> tuple[User, bool]:
+    """Find or create a user for Microsoft OAuth sign-in. Returns (user, is_new)."""
     # 1. Lookup by microsoft_id first
     result = await db.execute(select(User).where(User.microsoft_id == microsoft_id))
     user = result.scalar_one_or_none()
     if user:
-        return user
+        return user, False
 
     # 2. Lookup by email — link existing account to Microsoft
     result = await db.execute(select(User).where(User.email == email))
@@ -91,7 +91,7 @@ async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, ema
             user.avatar = avatar
         await db.commit()
         await db.refresh(user)
-        return user
+        return user, False
 
     # 3. Create new Microsoft-only user
     user = User(
@@ -105,7 +105,7 @@ async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, ema
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return user
+    return user, True
 
 
 async def refresh_tokens(db: AsyncSession, refresh_token: str) -> TokenResponse:
