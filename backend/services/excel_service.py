@@ -158,6 +158,19 @@ def excel_to_markdown(file_path: str) -> str:
             # Detect header row
             header_row = _detect_header_row(df_raw)
 
+            # Capture rows above the header as free-form text (summary/overview area)
+            if header_row > 0:
+                pre_header_lines = []
+                for i in range(header_row):
+                    row_vals = [str(v).strip() for v in df_raw.iloc[i] if pd.notna(v) and str(v).strip()]
+                    if row_vals:
+                        pre_header_lines.append(" | ".join(row_vals))
+                if pre_header_lines:
+                    sections.append("### Overview\n")
+                    for line in pre_header_lines:
+                        sections.append(f"- {line}")
+                    sections.append("")
+
             if header_row == 0:
                 headers = [str(c) for c in df_raw.iloc[0].tolist()]
                 df_data = df_raw.iloc[1:].reset_index(drop=True)
