@@ -43,12 +43,46 @@ async def batch_delete_users(
     admin: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete multiple users by ID. Cannot delete yourself."""
+    """Delete multiple users and all their data. Cannot delete yourself."""
+    import uuid as _uuid
+    from backend.models.notebook import Notebook
+    from backend.models.source import Source
+    from backend.models.chat_message import ChatMessage
+    from backend.models.saved_note import SavedNote
+    from backend.models.chat_log import ChatLog
+
     safe_ids = [uid for uid in user_ids if uid != str(admin.id)]
     if not safe_ids:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
-    import uuid
-    await db.execute(delete(User).where(User.id.in_([uuid.UUID(uid) for uid in safe_ids])))
+
+    uuids = [_uuid.UUID(uid) for uid in safe_ids]
+
+    # Get notebook IDs owned by these users
+    nb_result = await db.execute(select(Notebook.id).where(Notebook.owner_id.in_(uuids)))
+    nb_ids = [row[0] for row in nb_result.all()]
+
+    if nb_ids:
+        # Delete data in notebooks owned by these users
+        await db.execute(delete(Source).where(Source.notebook_id.in_(nb_ids)))
+        await db.execute(delete(ChatMessage).where(ChatMessage.notebook_id.in_(nb_ids)))
+        await db.execute(delete(SavedNote).where(SavedNote.notebook_id.in_(nb_ids)))
+        await db.execute(delete(ChatLog).where(ChatLog.notebook_id.in_(nb_ids)))
+
+    # Delete notebook memberships, invite links, and notebooks
+    from backend.models.notebook_member import NotebookMember
+    from backend.models.invite_link import InviteLink
+    await db.execute(delete(NotebookMember).where(NotebookMember.user_id.in_(uuids)))
+    await db.execute(delete(InviteLink).where(InviteLink.created_by.in_(uuids)))
+    await db.execute(delete(SavedNote).where(SavedNote.user_id.in_(uuids)))
+    await db.execute(delete(ChatLog).where(ChatLog.user_id.in_(uuids)))
+    await db.execute(delete(ChatMessage).where(ChatMessage.user_id.in_(uuids)))
+    await db.execute(delete(Source).where(Source.uploaded_by.in_(uuids)))
+
+    if nb_ids:
+        await db.execute(delete(Notebook).where(Notebook.id.in_(nb_ids)))
+
+    # Finally delete users
+    await db.execute(delete(User).where(User.id.in_(uuids)))
     await db.commit()
     return {"deleted": len(safe_ids)}
 
