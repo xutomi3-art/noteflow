@@ -52,6 +52,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   generateContent: async (notebookId: string, contentType: string) => {
+    // If we already have valid cached content, don't regenerate
+    const existing = get().content[contentType];
+    if (existing && !existing.startsWith("Error")) {
+      return;
+    }
+
     // Clear previous content (including error messages) before retrying
     set(state => {
       const content = { ...state.content };
