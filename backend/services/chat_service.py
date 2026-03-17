@@ -207,7 +207,7 @@ async def stream_chat(
         # Step 2b: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
         # If so, send only those matched Excel tables in full to LLM.
         # For data computation questions, also try SQL on matched tables.
-        MAX_LLM_EXCEL_CHARS = 30000  # total budget for all matched Excel tables (~15K tokens)
+        MAX_LLM_EXCEL_CHARS = 60000  # total budget for all matched Excel tables (~30K tokens)
         t_excel_start = time.time()
         if excel_sources:
             # Build a map of Excel ragflow_doc_id → Source
@@ -358,14 +358,23 @@ Answer the question ONLY based on the context above. Use [1], [2], etc. to cite 
 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
-        # Fetch conversation history for context (last 10 messages = 5 exchanges)
+        # Fetch conversation history — up to 10 rounds (20 messages) but capped at ~8000 tokens (~16K chars)
+        MAX_HISTORY_ROUNDS = 10
+        MAX_HISTORY_CHARS = 16000
         history = await get_chat_history(db, notebook_id, user_id)
-        # Exclude the user message we just saved
         history = [h for h in history if h.id != user_msg.id]
-        history_messages = [
-            {"role": h.role, "content": h.content}
-            for h in history[-10:]
-        ]
+        recent = history[-(MAX_HISTORY_ROUNDS * 2):]
+        # Trim from oldest until within char budget
+        history_messages = []
+        total_chars = 0
+        for h in reversed(recent):
+            msg_chars = len(h.content)
+            if total_chars + msg_chars > MAX_HISTORY_CHARS:
+                break
+            history_messages.append({"role": h.role, "content": h.content})
+            total_chars += msg_chars
+        history_messages.reverse()
+        logger.info("Chat history: %d messages, %d chars", len(history_messages), total_chars)
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
