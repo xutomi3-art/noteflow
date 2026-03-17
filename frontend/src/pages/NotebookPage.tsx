@@ -1565,7 +1565,7 @@ export default function NotebookPage() {
         )}
 
         {/* Center Panel: Chat */}
-        <section className={`flex-1 bg-white flex-col overflow-hidden relative ${isMobile ? (mobileTab === "chat" ? "flex" : "hidden") : "flex"}`} onPaste={handlePaste}>
+        <section className={`flex-1 bg-white flex-col overflow-hidden relative ${isMobile ? (mobileTab === "chat" ? "flex" : "hidden") : "flex"}`}>
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-6 shrink-0">
             <h2 className="text-[13px] font-semibold text-slate-700">Chat</h2>
           </div>
