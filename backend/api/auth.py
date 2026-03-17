@@ -71,7 +71,7 @@ _DEFAULT_NOTEBOOKS = [
 ]
 
 
-async def _create_default_notebooks(db: AsyncSession, user: User) -> None:
+async def _create_default_notebooks(db: AsyncSession, user: User, background_tasks: BackgroundTasks | None = None) -> None:
     """Create default starter notebooks with demo sources, notes for a new user."""
     source_tasks: list[tuple[str, str]] = []  # (source_id, notebook_id)
 
@@ -125,25 +125,17 @@ async def _create_default_notebooks(db: AsyncSession, user: User) -> None:
         except Exception:
             logger.warning("Failed to create default notebook '%s' for user %s", nb_data["name"], user.id)
 
-    # Process demo documents in background (don't block registration)
-    import asyncio
-    for sid, nid in source_tasks:
-        asyncio.create_task(_process_demo_source(sid, nid, user.id))
-
-
-async def _process_demo_source(source_id: str, notebook_id: str, user_id: _uuid.UUID) -> None:
-    """Process a demo source document in background."""
-    try:
-        await process_document(source_id=source_id, notebook_id=notebook_id)
-    except Exception:
-        logger.warning("Failed to process demo source %s for user %s", source_id, user_id)
+    # Queue demo documents for background processing
+    if background_tasks:
+        for sid, nid in source_tasks:
+            background_tasks.add_task(process_document, source_id=sid, notebook_id=nid)
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(req: RegisterRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     try:
         user = await auth_service.register(db, req)
-        await _create_default_notebooks(db, user)
+        await _create_default_notebooks(db, user, background_tasks)
         return await auth_service.login(db, LoginRequest(email=req.email, password=req.password))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -233,7 +225,7 @@ async def google_login(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/google/callback")
-async def google_callback(code: str = "", error: str = "", db: AsyncSession = Depends(get_db)):
+async def google_callback(background_tasks: BackgroundTasks, code: str = "", error: str = "", db: AsyncSession = Depends(get_db)):
     """Handle Google OAuth callback, exchange code, issue JWT, redirect to frontend."""
     if error or not code:
         return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=google_denied")
@@ -253,7 +245,7 @@ async def google_callback(code: str = "", error: str = "", db: AsyncSession = De
 
         user, is_new = await auth_service.find_or_create_google_user(db, google_id, email, name, avatar)
         if is_new:
-            await _create_default_notebooks(db, user)
+            await _create_default_notebooks(db, user, background_tasks)
 
         access_token = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))
@@ -277,7 +269,7 @@ async def microsoft_login(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/microsoft/callback")
-async def microsoft_callback(code: str = "", error: str = "", db: AsyncSession = Depends(get_db)):
+async def microsoft_callback(background_tasks: BackgroundTasks, code: str = "", error: str = "", db: AsyncSession = Depends(get_db)):
     """Handle Microsoft OAuth callback, exchange code, issue JWT, redirect to frontend."""
     if error or not code:
         return RedirectResponse(url=f"{settings.APP_BASE_URL}/login?error=microsoft_denied")
@@ -297,7 +289,7 @@ async def microsoft_callback(code: str = "", error: str = "", db: AsyncSession =
 
         user, is_new = await auth_service.find_or_create_microsoft_user(db, microsoft_id, email, name, avatar)
         if is_new:
-            await _create_default_notebooks(db, user)
+            await _create_default_notebooks(db, user, background_tasks)
 
         access_token = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))
