@@ -1148,6 +1148,7 @@ export default function NotebookPage() {
           >
             <img src="/logo.png" alt="Noteflow" className="w-6 h-6 rounded-md" />
           </button>
+          <span className="px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded -ml-1">Beta</span>
           {isEditingName ? (
             <input
               ref={nameInputRef}

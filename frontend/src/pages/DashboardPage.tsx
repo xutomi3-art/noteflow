@@ -287,6 +287,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="Noteflow" className="w-10 h-10 rounded-xl" />
           <span className="text-2xl font-bold tracking-tight">Noteflow</span>
+          <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded-md">Beta</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right hidden md:block">

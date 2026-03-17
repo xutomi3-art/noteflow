@@ -39,7 +39,10 @@ export default function LoginPage() {
         {/* Logo & Branding */}
         <div className="flex flex-col items-center mb-10">
           <img src="/logo.png" alt="Noteflow" className="w-14 h-14 rounded-2xl mb-4 shadow-sm" />
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Noteflow</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Noteflow</h1>
+            <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded-md">Beta</span>
+          </div>
           <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
         </div>
 
