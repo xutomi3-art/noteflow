@@ -44,7 +44,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] px-4">
+    <div className="relative min-h-screen flex flex-col items-center justify-center bg-[#f8f9fa] px-4">
       <div className="w-full max-w-[400px]">
         {/* Logo & Branding */}
         <div className="flex flex-col items-center mb-10">
@@ -170,7 +170,13 @@ export default function RegisterPage() {
             Sign in
           </Link>
         </p>
+
       </div>
+
+      <p className="absolute bottom-6 text-center text-xs text-gray-400">
+        上海聚托信息科技有限公司©2026{' '}
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 transition-colors">沪ICP备15056478号-5</a>
+      </p>
     </div>
   );
 }
