@@ -15,12 +15,10 @@ from backend.services.excel_service import excel_to_markdown
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/overview", tags=["overview"])
 
-OVERVIEW_PROMPT = """IMPORTANT: Detect the primary language of the documents below and write your ENTIRE response in that SAME language. Do NOT translate, switch languages, or add meta-commentary about language. Output content directly.
-
-Based on the following document contents, write:
+OVERVIEW_PROMPT = """Based on the following document contents, write in English:
 
 1. A brief overview (2-3 sentences) describing what these documents are about.
-2. Exactly 3 suggested questions that a user might want to ask about these documents. The questions should be specific, insightful, and directly related to the content.
+2. Exactly 3 practical suggested questions that a user might want to ask. Keep them simple, useful, and beginner-friendly.
 
 Format your response EXACTLY as follows (use this exact format, no extra text):
 OVERVIEW:
@@ -135,7 +133,7 @@ async def get_overview(
 
     prompt = OVERVIEW_PROMPT.format(context=context)
     messages = [
-        {"role": "system", "content": "You are a helpful assistant that analyzes documents. Always respond in the same language as the source documents — never translate or switch to a different language. Do not add any meta-commentary about the language you are using."},
+        {"role": "system", "content": "You are a helpful assistant that analyzes documents. Always respond in English."},
         {"role": "user", "content": prompt},
     ]
     raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
