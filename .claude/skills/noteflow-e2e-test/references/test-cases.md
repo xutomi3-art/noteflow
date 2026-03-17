@@ -227,3 +227,64 @@ Each test case corresponds to a bug that was found and fixed. These must pass on
   3. Verify streaming state ends (input re-enabled, stop button gone)
   4. Verify no infinite loading spinner
 - **Expected:** Error events properly terminate streaming and show error to user
+
+### TC-023: Qwen3.5-Plus as primary LLM
+- **Change:** Switched from DeepSeek-chat to Qwen3.5-Plus (1M context)
+- **Steps:**
+  1. Open a notebook with sources → send a question
+  2. Verify AI answers correctly with citations
+  3. Check backend log: model field shows `qwen3.5-plus`
+  4. Verify no "DeepSeek" references in response or errors
+- **Expected:** Qwen3.5-Plus generates answers normally
+
+### TC-024: Thinking mode removed
+- **Change:** Removed Think button and reasoning chain display
+- **Steps:**
+  1. Open any notebook
+  2. Verify NO "Think" button next to chat input (Brain icon gone)
+  3. Verify chat input area has: source count + send button only
+  4. Send a question → verify answer streams directly (no thinking phase)
+- **Expected:** No thinking mode UI, clean chat input
+
+### TC-025: Enlarged token budget with Qwen 1M context
+- **Change:** Token budget expanded: history 30 rounds/60K chars, Excel 200-600K chars
+- **Steps:**
+  1. Have a long conversation (15+ rounds) in a notebook with Excel sources
+  2. Ask an Excel-related question
+  3. Verify answer generates successfully (no token overflow)
+  4. Check backend log for budget values
+- **Expected:** Long conversations + Excel work without overflow
+
+### TC-026: RAG top-k increased to 10
+- **Change:** RAG retrieval from top-6 to top-10 chunks
+- **Steps:**
+  1. Open a notebook with many sources (10+)
+  2. Ask a question that spans multiple documents
+  3. Verify citations reference multiple different sources
+- **Expected:** More diverse citations from increased retrieval
+
+### TC-027: Admin LLM page shows Qwen3.5-Plus config
+- **Steps:**
+  1. Log in as admin → /admin/llm
+  2. Verify group title: "Qwen3.5-Plus (Chat LLM)"
+  3. Verify fields: qwen_api_key, llm_base_url, llm_model, llm_max_output_tokens
+  4. Verify NO DeepSeek fields
+  5. Verify Token Budget info card with pricing tiers at bottom
+- **Expected:** Admin shows Qwen config with pricing info
+
+### TC-028: Admin token usage per user
+- **Steps:**
+  1. Log in as admin → /admin/usage
+  2. Scroll down to "Token Usage per User" section
+  3. Verify table shows: User, Requests, Tokens, Avg/Req, Est. Cost
+  4. Verify total tokens and cost displayed
+  5. Switch between 7d and 30d → verify data updates
+- **Expected:** Per-user token consumption visible with cost estimates
+
+### TC-029: Admin health check — no DeepSeek
+- **Steps:**
+  1. Log in as admin → /admin/system
+  2. Check service health panel
+  3. Verify "qwen" service shows OK
+  4. Verify NO "deepseek" service listed
+- **Expected:** Only Qwen in health checks
