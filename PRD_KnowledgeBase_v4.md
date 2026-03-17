@@ -844,6 +844,7 @@ PATCH  /api/notebooks/{id}/owner                Transfer ownership
 
 - Nginx reverse proxy — no direct backend exposure
 - JWT access tokens (24h expiry) + refresh token rotation
+- Google OAuth 2.0 + Microsoft Entra ID SSO (personal + work/school accounts)
 - All file access requires valid JWT token (passed as query parameter for PDF viewer)
 - Notebook access enforced at API layer — permission checks on every endpoint
 - Chinese filenames handled via RFC 5987 URL encoding in Content-Disposition headers
@@ -911,23 +912,40 @@ PATCH  /api/notebooks/{id}/owner                Transfer ownership
 | Podcast (Alibaba TTS, two-voice) | ✅ Done (requires TTS config) |
 | Image upload support (OCR via MinerU) | ✅ Done |
 
-### Phase 4 · Future Enhancements (Planned)
+### Phase 4 · Admin & UX Polish ✅ COMPLETE
+
+| Feature | Status |
+|---------|--------|
+| Admin Panel (dashboard, users, LLM config, system health, logs, usage) | ✅ Done |
+| DeepSeek R1 thinking mode (show reasoning process) | ✅ Done |
+| Conversation memory (chat history per notebook) | ✅ Done |
+| Resizable panels (drag to resize Sources/Chat/Studio) | ✅ Done |
+| Paste image support (Ctrl+V in upload area) | ✅ Done |
+| Delete notebook UI | ✅ Done |
+| Mobile responsive layout | ✅ Done |
+| Password reset via email (SMTP) | ✅ Done |
+| Let's Encrypt SSL auto-renewal | ✅ Done |
+
+### Phase 5 · SSO & Onboarding ✅ COMPLETE
+
+| Feature | Status |
+|---------|--------|
+| Google SSO (OAuth 2.0) | ✅ Done — login/register pages, admin-configurable credentials |
+| Microsoft Office 365 SSO (Entra ID / Azure AD) | ✅ Done — supports personal + work/school accounts, account linking |
+| Demo onboarding for new users | ✅ Done — 3 notebooks with real sources (7 documents), notes, async processing |
+| Overview caching (DB-persisted) | ✅ Done — generated once via LLM, cached in notebooks table, invalidated on source change |
+| Studio language detection | ✅ Done — explicit CJK detection, forces correct output language for Summary/FAQ/Mind Map/Action Items |
+| Beta badge on all pages | ✅ Done |
+| Slide Deck hidden (deferred) | ✅ Done — button hidden pending quality improvements |
+
+### Phase 6 · Future Enhancements (Planned)
 
 | Feature | Description |
 |---------|-------------|
-| Mobile responsive layout | Optimize for 375px viewport |
-| Subscription plans | Free / Pro / Business tiers |
-| Usage Dashboard | Storage, queries, member analytics |
-| SSO integration (SAML / OIDC) | Enterprise IdP support |
-
-### Phase 5 · Intelligence Enhancements (Planned)
-
-| Feature | Description |
-|---------|-------------|
-| Vanna.ai integration | Self-learning SQL for Excel/CSV queries — trains on user corrections to improve accuracy over time |
-| Chart/diagram understanding | Vision LLM (Qwen-VL) extracts structured data from charts, diagrams, and visual content in uploaded images |
-| Presenton PPT with GPU | Deploy Presenton on GPU server for AI-generated images, rich layouts, and professional slide design (current CPU-only server causes Ollama crash) |
-| Google SSO (OAuth 2.0) | Requires public domain (Google rejects IP-only redirect URIs). Code ready in backend/services/google_auth_service.py + frontend login/register pages. Need: domain → Google Cloud OAuth credentials → Admin Panel config |
+| Tenant-based sharing isolation | Only users in the same Microsoft tenant can share notebooks |
+| Vanna.ai integration | Self-learning SQL for Excel/CSV queries — trains on user corrections |
+| Chart/diagram understanding | Vision LLM (Qwen-VL) extracts structured data from charts and diagrams |
+| Presenton PPT with GPU | GPU-accelerated AI slide generation with rich layouts |
 | Subscription plans | Free / Pro / Business tiers with usage limits |
 | Private deployment package | Documented Docker Compose one-click deployment for enterprises |
 | Open API | External REST API for programmatic notebook queries |

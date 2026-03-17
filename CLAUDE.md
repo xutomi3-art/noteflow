@@ -123,8 +123,9 @@ docker compose exec postgres psql -U noteflow -d noteflow
 - **Phase 1** ✅: Personal notebooks, PDF/DOCX/PPTX/TXT/MD upload, AI Q&A with citations, Studio (Summary/FAQ/Study Guide/Saved Notes)
 - **Phase 2** ✅: Excel/CSV support (DuckDB + dual-track RAG), notebook sharing (Owner/Editor/Viewer roles, invite links)
 - **Phase 3** ✅: Mind Map, Podcast, PPT generation (python-pptx + Presenton), mobile responsive, inline PDF viewer
-- **Phase 4** ✅: Admin Panel (dashboard/users/LLM config/system/logs/usage), DeepSeek R1 thinking mode, conversation memory, resizable panels, paste image, delete notebook UI
-- **Phase 5** (planned): Google SSO (needs domain), Presenton GPU PPT, Vanna.ai, Chart Understanding, Subscription plans, Private deployment, Open API
+- **Phase 4** ✅: Admin Panel (dashboard/users/LLM config/system/logs/usage), DeepSeek R1 thinking mode, conversation memory, resizable panels, paste image, delete notebook UI, mobile responsive, password reset, SSL
+- **Phase 5** ✅: Google SSO, Microsoft 365 SSO (Entra ID), demo onboarding (7 sources across 3 notebooks), overview DB caching, Studio language detection, Beta badge
+- **Phase 6** (planned): Tenant-based sharing, Presenton GPU PPT, Vanna.ai, Chart Understanding, Subscription plans, Private deployment, Open API
 
 ## 🔄 Autonomous Workflow（自主工作流 — 核心）
 
@@ -178,6 +179,16 @@ docker compose exec postgres psql -U noteflow -d noteflow
 - 读错误信息，不要猜
 - 检查最近的改动是否引入了循环导入或类型冲突
 - 修复后跑完整测试
+
+### 🐛 Bug → 测试用例闭环
+
+每次用户测试发现 bug 并修复后，**必须**执行以下步骤：
+
+1. 将该 bug 对应的测试用例添加到 `noteflow-e2e-test` skill 的 `references/test-cases.md` 中
+2. 用 skill-creator verify 验证 skill 格式正确
+3. 运行新增的测试用例确认 PASS
+
+目的：确保同一个 bug 永远不会再次出现。每次做回归测试时，所有历史 bug 都会被覆盖到。
 
 ### 🔍 自我检查（每完成 3 个任务执行一次）
 
