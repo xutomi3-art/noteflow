@@ -2141,7 +2141,21 @@ export default function NotebookPage() {
       {/* Add Source Modal */}
       {showAddSourceModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeAddSourceModal}>
-          <div className="bg-white rounded-[32px] w-full max-w-2xl p-10 relative shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-[32px] w-full max-w-2xl p-10 relative shadow-2xl" onClick={(e) => e.stopPropagation()} onPaste={(e) => {
+            const items = e.clipboardData.items;
+            for (const item of Array.from(items)) {
+              if (item.type.startsWith("image/")) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file) {
+                  const ext = file.type.split("/")[1] || "png";
+                  const namedFile = new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type });
+                  setModalFiles(prev => [...prev, namedFile]);
+                }
+                return;
+              }
+            }
+          }}>
             <button
               onClick={closeAddSourceModal}
               className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors"
@@ -2180,6 +2194,7 @@ export default function NotebookPage() {
             >
               <Upload className="w-10 h-10 text-slate-300 mb-4" />
               <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
+              <p className="text-sm text-slate-400 mb-1">or paste an image from clipboard (Ctrl+V / Cmd+V)</p>
               <p className="text-sm text-slate-500 mb-1">
                 pdf, images, docs,{' '}
                 <span className="relative group/tip inline-block">
