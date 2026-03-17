@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import time
 import uuid
@@ -193,48 +194,86 @@ async def stream_chat(
         excel_sources = list(excel_result.scalars().all())
         logger.info("Excel sources found: %d, source_ids: %s", len(excel_sources), source_ids)
 
-        # Handle Excel queries — LLM-native approach preferred (send markdown to LLM directly)
-        # qwen-plus supports 128K context, so we can handle fairly large spreadsheets
-        # ~60000 chars ≈ 200-300 rows × 8-10 columns, well within context limits
-        # For very large files: fall back to SQL generation via DuckDB
-        MAX_LLM_NATIVE_CHARS = 60000
+        # Step 2a: RAGFlow retrieval first — find relevant chunks across all sources
         excel_context = None
         sql_answer = None
 
+        chunks = []
+        if dataset_ids:
+            filter_doc_ids = document_ids if source_ids and document_ids else None
+            chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=6, document_ids=filter_doc_ids)
+        t_ragflow_end = time.time()
+
+        # Step 2b: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
+        # If so, send only those matched Excel tables in full to LLM.
+        # For data computation questions, also try SQL on matched tables.
+        MAX_LLM_EXCEL_CHARS = 80000  # total budget for all matched Excel tables
         t_excel_start = time.time()
         if excel_sources:
-            # First pass: try LLM-native approach for all Excel sources (no routing needed)
-            for excel_src in excel_sources:
-                if excel_src.storage_url:
+            # Build a map of Excel ragflow_doc_id → Source
+            excel_by_doc_id: dict[str, "Source"] = {}
+            excel_by_filename: dict[str, "Source"] = {}
+            for src in excel_sources:
+                if src.ragflow_doc_id:
+                    excel_by_doc_id[src.ragflow_doc_id] = src
+                # Also match by filename (RAGFlow chunk contains document_keyword = filename)
+                base = os.path.splitext(src.filename)[0] + ".md"
+                excel_by_filename[base.lower()] = src
+                excel_by_filename[src.filename.lower()] = src
+
+            # Find which Excel files appear in retrieved chunks
+            matched_excel: dict[str, "Source"] = {}  # source_id → Source (deduplicated)
+            for chunk in chunks:
+                doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "")).lower()
+                doc_id = chunk.get("document_id", chunk.get("doc_id", ""))
+                # Match by doc_id
+                if doc_id in excel_by_doc_id:
+                    src = excel_by_doc_id[doc_id]
+                    matched_excel[str(src.id)] = src
+                # Match by filename
+                for key, src in excel_by_filename.items():
+                    if key in doc_name or doc_name in key:
+                        matched_excel[str(src.id)] = src
+
+            if matched_excel:
+                # Send matched Excel tables in full to LLM
+                excel_parts = []
+                total_chars = 0
+                for src in matched_excel.values():
+                    if not src.storage_url:
+                        continue
                     try:
-                        md_content = excel_to_markdown(excel_src.storage_url)
-                        if len(md_content) <= MAX_LLM_NATIVE_CHARS:
-                            excel_context = f"Data from file: {excel_src.filename}\n\n{md_content}"
-                            logger.info("Using LLM-native approach for %s (%d chars)", excel_src.filename, len(md_content))
-                            break
+                        md = excel_to_markdown(src.storage_url)
+                        if total_chars + len(md) <= MAX_LLM_EXCEL_CHARS:
+                            excel_parts.append(f"Data from file: {src.filename}\n\n{md}")
+                            total_chars += len(md)
+                            logger.info("Including matched Excel: %s (%d chars)", src.filename, len(md))
                         else:
-                            logger.info("Excel markdown too large (%d chars), will try SQL for %s", len(md_content), excel_src.filename)
+                            logger.info("Skipping Excel %s (%d chars) — budget exceeded", src.filename, len(md))
                     except Exception as e:
-                        logger.warning("Failed to convert %s to markdown: %s", excel_src.filename, e)
+                        logger.warning("Failed to convert %s: %s", src.filename, e)
+                if excel_parts:
+                    excel_context = "\n\n---\n\n".join(excel_parts)
+                    logger.info("Excel context: %d matched tables, %d total chars", len(excel_parts), total_chars)
 
-            # Second pass: SQL fallback for large files (only if LLM-native didn't work)
-            if excel_context is None:
-                for excel_src in excel_sources:
-                    schema = get_table_schema(excel_src.duckdb_path)
+            # SQL fallback for data computation queries on matched Excel
+            if sql_answer is None and matched_excel:
+                for src in matched_excel.values():
+                    if not src.duckdb_path:
+                        continue
+                    schema = get_table_schema(src.duckdb_path)
                     route = await route_query(message, schema)
-                    logger.info("Query route for '%s' on %s: %s", message[:50], excel_src.filename, route)
-
                     if route != "sql":
                         continue
-
-                    sample = get_table_sample(excel_src.duckdb_path)
+                    logger.info("SQL route matched for %s", src.filename)
+                    sample = get_table_sample(src.duckdb_path)
                     sql_gen_prompt = f"""Given this DuckDB table schema:
 {schema}
 
 Sample data (first and last rows):
 {sample}
 
-The data comes from file: {excel_src.filename}
+The data comes from file: {src.filename}
 
 Generate a SQL query to answer: {message}
 
@@ -242,36 +281,24 @@ Rules:
 - The table name is always "data"
 - Return ONLY the SQL query, no explanation, no markdown
 - Use standard SQL compatible with DuckDB
-- IMPORTANT: Excel merged cells have been forward-filled. If a category/topic spans multiple rows, ALL those rows now share the same category value. When asked about a budget/total for a category, use SUM() to aggregate all matching rows.
-- IMPORTANT: Excel files often have summary/total rows at the bottom (rows where key identifier columns like ID, name, PO number are NULL). When aggregating (SUM, COUNT, AVG), EXCLUDE these summary rows by filtering out rows where the primary identifier column IS NULL.
-- If the user asks for a total and a summary row already contains it, you can SELECT that value directly instead of re-summing.
-- Use ILIKE for string matching to be case-insensitive. Use '%keyword%' patterns for partial matching."""
+- IMPORTANT: Excel merged cells have been forward-filled.
+- IMPORTANT: Exclude summary/total rows where primary identifier is NULL.
+- Use ILIKE for case-insensitive string matching."""
 
                     sql_query = await qwen_client.generate(
                         [{"role": "user", "content": sql_gen_prompt}]
                     )
                     sql_query = sql_query.strip()
-                    # Strip markdown code fences if present
                     if sql_query.startswith("```"):
                         sql_query = sql_query.split("\n", 1)[1].rsplit("```", 1)[0].strip()
                     logger.info("Generated SQL: %s", sql_query)
-
                     try:
-                        sql_answer = query_excel(excel_src.duckdb_path, sql_query)
-                        logger.info("SQL query succeeded on %s", excel_src.filename)
+                        sql_answer = query_excel(src.duckdb_path, sql_query)
+                        logger.info("SQL succeeded on %s", src.filename)
                         break
                     except Exception as e:
-                        logger.warning("SQL query failed on %s: %s\nQuery: %s", excel_src.filename, e, sql_query)
-                        # Don't set sql_answer on failure — fall through to RAG
+                        logger.warning("SQL failed on %s: %s", src.filename, e)
         t_excel_end = time.time()
-
-        chunks = []
-        if dataset_ids:
-            # When source_ids are specified, pass document_ids to scope retrieval
-            # to only the selected sources within the shared notebook dataset
-            filter_doc_ids = document_ids if source_ids and document_ids else None
-            chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=6, document_ids=filter_doc_ids)
-        t_ragflow_end = time.time()
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
