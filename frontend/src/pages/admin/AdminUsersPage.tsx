@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, Shield, ShieldOff, Ban, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Shield, ShieldOff, Ban, CheckCircle, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 
 function formatDate(dateStr: string | null): string {
@@ -9,24 +9,62 @@ function formatDate(dateStr: string | null): string {
 }
 
 export default function AdminUsersPage() {
-  const { users, usersTotal, usersPage, fetchUsers, toggleUserDisabled, toggleUserAdmin } = useAdminStore();
+  const { users, usersTotal, usersPage, fetchUsers, toggleUserDisabled, toggleUserAdmin, deleteUsers } = useAdminStore();
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
   const totalPages = Math.ceil(usersTotal / 20);
 
   useEffect(() => {
     fetchUsers({ page: 1 });
   }, [fetchUsers]);
 
+  // Clear selection when page changes
+  useEffect(() => {
+    setSelected(new Set());
+  }, [usersPage]);
+
   const handleSearch = () => {
     fetchUsers({ search, page: 1 });
+    setSelected(new Set());
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === users.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(users.map(u => u.id)));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selected.size === 0) return;
+    const confirmed = window.confirm(`Delete ${selected.size} user(s)? This cannot be undone.`);
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      await deleteUsers([...selected]);
+      setSelected(new Set());
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
     <div className="max-w-6xl">
       <h2 className="text-2xl font-semibold text-gray-900 mb-6">Users</h2>
 
-      {/* Search */}
-      <div className="flex gap-2 mb-4">
+      {/* Search + Batch Actions */}
+      <div className="flex items-center gap-2 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
@@ -44,6 +82,17 @@ export default function AdminUsersPage() {
         >
           Search
         </button>
+
+        {selected.size > 0 && (
+          <button
+            onClick={handleBatchDelete}
+            disabled={deleting}
+            className="ml-auto flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+          >
+            <Trash2 size={14} />
+            Delete {selected.size} user{selected.size > 1 ? 's' : ''}
+          </button>
+        )}
       </div>
 
       {/* Table */}
@@ -51,6 +100,14 @@ export default function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/50">
+              <th className="w-10 px-3 py-3">
+                <input
+                  type="checkbox"
+                  checked={users.length > 0 && selected.size === users.length}
+                  onChange={toggleSelectAll}
+                  className="rounded border-gray-300 text-[#5b8c15] focus:ring-[#5b8c15]/30 cursor-pointer"
+                />
+              </th>
               <th className="text-left px-4 py-3 font-medium text-gray-500">User</th>
               <th className="text-left px-4 py-3 font-medium text-gray-500">Notebooks</th>
               <th className="text-left px-4 py-3 font-medium text-gray-500">Docs</th>
@@ -61,7 +118,15 @@ export default function AdminUsersPage() {
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+              <tr key={user.id} className={`border-b border-gray-50 hover:bg-gray-50/50 ${selected.has(user.id) ? 'bg-blue-50/40' : ''}`}>
+                <td className="px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(user.id)}
+                    onChange={() => toggleSelect(user.id)}
+                    className="rounded border-gray-300 text-[#5b8c15] focus:ring-[#5b8c15]/30 cursor-pointer"
+                  />
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
@@ -116,7 +181,7 @@ export default function AdminUsersPage() {
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   No users found
                 </td>
               </tr>

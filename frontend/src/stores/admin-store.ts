@@ -18,6 +18,7 @@ interface AdminState {
   fetchUsers: (params?: { search?: string; page?: number }) => Promise<void>;
   toggleUserDisabled: (userId: string, isDisabled: boolean) => Promise<void>;
   toggleUserAdmin: (userId: string, isAdmin: boolean) => Promise<void>;
+  deleteUsers: (userIds: string[]) => Promise<void>;
   fetchSettings: () => Promise<void>;
   saveSettings: (settings: Record<string, string>) => Promise<void>;
   fetchHealth: () => Promise<void>;
@@ -79,6 +80,14 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       users: state.users.map((u) =>
         u.id === userId ? { ...u, is_admin: isAdmin } : u
       ),
+    }));
+  },
+
+  deleteUsers: async (userIds) => {
+    await api.batchDeleteUsers(userIds);
+    set((state) => ({
+      users: state.users.filter((u) => !userIds.includes(u.id)),
+      usersTotal: state.usersTotal - userIds.length,
     }));
   },
 

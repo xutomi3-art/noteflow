@@ -518,6 +518,13 @@ class ApiClient {
     });
   }
 
+  async batchDeleteUsers(userIds: string[]): Promise<{ deleted: number }> {
+    return this.request("/admin/users/batch-delete", {
+      method: "POST",
+      body: JSON.stringify({ user_ids: userIds }),
+    });
+  }
+
   async getAdminSettings(): Promise<SystemSettingItem[]> {
     return this.request("/admin/settings");
   }

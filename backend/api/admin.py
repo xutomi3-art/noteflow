@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, desc
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy import select, func, desc, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
@@ -35,6 +35,22 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
 ):
     return await admin_service.list_users(db, search=search, page=page, limit=limit)
+
+
+@router.post("/users/batch-delete")
+async def batch_delete_users(
+    user_ids: list[str] = Body(..., embed=True),
+    admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete multiple users by ID. Cannot delete yourself."""
+    safe_ids = [uid for uid in user_ids if uid != str(admin.id)]
+    if not safe_ids:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    import uuid
+    await db.execute(delete(User).where(User.id.in_([uuid.UUID(uid) for uid in safe_ids])))
+    await db.commit()
+    return {"deleted": len(safe_ids)}
 
 
 @router.patch("/users/{user_id}")
