@@ -71,6 +71,48 @@ _DEFAULT_NOTEBOOKS = [
 ]
 
 
+async def _pre_generate_overviews(notebook_ids: list[str]) -> None:
+    """Pre-generate and cache overview for demo notebooks (runs after all sources processed)."""
+    from backend.core.database import async_session
+    from backend.api.overview import _get_ready_sources, _get_source_context, _compute_source_hash, _parse_overview_response, _detect_language, OVERVIEW_PROMPT
+    from backend.models.notebook import Notebook
+    from backend.services.qwen_client import qwen_client
+    import json
+
+    async with async_session() as db:
+        for nb_id_str in notebook_ids:
+            try:
+                nb_uuid = _uuid.UUID(nb_id_str)
+                sources = await _get_ready_sources(db, nb_uuid)
+                if not sources:
+                    continue
+
+                context = await _get_source_context(sources)
+                if not context:
+                    continue
+
+                lang = _detect_language(context)
+                prompt = OVERVIEW_PROMPT.format(context=context)
+                messages = [
+                    {"role": "system", "content": f"You are a helpful assistant that analyzes documents. You MUST write your entire response in {lang}. Do NOT use any other language."},
+                    {"role": "user", "content": prompt},
+                ]
+                raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
+                result = _parse_overview_response(raw)
+
+                # Save to DB cache
+                source_hash = _compute_source_hash(sources)
+                nb_result = await db.execute(select(Notebook).where(Notebook.id == nb_uuid))
+                notebook = nb_result.scalar_one_or_none()
+                if notebook:
+                    notebook.overview_cache = json.dumps(result)
+                    notebook.overview_source_hash = source_hash
+                    await db.commit()
+                    logger.info("Pre-generated overview for notebook %s", nb_id_str)
+            except Exception:
+                logger.warning("Failed to pre-generate overview for notebook %s", nb_id_str)
+
+
 async def _bump_notebook_updated_at(notebook_id: str) -> None:
     """Bump a notebook's updated_at to now (run as background task after all sources processed)."""
     from backend.core.database import async_session
@@ -87,6 +129,7 @@ async def _bump_notebook_updated_at(notebook_id: str) -> None:
 async def _create_default_notebooks(db: AsyncSession, user: User, background_tasks: BackgroundTasks | None = None) -> None:
     """Create default starter notebooks with demo sources, notes for a new user."""
     source_tasks: list[tuple[str, str, str, str, str]] = []  # (source_id, notebook_id, file_path, filename, file_type)
+    all_nb_ids: list[str] = []
     getting_started_id: str | None = None
 
     for nb_data in _DEFAULT_NOTEBOOKS:
@@ -97,6 +140,7 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
                 req=NotebookCreate(name=nb_data["name"], emoji=nb_data["emoji"], cover_color=nb_data["cover_color"]),
             )
             nb_id = str(nb.id)
+            all_nb_ids.append(nb_id)
             if nb_data["name"] == "Getting Started":
                 getting_started_id = nb_id
 
@@ -145,6 +189,9 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
     if background_tasks:
         for sid, nid, fpath, fname, ftype in source_tasks:
             background_tasks.add_task(process_document, source_id=sid, notebook_id=nid, file_path=fpath, filename=fname, file_type=ftype)
+        # Pre-generate overviews for all demo notebooks (runs after all sources processed)
+        if all_nb_ids:
+            background_tasks.add_task(_pre_generate_overviews, all_nb_ids)
         # Ensure Getting Started has the newest updated_at (appears first on dashboard)
         if getting_started_id:
             background_tasks.add_task(_bump_notebook_updated_at, getting_started_id)
