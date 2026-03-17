@@ -55,35 +55,38 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
             func.count(Source.id).label("source_count"),
             NotebookMember.role.label("user_role"),
             (func.coalesce(member_count_subq.c.member_count, 0) + 1).label("member_count"),
+            NotebookMember.joined_at.label("joined_at"),
         )
         .join(NotebookMember, NotebookMember.notebook_id == Notebook.id)
         .outerjoin(Source, Source.notebook_id == Notebook.id)
         .outerjoin(member_count_subq, member_count_subq.c.notebook_id == Notebook.id)
         .where(NotebookMember.user_id == user_id)
-        .group_by(Notebook.id, NotebookMember.role, member_count_subq.c.member_count)
+        .group_by(Notebook.id, NotebookMember.role, member_count_subq.c.member_count, NotebookMember.joined_at)
     )
     shared_result = await db.execute(shared_stmt)
     shared_rows = shared_result.all()
 
-    all_rows = owned_rows + shared_rows
-    all_rows.sort(key=lambda row: row[0].updated_at, reverse=True)
+    # Build unified response list
+    results: list[NotebookResponse] = []
+    for row in owned_rows:
+        nb, source_count, role, member_count = row
+        results.append(NotebookResponse(
+            id=str(nb.id), name=nb.name, emoji=nb.emoji, cover_color=nb.cover_color,
+            owner_id=str(nb.owner_id), is_shared=nb.is_shared, user_role=role,
+            source_count=source_count, member_count=member_count,
+            created_at=nb.created_at, updated_at=nb.updated_at, joined_at=None,
+        ))
+    for row in shared_rows:
+        nb, source_count, role, member_count, joined_at = row
+        results.append(NotebookResponse(
+            id=str(nb.id), name=nb.name, emoji=nb.emoji, cover_color=nb.cover_color,
+            owner_id=str(nb.owner_id), is_shared=nb.is_shared, user_role=role,
+            source_count=source_count, member_count=member_count,
+            created_at=nb.created_at, updated_at=nb.updated_at, joined_at=joined_at,
+        ))
 
-    return [
-        NotebookResponse(
-            id=str(nb.id),
-            name=nb.name,
-            emoji=nb.emoji,
-            cover_color=nb.cover_color,
-            owner_id=str(nb.owner_id),
-            is_shared=nb.is_shared,
-            user_role=role,
-            source_count=source_count,
-            member_count=member_count,
-            created_at=nb.created_at,
-            updated_at=nb.updated_at,
-        )
-        for nb, source_count, role, member_count in all_rows
-    ]
+    results.sort(key=lambda r: r.updated_at, reverse=True)
+    return results
 
 
 async def get_notebook(db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID, touch: bool = False) -> Notebook:

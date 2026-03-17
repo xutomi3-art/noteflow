@@ -117,10 +117,22 @@ export default function DashboardPage() {
       return personalNotebooks.indexOf(a) - personalNotebooks.indexOf(b);
     }
   );
+  const NEW_INVITE_DAYS = 7;
+  const isNewInvite = (nb: Notebook) => {
+    if (!nb.joined_at || nb.user_role === 'owner') return false;
+    const joinedMs = new Date(nb.joined_at).getTime();
+    return Date.now() - joinedMs < NEW_INVITE_DAYS * 86400000;
+  };
+
   const sortedTeam = [...teamNotebooks].sort(
     (a, b) => {
+      // 1. Starred first
       const starDiff = (starredIds.has(b.id) ? 1 : 0) - (starredIds.has(a.id) ? 1 : 0);
       if (starDiff !== 0) return starDiff;
+      // 2. New invites second (after starred)
+      const newDiff = (isNewInvite(b) ? 1 : 0) - (isNewInvite(a) ? 1 : 0);
+      if (newDiff !== 0) return newDiff;
+      // 3. Then by updated_at (backend order)
       return teamNotebooks.indexOf(a) - teamNotebooks.indexOf(b);
     }
   );
@@ -522,7 +534,12 @@ export default function DashboardPage() {
                     <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
                   <div className="p-5">
-                    <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
+                    <h3 className="font-bold text-base mb-1.5 truncate text-slate-900 flex items-center gap-2">
+                      {notebook.name}
+                      {isNewInvite(notebook) && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-600 rounded-md shrink-0">New</span>
+                      )}
+                    </h3>
                     <div className="text-[13px] text-slate-500 font-medium">
                       {notebook.user_role !== 'owner' ? `Shared with you` : `${notebook.member_count} ${notebook.member_count === 1 ? 'member' : 'members'}`}
                     </div>

@@ -24,6 +24,7 @@ export interface Notebook {
   member_count: number;
   created_at: string;
   updated_at: string;
+  joined_at: string | null;
 }
 
 export interface Source {

@@ -52,5 +52,6 @@ class NotebookResponse(BaseModel):
     member_count: int = 1
     created_at: datetime
     updated_at: datetime
+    joined_at: datetime | None = None
 
     model_config = {"from_attributes": True}
