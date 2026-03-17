@@ -814,16 +814,32 @@ export default function NotebookPage() {
     // Start file uploads
     const filesToUpload = [...modalFiles];
     const urlsToAdd = [...modalUrls];
+
+    // Create pending upload entries BEFORE closing modal so there's no blank gap
+    const allPendingUploads: typeof pendingUploads = [];
+    const fileUploadIds: number[] = [];
+    if (filesToUpload.length > 0) {
+      const uploadIds = filesToUpload.map(() => ++uploadIdCounterRef.current);
+      fileUploadIds.push(...uploadIds);
+      allPendingUploads.push(...filesToUpload.map((f, i) => ({ id: uploadIds[i], name: f.name, status: 'uploading' as const, progress: 0 })));
+    }
+    const urlUploadIds: number[] = [];
+    if (urlsToAdd.length > 0) {
+      const ids = urlsToAdd.map(() => ++uploadIdCounterRef.current);
+      urlUploadIds.push(...ids);
+      allPendingUploads.push(...urlsToAdd.map((u, i) => ({ id: ids[i], name: u, status: 'uploading' as const, progress: 0 })));
+    }
+    if (allPendingUploads.length > 0) {
+      setPendingUploads(prev => [...prev, ...allPendingUploads]);
+    }
+
     closeAddSourceModal();
 
     // Upload files
     if (filesToUpload.length > 0) {
-      const uploadIds = filesToUpload.map(() => ++uploadIdCounterRef.current);
-      const newUploads = filesToUpload.map((f, i) => ({ id: uploadIds[i], name: f.name, status: 'uploading' as const, progress: 0 }));
-      setPendingUploads(prev => [...prev, ...newUploads]);
       for (let i = 0; i < filesToUpload.length; i++) {
         const controller = new AbortController();
-        const uploadId = uploadIds[i];
+        const uploadId = fileUploadIds[i];
         uploadControllersRef.current.set(uploadId, controller);
         try {
           const uploaded = await api.uploadSource(id, filesToUpload[i], controller.signal, (progress) => {
@@ -844,11 +860,8 @@ export default function NotebookPage() {
       setTimeout(() => setPendingUploads(prev => prev.filter(u => u.status === 'uploading' || u.status === 'processing')), 2000);
     }
 
-    // Add URLs — show immediately in pending list
+    // Add URLs
     if (urlsToAdd.length > 0) {
-      const urlUploadIds = urlsToAdd.map(() => ++uploadIdCounterRef.current);
-      const urlUploads = urlsToAdd.map((u, i) => ({ id: urlUploadIds[i], name: u, status: 'uploading' as const, progress: 0 }));
-      setPendingUploads(prev => [...prev, ...urlUploads]);
       for (let i = 0; i < urlsToAdd.length; i++) {
         const uploadId = urlUploadIds[i];
         try {
