@@ -305,8 +305,6 @@ class ApiClient {
                 onThinkingStart?.();
               } else if (data.type === "reasoning") {
                 onReasoning?.(data.content);
-              } else if (data.type === "info") {
-                onToken(`> ℹ️ ${data.message}\n\n`);
               } else if (data.type === "token") {
                 onToken(data.content);
               } else if (data.type === "done") {

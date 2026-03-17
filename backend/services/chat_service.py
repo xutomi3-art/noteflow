@@ -234,7 +234,6 @@ async def stream_chat(
                     if key in doc_name or doc_name in key:
                         matched_excel[str(src.id)] = src
 
-            skipped_excel: list[str] = []
             if matched_excel:
                 # Dynamic budget: more generous when fewer Excel files matched
                 n = len(matched_excel)
@@ -259,7 +258,6 @@ async def stream_chat(
                             total_chars += len(md)
                             logger.info("Including matched Excel: %s (%d chars)", src.filename, len(md))
                         else:
-                            skipped_excel.append(src.filename)
                             logger.info("Skipping Excel %s (%d chars) — budget exceeded", src.filename, len(md))
                     except Exception as e:
                         logger.warning("Failed to convert %s: %s", src.filename, e)
@@ -310,12 +308,6 @@ Rules:
                     except Exception as e:
                         logger.warning("SQL failed on %s: %s", src.filename, e)
         t_excel_end = time.time()
-
-        # Notify frontend about skipped Excel files
-        if excel_sources and skipped_excel:
-            names = ", ".join(skipped_excel[:3])
-            suffix = f" and {len(skipped_excel) - 3} more" if len(skipped_excel) > 3 else ""
-            yield f"data: {json.dumps({'type': 'info', 'message': f'Some spreadsheets were too large to fully analyze: {names}{suffix}. Try selecting fewer sources for more complete results.'})}\n\n"
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
@@ -482,7 +474,12 @@ The uploaded documents do not contain information relevant to this question. Ple
             await db.commit()
         except Exception:
             pass
-        yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        error_str = str(e)
+        if "maximum context length" in error_str or "too many tokens" in error_str.lower():
+            friendly = "Selected sources contain too much data. Please select fewer sources and try again."
+            yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
+        else:
+            yield f"data: {json.dumps({'type': 'error', 'message': error_str})}\n\n"
 
 
 async def get_chat_history(
