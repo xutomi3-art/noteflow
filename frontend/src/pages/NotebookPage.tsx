@@ -1909,20 +1909,6 @@ export default function NotebookPage() {
                 <div className="text-[11px] font-bold text-cyan-900">FAQ</div>
               </button>
 
-              {/* Slide Deck */}
-              <button
-                onClick={() => handleStudioAction("ppt")}
-                disabled={pptLoading}
-                className="bg-[#fff7ed] hover:bg-orange-100 border border-orange-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
-              >
-                {pptLoading ? (
-                  <Loader2 className="w-4 h-4 text-orange-600 mb-2 animate-spin" />
-                ) : (
-                  <Presentation className="w-4 h-4 text-orange-600 mb-2" />
-                )}
-                <div className="text-[11px] font-bold text-orange-900">{pptLoading ? 'Generating...' : 'Slide Deck'}</div>
-              </button>
-
               {/* Mind Map */}
               <button
                 onClick={() => handleStudioAction("mindmap")}
