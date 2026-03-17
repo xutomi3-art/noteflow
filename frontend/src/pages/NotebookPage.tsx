@@ -362,18 +362,15 @@ export default function NotebookPage() {
   } = useStudioStore();
   const { members, fetchMembers, removeMember } = useSharingStore();
 
-  // Auto-expand Studio panel only when generation finishes (any isGenerating: true → false)
-  const wasGeneratingRef = useRef(false);
+  // Auto-expand Studio panel when new content appears
+  const prevContentCountRef = useRef(0);
   useEffect(() => {
-    const anyGenerating = Object.values(isGenerating).some(Boolean);
-    if (wasGeneratingRef.current && !anyGenerating) {
-      const hasContent = Object.values(studioContent).some(v => v && typeof v === "string" && v.length > 0);
-      if (hasContent && !isRightCollapsed) {
-        setRightWidth(w => Math.max(w, Math.min(520, window.innerWidth * 0.35)));
-      }
+    const contentCount = Object.values(studioContent).filter(v => v && typeof v === "string" && v.length > 0).length;
+    if (contentCount > prevContentCountRef.current && !isRightCollapsed) {
+      setRightWidth(w => Math.max(w, Math.min(520, window.innerWidth * 0.35)));
     }
-    wasGeneratingRef.current = anyGenerating;
-  }, [isGenerating, studioContent, isRightCollapsed]);
+    prevContentCountRef.current = contentCount;
+  }, [studioContent, isRightCollapsed]);
 
   // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
