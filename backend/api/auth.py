@@ -60,7 +60,7 @@ async def _create_default_notebooks(db: AsyncSession, user: User) -> None:
             )
             for note_content in _DEFAULT_NOTES.get(nb_data["name"], []):
                 try:
-                    await create_note(db, nb.id, note_content)
+                    await create_note(db, nb.id, note_content, user_id=user.id)
                 except Exception:
                     pass
         except Exception:
