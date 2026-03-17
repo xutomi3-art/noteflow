@@ -207,7 +207,7 @@ async def stream_chat(
         # Step 2b: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
         # If so, send only those matched Excel tables in full to LLM.
         # For data computation questions, also try SQL on matched tables.
-        MAX_LLM_EXCEL_CHARS = 80000  # total budget for all matched Excel tables
+        MAX_LLM_EXCEL_CHARS = 30000  # total budget for all matched Excel tables (~15K tokens)
         t_excel_start = time.time()
         if excel_sources:
             # Build a map of Excel ragflow_doc_id → Source
