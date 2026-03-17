@@ -73,7 +73,7 @@ _DEFAULT_NOTEBOOKS = [
 
 async def _create_default_notebooks(db: AsyncSession, user: User, background_tasks: BackgroundTasks | None = None) -> None:
     """Create default starter notebooks with demo sources, notes for a new user."""
-    source_tasks: list[tuple[str, str]] = []  # (source_id, notebook_id)
+    source_tasks: list[tuple[str, str, str, str, str]] = []  # (source_id, notebook_id, file_path, filename, file_type)
 
     for nb_data in _DEFAULT_NOTEBOOKS:
         try:
@@ -112,7 +112,7 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
                         file_size=os.path.getsize(dest_path),
                         storage_url=dest_path,
                     )
-                    source_tasks.append((str(source.id), nb_id))
+                    source_tasks.append((str(source.id), nb_id, dest_path, filename, file_type))
                 except Exception:
                     logger.warning("Failed to create demo source '%s' for user %s", filename, user.id)
 
@@ -127,8 +127,8 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
 
     # Queue demo documents for background processing
     if background_tasks:
-        for sid, nid in source_tasks:
-            background_tasks.add_task(process_document, source_id=sid, notebook_id=nid)
+        for sid, nid, fpath, fname, ftype in source_tasks:
+            background_tasks.add_task(process_document, source_id=sid, notebook_id=nid, file_path=fpath, filename=fname, file_type=ftype)
 
 
 @router.post("/register", response_model=TokenResponse)
