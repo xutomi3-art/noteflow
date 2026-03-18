@@ -271,14 +271,18 @@ async def stream_chat(
                     logger.info("Excel context: %d matched tables, %d total chars", len(excel_parts), total_chars)
 
             # SQL fallback — only for Excel files that were too large to fit in context
+            # Run in parallel with asyncio.gather for speed
             if sql_answer is None and truncated_excel:
-                for src in matched_excel.values():
+                import asyncio
+
+                async def _try_sql(src: "Source") -> str | None:
+                    """Try SQL route for a single Excel source. Returns result or None."""
                     if str(src.id) not in truncated_excel or not src.duckdb_path:
-                        continue
+                        return None
                     schema = get_table_schema(src.duckdb_path)
                     route = await route_query(message, schema)
                     if route != "sql":
-                        continue
+                        return None
                     logger.info("SQL route matched for %s", src.filename)
                     sample = get_table_sample(src.duckdb_path)
                     sql_gen_prompt = f"""Given this DuckDB table schema:
@@ -295,6 +299,8 @@ Rules:
 - The table name is always "data"
 - Return ONLY the SQL query, no explanation, no markdown
 - Use standard SQL compatible with DuckDB
+- IMPORTANT: Use ASCII commas (,) not Chinese commas (，) in SQL
+- IMPORTANT: Always quote column names with double quotes (e.g. "列名")
 - IMPORTANT: Excel merged cells have been forward-filled.
 - IMPORTANT: Exclude summary/total rows where primary identifier is NULL.
 - Use ILIKE for case-insensitive string matching."""
@@ -305,13 +311,25 @@ Rules:
                     sql_query = sql_query.strip()
                     if sql_query.startswith("```"):
                         sql_query = sql_query.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                    # Fix common LLM mistakes: Chinese punctuation → ASCII
+                    sql_query = sql_query.replace("，", ",").replace("（", "(").replace("）", ")").replace("'", "'").replace("'", "'")
                     logger.info("Generated SQL: %s", sql_query)
                     try:
-                        sql_answer = query_excel(src.duckdb_path, sql_query)
+                        result = query_excel(src.duckdb_path, sql_query)
                         logger.info("SQL succeeded on %s", src.filename)
-                        break
+                        return result
                     except Exception as e:
                         logger.warning("SQL failed on %s: %s", src.filename, e)
+                        return None
+
+                results = await asyncio.gather(
+                    *[_try_sql(src) for src in matched_excel.values()],
+                    return_exceptions=True,
+                )
+                for r in results:
+                    if isinstance(r, str) and r:
+                        sql_answer = r
+                        break
         t_excel_end = time.time()
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
