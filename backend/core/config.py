@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Volcengine ASR (Seed-ASR 2.0)
     VOLCENGINE_ASR_APPID: str = ""
     VOLCENGINE_ASR_ACCESS_KEY: str = ""  # Access Token from console
-    PUBLIC_BASE_URL: str = ""  # Public URL for audio file serving (e.g. http://111.229.247.26)
+    PUBLIC_BASE_URL: str = ""  # Public URL for audio file serving (e.g. http://47.116.199.160)
 
     # Web Scraper (Jina Reader)
     WEB_SCRAPER_REMOVE_SELECTOR: str = "nav, footer, header, aside, .ads, .sidebar, .advertisement, .ad-wrapper, .recommend, .comments, .comment-section, [role='banner'], [role='navigation'], [role='complementary']"
