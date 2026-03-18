@@ -432,6 +432,15 @@ export default function NotebookPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Polling fallback: refetch sources every 30s while any are processing (SSE may drop)
+  useEffect(() => {
+    if (!id) return;
+    const hasProcessing = sources.some((s) => s.status !== "ready" && s.status !== "failed");
+    if (!hasProcessing) return;
+    const timer = setInterval(() => fetchSources(id), 30000);
+    return () => clearInterval(timer);
+  }, [id, sources, fetchSources]);
+
   // Re-fetch notebook on window focus so role/permission changes are reflected without refresh
   useEffect(() => {
     if (!id) return;
