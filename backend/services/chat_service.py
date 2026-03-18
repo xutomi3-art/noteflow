@@ -250,6 +250,7 @@ async def stream_chat(
 
                 # Send matched Excel tables in full to LLM
                 excel_parts = []
+                truncated_excel: set[str] = set()  # source IDs that didn't fit — need SQL fallback
                 total_chars = 0
                 for src in matched_excel.values():
                     if not src.storage_url:
@@ -261,17 +262,18 @@ async def stream_chat(
                             total_chars += len(md)
                             logger.info("Including matched Excel: %s (%d chars)", src.filename, len(md))
                         else:
-                            logger.info("Skipping Excel %s (%d chars) — budget exceeded", src.filename, len(md))
+                            truncated_excel.add(str(src.id))
+                            logger.info("Skipping Excel %s (%d chars) — budget exceeded, will try SQL", src.filename, len(md))
                     except Exception as e:
                         logger.warning("Failed to convert %s: %s", src.filename, e)
                 if excel_parts:
                     excel_context = "\n\n---\n\n".join(excel_parts)
                     logger.info("Excel context: %d matched tables, %d total chars", len(excel_parts), total_chars)
 
-            # SQL fallback for data computation queries on matched Excel
-            if sql_answer is None and matched_excel:
+            # SQL fallback — only for Excel files that were too large to fit in context
+            if sql_answer is None and truncated_excel:
                 for src in matched_excel.values():
-                    if not src.duckdb_path:
+                    if str(src.id) not in truncated_excel or not src.duckdb_path:
                         continue
                     schema = get_table_schema(src.duckdb_path)
                     route = await route_query(message, schema)
