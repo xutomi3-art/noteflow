@@ -1,8 +1,10 @@
 import io
 import json as json_lib
+import logging
 import os
 import re
 import tempfile
+import time
 import urllib.parse
 import uuid
 
@@ -30,6 +32,8 @@ from backend.services.ragflow_client import ragflow_client
 from backend.services import permission_service
 from backend.services.tts_client import text_to_speech
 from backend.services.docmee_client import docmee_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/studio", tags=["studio"])
 ppt_router = APIRouter(prefix="/ppt", tags=["ppt"])
@@ -580,9 +584,13 @@ async def generate_content(
     if content_type not in PROMPTS:
         raise HTTPException(status_code=400, detail=f"Invalid type. Allowed: {list(PROMPTS.keys())}")
 
+    t_start = time.time()
     context = await _get_source_context(db, uuid.UUID(notebook_id))
+    t_context = time.time()
     if not context:
         raise HTTPException(status_code=400, detail="No ready sources available for generation")
+
+    logger.info("Studio %s: context retrieval %.1fs, %d chars", content_type, t_context - t_start, len(context))
 
     lang = _detect_language(context)
     prompt = PROMPTS[content_type].format(context=context)
@@ -595,5 +603,8 @@ async def generate_content(
         {"role": "user", "content": prompt},
     ]
     content = await qwen_client.generate(messages)
+    t_llm = time.time()
+
+    logger.info("Studio %s: LLM generation %.1fs, %d chars output. Total: %.1fs", content_type, t_llm - t_context, len(content), t_llm - t_start)
 
     return {"content": content}
