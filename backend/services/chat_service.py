@@ -449,6 +449,10 @@ Follow these rules strictly:
             {"role": "user", "content": user_content},
         ]
 
+        # Debug: log total prompt size and first 500 chars of user content
+        total_chars = sum(len(m["content"]) for m in messages)
+        logger.info("LLM prompt: %d messages, %d total chars, user_content[:500]=%s", len(messages), total_chars, user_content[:500])
+
         # 4. Stream response from LLM — send keepalive then stream tokens
         yield ": keepalive\n\n"
         full_response = ""
