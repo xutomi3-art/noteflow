@@ -127,12 +127,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Finalize whatever has been streamed so far as a message
     if (streamingContent) {
+      // Strip citation markers [1][2] since we don't have citation data when stopped early
+      const cleanedContent = streamingContent.replace(/\s*\[\d+\]/g, "");
+
       const assistantMsg: ChatMessage = {
         id: `stopped-${Date.now()}`,
         notebook_id: "",
         user_id: "",
         role: "assistant",
-        content: streamingContent,
+        content: cleanedContent,
         citations: [],
         created_at: new Date().toISOString(),
       };

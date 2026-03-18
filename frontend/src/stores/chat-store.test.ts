@@ -145,6 +145,21 @@ describe('useChatStore', () => {
       expect(msg?.role).toBe('assistant');
     });
 
+    it('should strip citation markers from stopped content', () => {
+      useChatStore.setState({
+        isStreaming: true,
+        streamingContent: 'The market is growing [1] rapidly [2][3] in Asia',
+        abortStream: vi.fn(),
+      });
+
+      useChatStore.getState().stopStream();
+
+      const state = useChatStore.getState();
+      const msg = state.messages[state.messages.length - 1];
+      expect(msg.content).toBe('The market is growing rapidly in Asia');
+      expect(msg.citations).toEqual([]);
+    });
+
     it('should handle stop when no streaming content', () => {
       useChatStore.setState({
         isStreaming: true,
