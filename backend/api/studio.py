@@ -10,7 +10,7 @@ import uuid
 
 from pydub import AudioSegment
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -582,7 +582,7 @@ class StudioRequest(BaseModel):
 async def generate_content(
     notebook_id: str,
     content_type: str,
-    body: StudioRequest | None = None,
+    body: StudioRequest = Body(default=StudioRequest()),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
