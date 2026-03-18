@@ -529,10 +529,15 @@ export default function DashboardPage() {
                         {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
                       </div>
                     </div>
-                    <div className="relative flex-shrink-0 ml-2" ref={openMenuId === notebook.id ? menuRef : undefined}>
+                    <div
+                      className="relative flex-shrink-0 ml-2 self-end"
+                      ref={openMenuId === notebook.id ? menuRef : undefined}
+                      onMouseEnter={() => setOpenMenuId(notebook.id)}
+                      onMouseLeave={() => setOpenMenuId(null)}
+                    >
                       <button
                         onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
-                        className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
                         title="More options"
                       >
                         <MoreHorizontal className="w-4 h-4" />
