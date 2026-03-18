@@ -406,8 +406,15 @@ The uploaded documents do not contain information relevant to this question. Ple
         MAX_HISTORY_ROUNDS = 30
         MAX_HISTORY_CHARS = 60000
         history = await get_chat_history(db, notebook_id, user_id)
-        # Filter out current message and error messages (they poison the context)
-        history = [h for h in history if h.id != user_msg.id and not h.content.strip().startswith("[Error:")]
+        history = [h for h in history if h.id != user_msg.id]
+        # If last assistant message was an error, skip all history to avoid content filter loops
+        last_assistant = next((h for h in reversed(history) if h.role == "assistant"), None)
+        if last_assistant and last_assistant.content.strip().startswith("[Error:"):
+            logger.info("Last response was an error — sending without chat history to avoid content filter loop")
+            history = []
+        else:
+            # Filter out any error messages from history
+            history = [h for h in history if not h.content.strip().startswith("[Error:")]
         recent = history[-(MAX_HISTORY_ROUNDS * 2):]
         history_messages = []
         history_chars = 0
