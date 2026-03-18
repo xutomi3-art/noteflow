@@ -1,9 +1,14 @@
+import logging
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from backend.models.user import User
 from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+
+logger = logging.getLogger(__name__)
 
 
 async def register(db: AsyncSession, req: RegisterRequest) -> User:
@@ -19,6 +24,10 @@ async def register(db: AsyncSession, req: RegisterRequest) -> User:
     db.add(user)
     await db.commit()
     await db.refresh(user)
+
+    # Auto-join notebooks where user has pending email invites
+    await _auto_join_pending_invites(db, user)
+
     return user
 
 
@@ -106,6 +115,59 @@ async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, ema
     await db.commit()
     await db.refresh(user)
     return user, True
+
+
+async def _auto_join_pending_invites(db: AsyncSession, user: User) -> None:
+    """Auto-join notebooks where user has pending email invites."""
+    from backend.models.invite_link import InviteLink
+    from backend.models.notebook import Notebook
+    from backend.models.notebook_member import NotebookMember
+
+    try:
+        result = await db.execute(
+            select(InviteLink).where(
+                InviteLink.email == user.email,
+                InviteLink.expires_at > datetime.now(timezone.utc),
+            )
+        )
+        links = list(result.scalars().all())
+        if not links:
+            return
+
+        for link in links:
+            # Skip if already a member or owner
+            is_owner = (await db.execute(
+                select(Notebook).where(Notebook.id == link.notebook_id, Notebook.owner_id == user.id)
+            )).scalar_one_or_none()
+            if is_owner:
+                continue
+
+            is_member = (await db.execute(
+                select(NotebookMember).where(
+                    NotebookMember.notebook_id == link.notebook_id,
+                    NotebookMember.user_id == user.id,
+                )
+            )).scalar_one_or_none()
+            if is_member:
+                continue
+
+            db.add(NotebookMember(
+                notebook_id=link.notebook_id,
+                user_id=user.id,
+                role=link.role,
+            ))
+            # Mark notebook as shared
+            nb = (await db.execute(
+                select(Notebook).where(Notebook.id == link.notebook_id)
+            )).scalar_one_or_none()
+            if nb and not nb.is_shared:
+                nb.is_shared = True
+
+            logger.info("Auto-joined user %s to notebook %s via pending invite", user.email, link.notebook_id)
+
+        await db.commit()
+    except Exception as e:
+        logger.warning("Auto-join pending invites failed for %s: %s", user.email, e)
 
 
 async def refresh_tokens(db: AsyncSession, refresh_token: str) -> TokenResponse:

@@ -329,6 +329,7 @@ async def google_callback(background_tasks: BackgroundTasks, code: str = "", err
         user, is_new = await auth_service.find_or_create_google_user(db, google_id, email, name, avatar)
         if is_new:
             await _create_default_notebooks(db, user, background_tasks)
+            await auth_service._auto_join_pending_invites(db, user)
 
         access_token = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))
@@ -373,6 +374,7 @@ async def microsoft_callback(background_tasks: BackgroundTasks, code: str = "", 
         user, is_new = await auth_service.find_or_create_microsoft_user(db, microsoft_id, email, name, avatar)
         if is_new:
             await _create_default_notebooks(db, user, background_tasks)
+            await auth_service._auto_join_pending_invites(db, user)
 
         access_token = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))
