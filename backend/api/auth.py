@@ -136,7 +136,6 @@ async def _bump_notebook_updated_at(notebook_id: str) -> None:
 async def _create_default_notebooks(db: AsyncSession, user: User, background_tasks: BackgroundTasks | None = None) -> None:
     """Create default starter notebooks with demo sources, notes for a new user."""
     source_tasks: list[tuple[str, str, str, str, str]] = []  # (source_id, notebook_id, file_path, filename, file_type)
-    overview_pairs: list[tuple[str, dict]] = []  # (notebook_id, overview_data)
     getting_started_id: str | None = None
 
     for nb_data in _DEFAULT_NOTEBOOKS:
@@ -147,8 +146,13 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
                 req=NotebookCreate(name=nb_data["name"], emoji=nb_data["emoji"], cover_color=nb_data["cover_color"]),
             )
             nb_id = str(nb.id)
+
+            # Write static overview immediately (no LLM, no background task)
             if nb_data.get("overview"):
-                overview_pairs.append((nb_id, nb_data["overview"]))
+                nb.overview_cache = json.dumps(nb_data["overview"])
+                nb.overview_source_hash = "_demo_"  # Special hash: only invalidated when user uploads NEW sources
+                await db.commit()
+
             if nb_data["name"] == "Getting Started":
                 getting_started_id = nb_id
 
@@ -197,9 +201,6 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
     if background_tasks:
         for sid, nid, fpath, fname, ftype in source_tasks:
             background_tasks.add_task(process_document, source_id=sid, notebook_id=nid, file_path=fpath, filename=fname, file_type=ftype)
-        # Save static overviews for demo notebooks (no LLM call — instant)
-        if overview_pairs:
-            background_tasks.add_task(_save_static_overviews, overview_pairs)
         # Ensure Getting Started has the newest updated_at (appears first on dashboard)
         if getting_started_id:
             background_tasks.add_task(_bump_notebook_updated_at, getting_started_id)

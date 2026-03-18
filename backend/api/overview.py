@@ -125,20 +125,31 @@ async def get_overview(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     nb_uuid = uuid.UUID(notebook_id)
-    sources = await _get_ready_sources(db, nb_uuid)
-    if not sources:
-        return {"overview": "", "suggested_questions": []}
 
-    source_hash = _compute_source_hash(sources)
-
-    # Check DB cache first
+    # Check DB cache first (before expensive source queries)
     nb_result = await db.execute(select(Notebook).where(Notebook.id == nb_uuid))
     notebook = nb_result.scalar_one_or_none()
-    if notebook and notebook.overview_cache and notebook.overview_source_hash == source_hash:
-        try:
-            return json.loads(notebook.overview_cache)
-        except (json.JSONDecodeError, TypeError):
-            pass
+
+    sources = await _get_ready_sources(db, nb_uuid)
+    source_hash = _compute_source_hash(sources) if sources else ""
+
+    # Return cached overview if hash matches OR if it's a demo notebook
+    if notebook and notebook.overview_cache:
+        is_demo = notebook.overview_source_hash == "_demo_"
+        cache_valid = notebook.overview_source_hash == source_hash or is_demo
+        if cache_valid:
+            try:
+                cached = json.loads(notebook.overview_cache)
+                # Upgrade demo hash to real hash once sources are ready (so future uploads invalidate correctly)
+                if is_demo and source_hash:
+                    notebook.overview_source_hash = source_hash
+                    await db.commit()
+                return cached
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    if not sources:
+        return {"overview": "", "suggested_questions": []}
 
     # Generate new overview via LLM
     t_start = time.time()
