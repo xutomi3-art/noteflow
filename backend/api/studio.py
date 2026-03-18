@@ -209,6 +209,9 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID, source_i
         notebook = nb_result.scalar_one_or_none()
         dataset_id = notebook.ragflow_dataset_id if notebook else None
 
+        # Filter RAGFlow retrieval to selected sources only
+        filter_doc_ids = [s.ragflow_doc_id for s in sources if s.ragflow_doc_id] if source_ids else None
+
         if dataset_id:
             seen_texts: set[str] = set()
             all_chunks: list[dict] = []
@@ -220,6 +223,7 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID, source_i
                         dataset_ids=[dataset_id],
                         question=query,
                         top_k=15,
+                        document_ids=filter_doc_ids,
                     )
                 except Exception:
                     chunks = []
