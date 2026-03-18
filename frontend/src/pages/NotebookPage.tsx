@@ -1015,10 +1015,10 @@ export default function NotebookPage() {
           setPodcastLoading(false);
         }
       } else {
-        await generateContent(id, action);
+        await generateContent(id, action, Array.from(selectedIds));
       }
     },
-    [id, generateContent],
+    [id, generateContent, selectedIds],
   );
 
   const handleDeleteSource = useCallback(

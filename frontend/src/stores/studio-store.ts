@@ -18,7 +18,7 @@ interface StudioState {
   pdfViewer: PdfViewerState | null;
 
   setActiveTab: (tab: StudioState["activeTab"]) => void;
-  generateContent: (notebookId: string, contentType: string) => Promise<void>;
+  generateContent: (notebookId: string, contentType: string, sourceIds?: string[]) => Promise<void>;
   clearContent: (contentType: string) => void;
   fetchNotes: (notebookId: string) => Promise<void>;
   deleteNote: (notebookId: string, noteId: string) => Promise<void>;
@@ -51,7 +51,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     });
   },
 
-  generateContent: async (notebookId: string, contentType: string) => {
+  generateContent: async (notebookId: string, contentType: string, sourceIds?: string[]) => {
     // Clear previous content (including error messages) before retrying
     set(state => {
       const content = { ...state.content };
@@ -59,7 +59,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       return { content, isGenerating: { ...state.isGenerating, [contentType]: true } };
     });
     try {
-      let content = await api.generateStudioContent(notebookId, contentType);
+      let content = await api.generateStudioContent(notebookId, contentType, sourceIds);
       // Strip ```json fences from mindmap content so the frontend can parse it as JSON
       if (contentType === "mindmap") {
         const stripped = content.trim();

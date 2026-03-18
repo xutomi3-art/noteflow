@@ -164,20 +164,23 @@ _RETRIEVAL_QUERIES = [
 ]
 
 
-async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID) -> str:
+async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None = None) -> str:
     """Get document content for studio generation.
 
     Strategy:
     1. For TXT/MD: read directly from local storage (fast, no RAGFlow round-trip)
     2. For PDF/DOCX/PPTX: retrieve chunks from RAGFlow (MinerU-parsed content lives there)
     3. Combine both with deduplication
+
+    If source_ids is provided, only include those sources. Otherwise use all ready sources.
     """
-    result = await db.execute(
-        select(Source).where(
-            Source.notebook_id == notebook_id,
-            Source.status == "ready",
-        )
+    query = select(Source).where(
+        Source.notebook_id == notebook_id,
+        Source.status == "ready",
     )
+    if source_ids:
+        query = query.where(Source.id.in_([uuid.UUID(sid) for sid in source_ids]))
+    result = await db.execute(query)
     sources = list(result.scalars().all())
     if not sources:
         return ""
@@ -571,10 +574,15 @@ async def generate_podcast(
     )
 
 
+class StudioRequest(BaseModel):
+    source_ids: list[str] | None = None
+
+
 @router.post("/{content_type}")
 async def generate_content(
     notebook_id: str,
     content_type: str,
+    body: StudioRequest | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -584,8 +592,9 @@ async def generate_content(
     if content_type not in PROMPTS:
         raise HTTPException(status_code=400, detail=f"Invalid type. Allowed: {list(PROMPTS.keys())}")
 
+    source_ids = body.source_ids if body else None
     t_start = time.time()
-    context = await _get_source_context(db, uuid.UUID(notebook_id))
+    context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
     t_context = time.time()
     if not context:
         raise HTTPException(status_code=400, detail="No ready sources available for generation")

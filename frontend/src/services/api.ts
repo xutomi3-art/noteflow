@@ -404,13 +404,15 @@ class ApiClient {
   }
 
   // Studio generation
-  async generateStudioContent(notebookId: string, contentType: string): Promise<string> {
+  async generateStudioContent(notebookId: string, contentType: string, sourceIds?: string[]): Promise<string> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120_000);
     try {
       const data = await this.request<{ content: string }>(`/notebooks/${notebookId}/studio/${contentType}`, {
         method: "POST",
         signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_ids: sourceIds?.length ? sourceIds : null }),
       });
       return data.content;
     } finally {
