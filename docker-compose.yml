@@ -86,13 +86,13 @@ services:
     command:
       - "postgres"
       - "-c"
-      - "shared_buffers=512MB"
+      - "shared_buffers=1GB"
       - "-c"
-      - "work_mem=16MB"
+      - "work_mem=32MB"
       - "-c"
-      - "effective_cache_size=2GB"
+      - "effective_cache_size=4GB"
       - "-c"
-      - "maintenance_work_mem=256MB"
+      - "maintenance_work_mem=512MB"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U noteflow"]
       interval: 5s
