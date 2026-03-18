@@ -10,7 +10,6 @@ const SERVICE_LABELS: Record<string, string> = {
   mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
   qwen: 'Qwen3.5-Plus',
-  google_oauth: 'Google OAuth',
 };
 
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
@@ -21,7 +20,6 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   mineru: 'Document parsing service',
   docmee: 'AI PPT generation service',
   qwen: 'Chat LLM, Embedding & Vision API',
-  google_oauth: 'Google Sign-In connectivity (via proxy if configured)',
 };
 
 interface ConfigField {
