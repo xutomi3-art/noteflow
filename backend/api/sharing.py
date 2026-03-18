@@ -66,7 +66,39 @@ async def send_email_invite(
     if not is_smtp_configured():
         raise HTTPException(status_code=503, detail="Email service not configured on this server")
 
-    # Create invite link (reuses existing token logic)
+    # Auto-add if user already registered
+    from backend.models.user import User as UserModel
+    from backend.models.notebook_member import NotebookMember
+    existing_user = (await db.execute(
+        select(UserModel).where(UserModel.email == req.email)
+    )).scalar_one_or_none()
+
+    if existing_user:
+        # Check not already a member or owner
+        is_owner = (await db.execute(
+            select(Notebook).where(Notebook.id == nb_uuid, Notebook.owner_id == existing_user.id)
+        )).scalar_one_or_none()
+        is_member = (await db.execute(
+            select(NotebookMember).where(
+                NotebookMember.notebook_id == nb_uuid,
+                NotebookMember.user_id == existing_user.id,
+            )
+        )).scalar_one_or_none()
+
+        if not is_owner and not is_member:
+            db.add(NotebookMember(
+                notebook_id=nb_uuid,
+                user_id=existing_user.id,
+                role=req.role,
+            ))
+            # Ensure notebook is marked as shared
+            nb_result = await db.execute(select(Notebook).where(Notebook.id == nb_uuid))
+            nb_obj = nb_result.scalar_one_or_none()
+            if nb_obj and not nb_obj.is_shared:
+                nb_obj.is_shared = True
+            await db.commit()
+
+    # Create invite link (for unregistered users or as backup)
     link = await sharing_service.create_invite_link(db, nb_uuid, user.id, req.role, email=req.email)
     join_url = f"{settings.APP_BASE_URL}/join/{link.token}"
 
@@ -85,7 +117,9 @@ async def send_email_invite(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
-    return EmailInviteResponse(message=f"Invite sent to {req.email}", join_url=join_url)
+    auto_added = bool(existing_user and not is_owner and not is_member) if existing_user else False
+    msg = f"Invite sent to {req.email}" + (" (auto-added as member)" if auto_added else "")
+    return EmailInviteResponse(message=msg, join_url=join_url)
 
 
 @router.delete("/notebooks/{notebook_id}/share")
