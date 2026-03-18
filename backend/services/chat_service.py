@@ -200,7 +200,7 @@ async def stream_chat(
         chunks = []
         if dataset_ids:
             filter_doc_ids = document_ids if source_ids and document_ids else None
-            chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=10, document_ids=filter_doc_ids)
+            chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids)
         t_ragflow_end = time.time()
 
         # Step 2b: If we have Excel sources, check if RAGFlow found relevant Excel chunks.

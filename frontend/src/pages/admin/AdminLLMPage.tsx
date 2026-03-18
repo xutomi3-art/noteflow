@@ -26,6 +26,7 @@ const GROUPS: FieldGroup[] = [
     fields: [
       { key: 'ragflow_api_key', label: 'API Key', secret: true },
       { key: 'ragflow_base_url', label: 'Base URL' },
+      { key: 'rag_top_k', label: 'Top-K Chunks (default: 6)' },
     ],
   },
 ];

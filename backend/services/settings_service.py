@@ -9,7 +9,7 @@ from backend.models.system_setting import SystemSetting
 
 # Keys that can be configured via admin panel
 CONFIGURABLE_KEYS = {
-    "llm_base_url", "llm_model", "llm_max_output_tokens",
+    "llm_base_url", "llm_model", "llm_max_output_tokens", "rag_top_k",
     "qwen_api_key",
     "ragflow_api_key", "ragflow_base_url",
     "docmee_api_key",
@@ -29,6 +29,7 @@ _ENV_MAP = {
     "llm_base_url": "LLM_BASE_URL",
     "llm_model": "LLM_MODEL",
     "llm_max_output_tokens": "LLM_MAX_OUTPUT_TOKENS",
+    "rag_top_k": "RAG_TOP_K",
     "qwen_api_key": "QWEN_API_KEY",
     "ragflow_api_key": "RAGFLOW_API_KEY",
     "ragflow_base_url": "RAGFLOW_BASE_URL",
