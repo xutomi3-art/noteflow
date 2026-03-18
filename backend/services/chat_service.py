@@ -528,6 +528,9 @@ Follow these rules strictly:
         if "maximum context length" in error_str or "too many tokens" in error_str.lower():
             friendly = "Selected sources contain too much data. Please select fewer sources and try again."
             yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
+        elif "data_inspection_failed" in error_str.lower() or "DataInspectionFailed" in error_str:
+            friendly = "The AI content filter flagged this query. Please try rephrasing your question. (内容安全审核误拦截，请尝试换个方式提问)"
+            yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
         else:
             yield f"data: {json.dumps({'type': 'error', 'message': error_str})}\n\n"
 
