@@ -27,12 +27,23 @@ async def get_microsoft_config(db: AsyncSession) -> tuple[str, str, str, str]:
     return client_id, client_secret, tenant_id, redirect_uri
 
 
-def build_microsoft_auth_url(client_id: str, tenant_id: str, redirect_uri: str) -> str:
-    """Build Microsoft OAuth consent URL.
+def _resolve_tenant(tenant_id: str) -> str:
+    """Force 'common' tenant to 'consumers' to avoid login.live.com redirect.
 
-    Uses login.microsoftonline.com with domain_hint=consumers to avoid
-    the ms-sso.copilot.microsoft.com redirect which is blocked in China.
+    When tenant=common, Microsoft routes personal accounts (@outlook, @live,
+    @hotmail) through login.live.com, which triggers a redirect to
+    ms-sso.copilot.microsoft.com for Copilot cookie sync. That domain is
+    blocked in China (ERR_CONNECTION_RESET).
+
+    Using tenant=consumers keeps the entire flow on login.microsoftonline.com.
     """
+    if tenant_id in ("common", ""):
+        return "consumers"
+    return tenant_id
+
+
+def build_microsoft_auth_url(client_id: str, tenant_id: str, redirect_uri: str) -> str:
+    """Build Microsoft OAuth consent URL."""
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -40,10 +51,8 @@ def build_microsoft_auth_url(client_id: str, tenant_id: str, redirect_uri: str) 
         "scope": "openid email profile User.Read",
         "response_mode": "query",
         "prompt": "select_account",
-        # Bypass ms-sso.copilot.microsoft.com (blocked in China)
-        "domain_hint": "consumers",
     }
-    base_url = MICROSOFT_AUTH_URL_TEMPLATE.format(tenant=tenant_id)
+    base_url = MICROSOFT_AUTH_URL_TEMPLATE.format(tenant=_resolve_tenant(tenant_id))
     return f"{base_url}?{urlencode(params)}"
 
 
@@ -59,7 +68,7 @@ async def exchange_code_for_tokens(
     code: str, client_id: str, client_secret: str, tenant_id: str, redirect_uri: str
 ) -> dict:
     """Exchange authorization code for Microsoft tokens."""
-    token_url = MICROSOFT_TOKEN_URL_TEMPLATE.format(tenant=tenant_id)
+    token_url = MICROSOFT_TOKEN_URL_TEMPLATE.format(tenant=_resolve_tenant(tenant_id))
     async with _http_client() as client:
         resp = await client.post(token_url, data={
             "code": code,
