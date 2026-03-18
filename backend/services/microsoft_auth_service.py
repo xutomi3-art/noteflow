@@ -28,7 +28,11 @@ async def get_microsoft_config(db: AsyncSession) -> tuple[str, str, str, str]:
 
 
 def build_microsoft_auth_url(client_id: str, tenant_id: str, redirect_uri: str) -> str:
-    """Build Microsoft OAuth consent URL."""
+    """Build Microsoft OAuth consent URL.
+
+    Uses login.microsoftonline.com with domain_hint=consumers to avoid
+    the ms-sso.copilot.microsoft.com redirect which is blocked in China.
+    """
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -36,6 +40,8 @@ def build_microsoft_auth_url(client_id: str, tenant_id: str, redirect_uri: str) 
         "scope": "openid email profile User.Read",
         "response_mode": "query",
         "prompt": "select_account",
+        # Bypass ms-sso.copilot.microsoft.com (blocked in China)
+        "domain_hint": "consumers",
     }
     base_url = MICROSOFT_AUTH_URL_TEMPLATE.format(tenant=tenant_id)
     return f"{base_url}?{urlencode(params)}"
