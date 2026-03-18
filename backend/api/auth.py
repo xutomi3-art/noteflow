@@ -203,8 +203,14 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
         for sid, nid, fpath, fname, ftype in source_tasks:
             background_tasks.add_task(process_document, source_id=sid, notebook_id=nid, file_path=fpath, filename=fname, file_type=ftype)
         # Ensure Getting Started has the newest updated_at (appears first on dashboard)
+        # Bump it synchronously with a future timestamp so source processing won't overtake it
         if getting_started_id:
-            background_tasks.add_task(_bump_notebook_updated_at, getting_started_id)
+            from datetime import datetime, timezone, timedelta
+            gs_result = await db.execute(select(Notebook).where(Notebook.id == _uuid.UUID(getting_started_id)))
+            gs_nb = gs_result.scalar_one_or_none()
+            if gs_nb:
+                gs_nb.updated_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+                await db.commit()
 
 
 @router.post("/register", response_model=TokenResponse)
