@@ -379,6 +379,13 @@ Result from structured data query:
 {sql_answer}
 
 Provide a clear, concise answer based on these query results."""
+        elif context and web_search:
+            user_content = f"""Context from source documents:
+{context}
+
+Question: {message}
+
+Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer."""
         elif context:
             user_content = f"""Context from source documents:
 {context}
@@ -386,6 +393,10 @@ Provide a clear, concise answer based on these query results."""
 Question: {message}
 
 Answer the question ONLY based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not contain relevant information to answer the question, say that the uploaded documents do not contain this information."""
+        elif web_search:
+            user_content = f"""Question: {message}
+
+The uploaded documents do not contain information relevant to this question. Please use web search to find the answer."""
         else:
             user_content = f"""Question: {message}
 
@@ -418,9 +429,19 @@ The uploaded documents do not contain information relevant to this question. Ple
             logger.warning("User content too long (%d chars), truncating to %d (history=%d)", len(user_content), max_user_chars, history_chars)
             user_content = user_content[:max_user_chars - 200] + f"\n\n[Context truncated due to length]\n\nQuestion: {message}"
 
-        system_prompt = SYSTEM_PROMPT
         if web_search:
-            system_prompt += "\n9. You have access to web search. When the uploaded documents lack relevant information, you may use web search results to supplement your answer. Clearly distinguish between information from uploaded documents (cite with [1][2]) and information from the web (mention it is from web search)."
+            system_prompt = """You are an AI assistant that answers questions based on the provided source documents AND web search results.
+Follow these rules strictly:
+1. First check if the provided context contains relevant information. If it does, answer based on the context and cite with [1], [2], etc.
+2. If the context does not contain relevant information, use your web search capability to find the answer from the internet.
+3. When using web search results, clearly indicate that the information comes from the internet (e.g. "According to web search results:").
+4. You may combine information from both uploaded documents and web search when appropriate.
+5. Be concise and direct in your answers.
+6. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
+7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
+8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
+        else:
+            system_prompt = SYSTEM_PROMPT
 
         messages = [
             {"role": "system", "content": system_prompt},
