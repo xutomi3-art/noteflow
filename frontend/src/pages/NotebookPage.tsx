@@ -270,6 +270,7 @@ export default function NotebookPage() {
   // Local state
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [overview, setOverview] = useState<{ overview: string; suggested_questions: string[] } | null>(null);
+  const pendingOverviewRef = useRef<{ overview: string; suggested_questions: string[] } | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
@@ -402,7 +403,14 @@ export default function NotebookPage() {
       fetchHistory(id);
       fetchNotes(id);
       api.getOverview(id).then(data => {
-        if (!cancelled && data.overview) setOverview(data);
+        if (!cancelled && data.overview) {
+          // Defer overview update if chat is streaming to avoid interrupting SSE
+          if (useChatStore.getState().isStreaming) {
+            pendingOverviewRef.current = data;
+          } else {
+            setOverview(data);
+          }
+        }
       }).catch(() => {});
     }).catch(() => {
       if (!cancelled) setNotFound(true);
@@ -515,12 +523,26 @@ export default function NotebookPage() {
       (allSourcesDone && !prevAllDoneRef.current);
     if (shouldFetch) {
       api.getOverview(id).then(data => {
-        if (data.overview) setOverview(data);
+        if (data.overview) {
+          if (useChatStore.getState().isStreaming) {
+            pendingOverviewRef.current = data;
+          } else {
+            setOverview(data);
+          }
+        }
       }).catch(() => {});
     }
     prevReadyRef.current = readyCount;
     prevAllDoneRef.current = allSourcesDone;
   }, [id, readyCount, allSourcesDone, overview]);
+
+  // Apply pending overview after streaming ends (deferred to avoid interrupting SSE)
+  useEffect(() => {
+    if (!isStreaming && pendingOverviewRef.current) {
+      setOverview(pendingOverviewRef.current);
+      pendingOverviewRef.current = null;
+    }
+  }, [isStreaming]);
 
   // Auto-scroll chat — only if user is near the bottom
   const chatScrollRef = useRef<HTMLDivElement>(null);
