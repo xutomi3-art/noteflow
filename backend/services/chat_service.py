@@ -238,6 +238,7 @@ async def stream_chat(
                         len(excel_sources), len(matched_excel), len(chunks),
                         [s.filename for s in matched_excel.values()])
 
+            truncated_excel: set[str] = set()
             if matched_excel:
                 # Dynamic budget: generous with Qwen3.5-Plus 1M context
                 n = len(matched_excel)
@@ -251,7 +252,6 @@ async def stream_chat(
 
                 # Send matched Excel tables in full to LLM
                 excel_parts = []
-                truncated_excel: set[str] = set()  # source IDs that didn't fit — need SQL fallback
                 total_chars = 0
                 for src in matched_excel.values():
                     if not src.storage_url:
