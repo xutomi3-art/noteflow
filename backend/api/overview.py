@@ -1,6 +1,8 @@
 import hashlib
 import json
+import logging
 import os
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +16,8 @@ from backend.models.user import User
 from backend.models.source import Source
 from backend.services.qwen_client import qwen_client
 from backend.services.excel_service import excel_to_markdown
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/overview", tags=["overview"])
 
@@ -137,9 +141,13 @@ async def get_overview(
             pass
 
     # Generate new overview via LLM
+    t_start = time.time()
     context = await _get_source_context(sources)
+    t_context = time.time()
     if not context:
         return {"overview": "", "suggested_questions": []}
+
+    logger.info("Overview: context read %.1fs, %d chars, %d sources", t_context - t_start, len(context), len(sources))
 
     lang = _detect_language(context)
     prompt = OVERVIEW_PROMPT.format(context=context)
@@ -148,7 +156,10 @@ async def get_overview(
         {"role": "user", "content": prompt},
     ]
     raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
+    t_llm = time.time()
     result = _parse_overview_response(raw)
+
+    logger.info("Overview: LLM generation %.1fs, total %.1fs", t_llm - t_context, t_llm - t_start)
 
     # Save to DB cache
     if notebook:
