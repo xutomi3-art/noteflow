@@ -1237,10 +1237,9 @@ export default function NotebookPage() {
           )}
           <button
             onClick={() => navigate("/dashboard")}
-            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
-            title="Back to Dashboard"
+            className="px-2.5 py-1 text-[12px] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
           >
-            <ArrowLeft className="w-4 h-4" />
+            Back
           </button>
         </div>
 
