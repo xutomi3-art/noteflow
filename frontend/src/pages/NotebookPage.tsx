@@ -1235,6 +1235,13 @@ export default function NotebookPage() {
               {notebook?.name || "Loading..."}
             </span>
           )}
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+            title="Back to Dashboard"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
         </div>
 
         <div className="flex items-center gap-4">
