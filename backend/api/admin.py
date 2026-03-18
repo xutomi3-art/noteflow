@@ -165,6 +165,17 @@ async def health_check(
     return await admin_service.check_service_health(db)
 
 
+@router.get("/resources")
+async def get_resources(
+    _admin: User = Depends(get_admin_user),
+):
+    """Get host and container resource usage (CPU, memory, disk)."""
+    import asyncio
+    host = await asyncio.to_thread(admin_service.get_host_resources)
+    containers = await admin_service.get_container_resources()
+    return {"host": host, "containers": containers}
+
+
 @router.get("/usage")
 async def get_usage(
     period: int = 7,

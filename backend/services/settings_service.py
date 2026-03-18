@@ -20,6 +20,8 @@ CONFIGURABLE_KEYS = {
     "google_client_id", "google_client_secret", "google_redirect_uri", "google_proxy",
     "microsoft_client_id", "microsoft_client_secret", "microsoft_tenant_id", "microsoft_redirect_uri",
     "alert_email", "alert_check_interval_minutes",
+    "resource_cpu_threshold", "resource_memory_threshold", "resource_disk_threshold",
+    "resource_container_cpu_threshold", "resource_container_memory_threshold",
 }
 
 # Keys that contain sensitive values — mask on read
