@@ -231,8 +231,8 @@ export default function DashboardPage() {
     if (messages.length > 0) {
       alert(messages.join('\n\n'));
     }
-    if (pendingFiles.length + accepted.length > 50) {
-      alert('Maximum 50 files allowed per notebook.');
+    if (pendingFiles.length + accepted.length > 100) {
+      alert('Maximum 100 files allowed per notebook.');
       return;
     }
     setPendingFiles(prev => [...prev, ...accepted]);
