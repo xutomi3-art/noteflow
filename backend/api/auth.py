@@ -16,6 +16,7 @@ from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.deps import get_current_user
 from backend.core.security import create_access_token, create_refresh_token, create_password_reset_token, decode_password_reset_token, hash_password
+from backend.models.notebook import Notebook
 from backend.models.user import User
 from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
 from backend.services import auth_service
