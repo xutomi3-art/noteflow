@@ -45,6 +45,14 @@ _DEFAULT_NOTEBOOKS = [
             "## Key Findings: AI in Education\n\n- Global AI in Education market: **$5.1B (2024) → $47.7B (2030)**, 36% CAGR\n- Content generation & language learning are the fastest growing segments (40%+ CAGR)\n- **73% of universities** plan to deploy AI teaching assistants by 2027\n- AI tutoring shows **18% improvement** in test scores and **25% reduction** in dropout rates\n- Main barriers: data privacy (FERPA/GDPR), academic integrity concerns, faculty readiness (only 34% feel prepared)\n\n> Source: AI Education Research Report, March 2026",
             "## Budget Summary: AI Implementation\n\n| Category | Cost |\n|----------|------|\n| Infrastructure | $10,200 |\n| Software & APIs | $19,200 |\n| Personnel | $99,000 |\n| Training | $13,000 |\n| Contingency (15%) | $21,060 |\n| **Total Year 1** | **$162,460** |\n\nROI breakeven in **Year 2**. By Year 5: cumulative benefit of **$610,540** (3.8x return).\n\n> Source: Cost Analysis Spreadsheet",
         ],
+        "overview": {
+            "overview": "These documents analyze the AI in Education market landscape, covering market size projections, implementation costs, and strategic recommendations. They include a research report with industry trends, a detailed cost-benefit analysis spreadsheet, and an overview of AI applications in educational settings.",
+            "suggested_questions": [
+                "What is the projected market size for AI in Education by 2030?",
+                "What are the main cost categories for implementing AI in education?",
+                "What are the biggest barriers to AI adoption in universities?"
+            ],
+        },
     },
     {
         "name": "Meeting Notes", "emoji": "📋", "cover_color": "#fef08a",
@@ -55,8 +63,16 @@ _DEFAULT_NOTEBOOKS = [
         ],
         "notes": [
             "## FY2026 Budget Approved: $4.425M\n\n**Key numbers:**\n- Personnel (existing): $2.16M (48.8%)\n- New hires (4 positions): $680K (15.4%)\n- AI/ML infrastructure: $312K (7.0%)\n- Cloud infrastructure: $368K (8.3%)\n- Contingency: $230K (5.2%)\n\n**Conditions:**\n1. Quarterly budget reviews with variance analysis\n2. AI ROI dashboard by end of Q1\n3. Monthly hiring progress reports\n\n> Approved by CEO Michael Zhou on March 17, 2026",
-            "## Open Action Items\n\n| Owner | Task | Due |\n|-------|------|-----|\n| Kevin | Negotiate DeepSeek volume discount | Mar 17 |\n| Rachel | Extend offers to ML engineer candidates | Mar 21 |\n| Tony | AI infrastructure provisioned | Mar 25 |\n| Tony | Cost monitoring dashboards live | Mar 28 |\n| Sarah | Q1 review meeting | Jun 15 |\n\n**Next milestone:** Budget codes activated by Mar 20",
+            "## Open Action Items\n\n| Owner | Task | Due |\n|-------|------|-----|\n| Kevin | Negotiate AI API volume discount | Mar 17 |\n| Rachel | Extend offers to ML engineer candidates | Mar 21 |\n| Tony | AI infrastructure provisioned | Mar 25 |\n| Tony | Cost monitoring dashboards live | Mar 28 |\n| Sarah | Q1 review meeting | Jun 15 |\n\n**Next milestone:** Budget codes activated by Mar 20",
         ],
+        "overview": {
+            "overview": "These documents outline the planning and approval process for the FY2026 engineering budget, tracking from initial kickoff through detailed review to final CEO approval. The total approved budget is $4.425M covering personnel, infrastructure, AI/ML initiatives, and new hires.",
+            "suggested_questions": [
+                "What is the total approved budget for FY2026?",
+                "What new positions were approved in the budget?",
+                "What are the conditions attached to the budget approval?"
+            ],
+        },
     },
     {
         "name": "Getting Started", "emoji": "🚀", "cover_color": "#ecfccb",
@@ -64,53 +80,44 @@ _DEFAULT_NOTEBOOKS = [
             "noteflow-user-manual.md",
         ],
         "notes": [
-            "## Welcome to Noteflow!\n\nNoteflow is your AI-powered knowledge base. Upload documents, ask questions, and get answers with source citations.\n\n### Quick Start\n1. **Add Sources** — Upload PDF, Word, Excel, images, or paste a URL\n2. **Ask Questions** — Select documents and chat with AI\n3. **Use Studio** — One-click Summary, FAQ, Mind Map, Podcast\n4. **Collaborate** — Share notebooks with your team\n\n> Tip: Click the **Think** button for deep reasoning mode (DeepSeek R1)",
-            "## Frequently Asked Questions\n\n**Q: What file formats are supported?**\nA: PDF, DOCX, PPTX, XLSX, CSV, TXT, Markdown, and images (JPG, PNG, WebP with OCR).\n\n**Q: How do I share a notebook with my team?**\nA: Click \"Share with Team\" → invite by email or generate a link → set roles (Owner/Editor/Viewer).\n\n**Q: How do I convert a personal notebook to a team notebook?**\nA: Open your notebook → click \"Share with Team\" → invite members. It automatically appears under Team Notebooks for everyone.\n\n**Q: What is Think mode?**\nA: Deep reasoning powered by DeepSeek R1. AI shows its full thought process — great for complex analysis.\n\n**Q: Can I query multiple documents at once?**\nA: Yes! Select multiple sources and ask cross-document questions. AI correlates information and cites each source.\n\n**Q: Is my data secure?**\nA: All files are stored on your private server. Supports Docker deployment, HTTPS encryption, and Google/Microsoft SSO.",
+            "## Welcome to Noteflow!\n\nNoteflow is your AI-powered knowledge base. Upload documents, ask questions, and get answers with source citations.\n\n### Quick Start\n1. **Add Sources** — Upload PDF, Word, Excel, images, or paste a URL\n2. **Ask Questions** — Select documents and chat with AI\n3. **Use Studio** — One-click Summary, FAQ, Mind Map, Podcast\n4. **Collaborate** — Share notebooks with your team",
+            "## Frequently Asked Questions\n\n**Q: What file formats are supported?**\nA: PDF, DOCX, PPTX, XLSX, CSV, TXT, Markdown, and images (JPG, PNG, WebP with OCR).\n\n**Q: How do I share a notebook with my team?**\nA: Click \"Share with Team\" → invite by email or generate a link → set roles (Owner/Editor/Viewer).\n\n**Q: Can I query multiple documents at once?**\nA: Yes! Select multiple sources and ask cross-document questions. AI correlates information and cites each source.\n\n**Q: Is my data secure?**\nA: All files are stored on your private server. Supports Docker deployment, HTTPS encryption, and Google/Microsoft SSO.",
         ],
+        "overview": {
+            "overview": "This is the Noteflow user manual — your guide to getting started with the AI-powered knowledge base. Learn how to upload documents, ask questions with AI, use Studio tools, and collaborate with your team.",
+            "suggested_questions": [
+                "What file formats does Noteflow support?",
+                "How do I share a notebook with my team?",
+                "What can I do with Studio tools?"
+            ],
+        },
     },
 ]
 
 
-async def _pre_generate_overviews(notebook_ids: list[str]) -> None:
-    """Pre-generate and cache overview for demo notebooks (runs after all sources processed)."""
+async def _save_static_overviews(notebook_overview_pairs: list[tuple[str, dict]]) -> None:
+    """Save pre-written overview cache for demo notebooks (no LLM call needed)."""
     from backend.core.database import async_session
-    from backend.api.overview import _get_ready_sources, _get_source_context, _compute_source_hash, _parse_overview_response, _detect_language, OVERVIEW_PROMPT
+    from backend.api.overview import _get_ready_sources, _compute_source_hash
     from backend.models.notebook import Notebook
-    from backend.services.qwen_client import qwen_client
     import json
 
     async with async_session() as db:
-        for nb_id_str in notebook_ids:
+        for nb_id_str, overview_data in notebook_overview_pairs:
             try:
                 nb_uuid = _uuid.UUID(nb_id_str)
                 sources = await _get_ready_sources(db, nb_uuid)
-                if not sources:
-                    continue
+                source_hash = _compute_source_hash(sources) if sources else "demo"
 
-                context = await _get_source_context(sources)
-                if not context:
-                    continue
-
-                lang = _detect_language(context)
-                prompt = OVERVIEW_PROMPT.format(context=context)
-                messages = [
-                    {"role": "system", "content": f"You are a helpful assistant that analyzes documents. You MUST write your entire response in {lang}. Do NOT use any other language."},
-                    {"role": "user", "content": prompt},
-                ]
-                raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
-                result = _parse_overview_response(raw)
-
-                # Save to DB cache
-                source_hash = _compute_source_hash(sources)
                 nb_result = await db.execute(select(Notebook).where(Notebook.id == nb_uuid))
                 notebook = nb_result.scalar_one_or_none()
                 if notebook:
-                    notebook.overview_cache = json.dumps(result)
+                    notebook.overview_cache = json.dumps(overview_data)
                     notebook.overview_source_hash = source_hash
                     await db.commit()
-                    logger.info("Pre-generated overview for notebook %s", nb_id_str)
+                    logger.info("Saved static overview for notebook %s", nb_id_str)
             except Exception:
-                logger.warning("Failed to pre-generate overview for notebook %s", nb_id_str)
+                logger.warning("Failed to save static overview for notebook %s", nb_id_str)
 
 
 async def _bump_notebook_updated_at(notebook_id: str) -> None:
@@ -129,7 +136,7 @@ async def _bump_notebook_updated_at(notebook_id: str) -> None:
 async def _create_default_notebooks(db: AsyncSession, user: User, background_tasks: BackgroundTasks | None = None) -> None:
     """Create default starter notebooks with demo sources, notes for a new user."""
     source_tasks: list[tuple[str, str, str, str, str]] = []  # (source_id, notebook_id, file_path, filename, file_type)
-    all_nb_ids: list[str] = []
+    overview_pairs: list[tuple[str, dict]] = []  # (notebook_id, overview_data)
     getting_started_id: str | None = None
 
     for nb_data in _DEFAULT_NOTEBOOKS:
@@ -140,7 +147,8 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
                 req=NotebookCreate(name=nb_data["name"], emoji=nb_data["emoji"], cover_color=nb_data["cover_color"]),
             )
             nb_id = str(nb.id)
-            all_nb_ids.append(nb_id)
+            if nb_data.get("overview"):
+                overview_pairs.append((nb_id, nb_data["overview"]))
             if nb_data["name"] == "Getting Started":
                 getting_started_id = nb_id
 
@@ -189,9 +197,9 @@ async def _create_default_notebooks(db: AsyncSession, user: User, background_tas
     if background_tasks:
         for sid, nid, fpath, fname, ftype in source_tasks:
             background_tasks.add_task(process_document, source_id=sid, notebook_id=nid, file_path=fpath, filename=fname, file_type=ftype)
-        # Pre-generate overviews for all demo notebooks (runs after all sources processed)
-        if all_nb_ids:
-            background_tasks.add_task(_pre_generate_overviews, all_nb_ids)
+        # Save static overviews for demo notebooks (no LLM call — instant)
+        if overview_pairs:
+            background_tasks.add_task(_save_static_overviews, overview_pairs)
         # Ensure Getting Started has the newest updated_at (appears first on dashboard)
         if getting_started_id:
             background_tasks.add_task(_bump_notebook_updated_at, getting_started_id)
