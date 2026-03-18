@@ -24,7 +24,7 @@ class ASRService:
     def __init__(self) -> None:
         self.app_id = ""
         self.access_token = ""
-        self.public_base_url = ""  # e.g. "http://47.116.199.160"
+        self.public_base_url = ""  # e.g. "http://111.229.247.26"
 
     def configure(self, app_id: str, access_token: str,
                   public_base_url: str = "") -> None:
