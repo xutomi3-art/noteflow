@@ -1237,7 +1237,7 @@ export default function NotebookPage() {
           )}
           <button
             onClick={() => navigate("/dashboard")}
-            className="px-2.5 py-1 text-[12px] text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+            className="px-3 py-1 text-[13px] bg-[#ecfccb] text-[#5b8c15] hover:bg-[#d9f99d] rounded-lg transition-colors font-semibold"
           >
             Back
           </button>
