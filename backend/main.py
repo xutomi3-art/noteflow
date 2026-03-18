@@ -1,3 +1,4 @@
+import asyncio
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 from contextlib import asynccontextmanager
@@ -63,7 +64,13 @@ async def lifespan(app: FastAPI):
         public_base_url=settings.PUBLIC_BASE_URL,
     )
 
+    # Start background health monitor
+    from backend.services.health_monitor import start_monitor
+    monitor_task = asyncio.create_task(start_monitor())
+
     yield
+
+    monitor_task.cancel()
 
 
 app = FastAPI(title="Noteflow API", version="0.1.0", lifespan=lifespan)

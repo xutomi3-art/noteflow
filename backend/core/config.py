@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # Admin
     ADMIN_EMAIL: str = ""
 
+    # Health Alert
+    ALERT_EMAIL: str = ""
+    ALERT_CHECK_INTERVAL_MINUTES: int = 5
+
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

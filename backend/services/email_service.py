@@ -57,6 +57,34 @@ async def send_invite_email(
     await _send(to_email, subject, html)
 
 
+async def send_health_alert_email(to_email: str, failed_services: list[dict]) -> None:
+    subject = f"[Noteflow Alert] {len(failed_services)} service(s) down"
+    rows = ""
+    for svc in failed_services:
+        rows += f"""<tr>
+          <td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600">{svc['name']}</td>
+          <td style="padding:8px 12px;border:1px solid #e5e7eb;color:#dc2626">{svc['message']}</td>
+        </tr>"""
+    html = f"""\
+<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:32px">
+  <h2 style="font-size:18px;margin:0 0 16px;color:#dc2626">Service Health Alert</h2>
+  <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 16px">
+    The following service(s) are currently unreachable:
+  </p>
+  <table style="border-collapse:collapse;width:100%;font-size:13px;margin:0 0 24px">
+    <tr style="background:#f9fafb">
+      <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">Service</th>
+      <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">Error</th>
+    </tr>
+    {rows}
+  </table>
+  <p style="color:#888;font-size:12px;margin:0">
+    Checked at {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+  </p>
+</div>"""
+    await _send(to_email, subject, html)
+
+
 async def send_password_reset_email(to_email: str, reset_url: str) -> None:
     subject = "Reset your Noteflow password"
     html = f"""\

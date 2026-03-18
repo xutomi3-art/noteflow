@@ -19,6 +19,7 @@ CONFIGURABLE_KEYS = {
     "alibaba_tts_appkey", "alibaba_tts_token",
     "google_client_id", "google_client_secret", "google_redirect_uri", "google_proxy",
     "microsoft_client_id", "microsoft_client_secret", "microsoft_tenant_id", "microsoft_redirect_uri",
+    "alert_email", "alert_check_interval_minutes",
 }
 
 # Keys that contain sensitive values — mask on read
@@ -51,6 +52,8 @@ _ENV_MAP = {
     "microsoft_client_secret": "MICROSOFT_CLIENT_SECRET",
     "microsoft_tenant_id": "MICROSOFT_TENANT_ID",
     "microsoft_redirect_uri": "MICROSOFT_REDIRECT_URI",
+    "alert_email": "ALERT_EMAIL",
+    "alert_check_interval_minutes": "ALERT_CHECK_INTERVAL_MINUTES",
 }
 
 

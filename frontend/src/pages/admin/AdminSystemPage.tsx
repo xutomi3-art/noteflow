@@ -30,6 +30,11 @@ interface ConfigField {
   width?: string;
 }
 
+const ALERT_FIELDS: ConfigField[] = [
+  { key: 'alert_email', label: 'Alert Email', placeholder: 'admin@example.com' },
+  { key: 'alert_check_interval_minutes', label: 'Check Interval (min)', placeholder: '5', width: 'w-24' },
+];
+
 const SMTP_FIELDS: ConfigField[] = [
   { key: 'smtp_host', label: 'SMTP Host', placeholder: 'smtp.example.com' },
   { key: 'smtp_port', label: 'Port', placeholder: '465', width: 'w-24' },
@@ -395,6 +400,16 @@ export default function AdminSystemPage() {
           {scraperMessage && <span className="text-sm text-green-600">{scraperMessage}</span>}
         </div>
       </div>
+
+      {/* Health Alert Settings */}
+      <ConfigSection
+        title="Health Alerts"
+        description="Send email alerts when services go down (requires Resend API key)"
+        fields={ALERT_FIELDS}
+        settings={settings}
+        saveSettings={handleSaveConfig}
+        saveLabel="Save Alert Settings"
+      />
 
       {/* SMTP Settings */}
       <ConfigSection
