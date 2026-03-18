@@ -1529,12 +1529,12 @@ export default function NotebookPage() {
 
           {/* Team Members (shown for team notebooks) */}
           {notebook?.is_shared && (
-            <div className="border-t border-slate-100 px-4 py-3 shrink-0">
+            <div className="border-t border-slate-100 px-4 py-3 flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
                   Team ({members.length})
                 </h3>
-                {notebook?.user_role === 'owner' && (
+                {(notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
                   <button
                     onClick={() => setIsShareModalOpen(true)}
                     className="text-[12px] text-[#5b8c15] hover:text-[#4a7311] font-medium transition-colors flex items-center gap-1"
@@ -1544,34 +1544,39 @@ export default function NotebookPage() {
                   </button>
                 )}
               </div>
-              <div className="space-y-1 max-h-[120px] overflow-y-auto">
+              <div className="space-y-1 overflow-y-auto flex-1">
                 {members.map((member) => (
                   <div
                     key={member.user_id}
-                    className="flex items-center gap-2 py-1 group"
+                    className="flex items-center gap-2 py-1.5 group"
                   >
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${
                       member.status === "pending"
                         ? "bg-slate-200 text-slate-500"
                         : "bg-[#5b8c15] text-white"
                     }`}>
                       {(member.name || member.email || "U").charAt(0).toUpperCase()}
                     </div>
-                    <span className={`text-[12px] flex-1 truncate ${
-                      member.status === "pending" ? "text-slate-400 italic" : "text-slate-700"
-                    }`}>
-                      {member.name || member.email}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[12px] truncate ${
+                        member.status === "pending" ? "text-slate-400 italic" : "text-slate-700 font-medium"
+                      }`}>
+                        {member.name || member.email}
+                      </div>
+                      {member.email && member.name && (
+                        <div className="text-[10px] text-slate-400 truncate">{member.email}</div>
+                      )}
+                    </div>
                     {member.status === "pending" ? (
-                      <span className="text-[10px] text-amber-500 font-medium w-12 text-right shrink-0">Pending</span>
+                      <span className="text-[10px] text-amber-500 font-medium shrink-0">Pending</span>
                     ) : (
-                      <span className="text-[10px] text-slate-400 capitalize w-12 text-right shrink-0">{member.role}</span>
+                      <span className="text-[10px] text-slate-400 capitalize shrink-0">{member.role}</span>
                     )}
-                    {notebook?.user_role === "owner" && (
+                    {(notebook?.user_role === "owner" || notebook?.user_role === "editor") && (
                       member.role !== "owner" ? (
                         <button
                           onClick={() => removeMember(id || "", member.user_id)}
-                          className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                          className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
                         >
                           <X className="w-3 h-3" />
                         </button>
