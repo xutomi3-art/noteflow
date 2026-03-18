@@ -10,6 +10,7 @@ services:
       - certbot-certs:/etc/letsencrypt:ro
       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
+      - landing
       - frontend
       - backend
     # Reload nginx every 6h to pick up renewed certs
@@ -22,6 +23,12 @@ services:
       - certbot-webroot:/var/www/certbot
       - certbot-certs:/etc/letsencrypt
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
+    restart: unless-stopped
+
+  landing:
+    build:
+      context: /opt/netflow_frontend
+      dockerfile: /opt/noteflow/docker/Dockerfile.landing
     restart: unless-stopped
 
   frontend:
