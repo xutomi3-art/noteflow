@@ -144,13 +144,21 @@ if sys.version_info >= (3, 10):
         db_module.async_session = session_factory
 
         # Mock process_document to avoid external service calls (RAGFlow, MinerU)
+        # Must patch in ALL modules that import it at module level
         import backend.api.sources as sources_module
-        original_process = sources_module.process_document
+        import backend.api.auth as auth_module
+        import backend.services.document_pipeline as pipeline_module
+
+        original_sources_process = sources_module.process_document
+        original_auth_process = auth_module.process_document
+        original_pipeline_process = pipeline_module.process_document
 
         async def _noop_process_document(**kwargs):
             pass
 
         sources_module.process_document = _noop_process_document
+        auth_module.process_document = _noop_process_document
+        pipeline_module.process_document = _noop_process_document
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -158,7 +166,9 @@ if sys.version_info >= (3, 10):
 
         app.dependency_overrides.clear()
         db_module.async_session = original_session
-        sources_module.process_document = original_process
+        sources_module.process_document = original_sources_process
+        auth_module.process_document = original_auth_process
+        pipeline_module.process_document = original_pipeline_process
 
     # -- Shared helpers -----------------------------------------------------
 
