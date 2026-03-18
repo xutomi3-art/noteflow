@@ -285,6 +285,7 @@ export default function NotebookPage() {
   const [pptModalOpen, setPptModalOpen] = useState(false);
   const [podcastLoading, setPodcastLoading] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [leftWidth, setLeftWidth] = useState(300);
@@ -1266,8 +1267,13 @@ export default function NotebookPage() {
           </div>
           <div
             className="relative"
-            onMouseEnter={() => setIsProfileMenuOpen(true)}
-            onMouseLeave={() => setIsProfileMenuOpen(false)}
+            onMouseEnter={() => {
+              if (profileHoverRef.current) clearTimeout(profileHoverRef.current);
+              setIsProfileMenuOpen(true);
+            }}
+            onMouseLeave={() => {
+              profileHoverRef.current = setTimeout(() => setIsProfileMenuOpen(false), 500);
+            }}
           >
             <button className="w-9 h-9 rounded-full bg-[#5b8c15] text-white flex items-center justify-center font-bold text-sm hover:bg-[#4a7311] transition-colors">
               {(user?.name || "U").charAt(0).toUpperCase()}

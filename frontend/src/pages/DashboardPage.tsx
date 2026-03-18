@@ -85,6 +85,8 @@ export default function DashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const profileHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const menuHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchNotebooks();
@@ -366,8 +368,13 @@ export default function DashboardPage() {
           </div>
           <div
             className="relative"
-            onMouseEnter={() => setIsProfileMenuOpen(true)}
-            onMouseLeave={() => setIsProfileMenuOpen(false)}
+            onMouseEnter={() => {
+              if (profileHoverRef.current) clearTimeout(profileHoverRef.current);
+              setIsProfileMenuOpen(true);
+            }}
+            onMouseLeave={() => {
+              profileHoverRef.current = setTimeout(() => setIsProfileMenuOpen(false), 500);
+            }}
           >
             <button
               className="w-11 h-11 rounded-full bg-[#5b8c15] text-white flex items-center justify-center font-bold text-lg hover:bg-[#4a7311] transition-colors"
@@ -532,8 +539,13 @@ export default function DashboardPage() {
                     <div
                       className="relative flex-shrink-0 ml-2 self-end"
                       ref={openMenuId === notebook.id ? menuRef : undefined}
-                      onMouseEnter={() => setOpenMenuId(notebook.id)}
-                      onMouseLeave={() => setOpenMenuId(null)}
+                      onMouseEnter={() => {
+                        if (menuHoverRef.current) clearTimeout(menuHoverRef.current);
+                        setOpenMenuId(notebook.id);
+                      }}
+                      onMouseLeave={() => {
+                        menuHoverRef.current = setTimeout(() => setOpenMenuId(null), 500);
+                      }}
                     >
                       <button
                         onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
