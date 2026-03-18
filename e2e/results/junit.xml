@@ -1,0 +1,2352 @@
+<testsuites id="" name="" tests="61" failures="24" skipped="0" errors="0" time="585.868502">
+<testsuite name="01-auth.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="12" failures="0" skipped="0" time="4.014" errors="0">
+<testcase name="Authentication › login page renders correctly" classname="01-auth.spec.ts" time="0.331">
+</testcase>
+<testcase name="Authentication › register page renders correctly" classname="01-auth.spec.ts" time="0.151">
+</testcase>
+<testcase name="Authentication › login page links to register page" classname="01-auth.spec.ts" time="0.197">
+</testcase>
+<testcase name="Authentication › register page links back to login" classname="01-auth.spec.ts" time="0.163">
+</testcase>
+<testcase name="Authentication › unauthenticated user redirected from /dashboard to /login" classname="01-auth.spec.ts" time="0.146">
+</testcase>
+<testcase name="Authentication › unauthenticated user redirected from /notebook/* to /login" classname="01-auth.spec.ts" time="0.136">
+</testcase>
+<testcase name="Authentication › login shows error on wrong credentials" classname="01-auth.spec.ts" time="0.326">
+</testcase>
+<testcase name="Authentication › register shows password strength indicators" classname="01-auth.spec.ts" time="0.178">
+</testcase>
+<testcase name="Authentication › register shows error for weak password on submit" classname="01-auth.spec.ts" time="0.217">
+</testcase>
+<testcase name="Authentication › full registration and redirect to dashboard" classname="01-auth.spec.ts" time="1.065">
+</testcase>
+<testcase name="Authentication › full login flow and redirect to dashboard" classname="01-auth.spec.ts" time="0.959">
+</testcase>
+<testcase name="Authentication › / root redirects to /dashboard (then to /login if not authenticated)" classname="01-auth.spec.ts" time="0.145">
+</testcase>
+</testsuite>
+<testsuite name="02-dashboard.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="6" failures="3" skipped="0" time="54.008" errors="0">
+<testcase name="Dashboard › dashboard loads and shows header" classname="02-dashboard.spec.ts" time="0.346">
+</testcase>
+<testcase name="Dashboard › dashboard shows &quot;New Notebook&quot; button" classname="02-dashboard.spec.ts" time="10.863">
+<failure message="02-dashboard.spec.ts:54:7 dashboard shows &quot;New Notebook&quot; button" type="FAILURE">
+<![CDATA[  [chromium] › 02-dashboard.spec.ts:54:7 › Dashboard › dashboard shows "New Notebook" button ───────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: /new notebook/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('button', { name: /new notebook/i }).first()
+
+
+      54 |   test('dashboard shows "New Notebook" button', async ({ page }) => {
+      55 |     const newBtn = page.getByRole('button', { name: /new notebook/i });
+    > 56 |     await expect(newBtn.first()).toBeVisible();
+         |                                  ^
+      57 |   });
+      58 |
+      59 |   test('create notebook via modal and navigate to it', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/02-dashboard.spec.ts:56:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: /new notebook/i }).first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('button', { name: /new notebook/i }).first()
+
+
+      54 |   test('dashboard shows "New Notebook" button', async ({ page }) => {
+      55 |     const newBtn = page.getByRole('button', { name: /new notebook/i });
+    > 56 |     await expect(newBtn.first()).toBeVisible();
+         |                                  ^
+      57 |   });
+      58 |
+      59 |   test('create notebook via modal and navigate to it', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/02-dashboard.spec.ts:56:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-dashboard-shows-New-Notebook-button-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Dashboard › create notebook via modal and navigate to it" classname="02-dashboard.spec.ts" time="31.038">
+<failure message="02-dashboard.spec.ts:59:7 create notebook via modal and navigate to it" type="FAILURE">
+<![CDATA[  [chromium] › 02-dashboard.spec.ts:59:7 › Dashboard › create notebook via modal and navigate to it 
+
+    TimeoutError: locator.click: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /new notebook/i }).first()
+
+
+      61 |
+      62 |     // Click the New Notebook button
+    > 63 |     await page.getByRole('button', { name: /new notebook/i }).first().click();
+         |                                                                       ^
+      64 |
+      65 |     // Modal appears
+      66 |     const modalInput = page.locator('input[type="text"]').last();
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/02-dashboard.spec.ts:63:71
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.click: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /new notebook/i }).first()
+
+
+      61 |
+      62 |     // Click the New Notebook button
+    > 63 |     await page.getByRole('button', { name: /new notebook/i }).first().click();
+         |                                                                       ^
+      64 |
+      65 |     // Modal appears
+      66 |     const modalInput = page.locator('input[type="text"]').last();
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/02-dashboard.spec.ts:63:71
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-cre-40213-ia-modal-and-navigate-to-it-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Dashboard › created notebook appears on dashboard" classname="02-dashboard.spec.ts" time="0.471">
+</testcase>
+<testcase name="Dashboard › clicking notebook card navigates to notebook" classname="02-dashboard.spec.ts" time="0.455">
+</testcase>
+<testcase name="Dashboard › logout from dashboard redirects to login" classname="02-dashboard.spec.ts" time="10.835">
+<failure message="02-dashboard.spec.ts:110:7 logout from dashboard redirects to login" type="FAILURE">
+<![CDATA[  [chromium] › 02-dashboard.spec.ts:110:7 › Dashboard › logout from dashboard redirects to login ───
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/login/
+    Received string:  "https://localhost/dashboard"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 5000ms
+        9 × unexpected value "https://localhost/dashboard"
+
+
+      129 |     });
+      130 |     await page.goto('/dashboard');
+    > 131 |     await expect(page).toHaveURL(/\/login/);
+          |                        ^
+      132 |   });
+      133 | });
+      134 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/02-dashboard.spec.ts:131:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/login/
+    Received string:  "https://localhost/dashboard"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 5000ms
+        9 × unexpected value "https://localhost/dashboard"
+
+
+      129 |     });
+      130 |     await page.goto('/dashboard');
+    > 131 |     await expect(page).toHaveURL(/\/login/);
+          |                        ^
+      132 |   });
+      133 | });
+      134 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/02-dashboard.spec.ts:131:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/02-dashboard-Dashboard-log-6e1ea-ashboard-redirects-to-login-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+<testsuite name="03-notebook.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="8" failures="5" skipped="0" time="105.794" errors="0">
+<testcase name="Notebook Page › notebook page renders three panels" classname="03-notebook.spec.ts" time="0.356">
+</testcase>
+<testcase name="Notebook Page › notebook name is visible" classname="03-notebook.spec.ts" time="0.412">
+</testcase>
+<testcase name="Notebook Page › back button navigates to dashboard" classname="03-notebook.spec.ts" time="20.89">
+<failure message="03-notebook.spec.ts:76:7 back button navigates to dashboard" type="FAILURE">
+<![CDATA[  [chromium] › 03-notebook.spec.ts:76:7 › Notebook Page › back button navigates to dashboard ───────
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/dashboard/
+    Received string:  "https://localhost/notebook/bea98e7c-66b1-469d-bd8d-4dbd214a4630"
+    Timeout: 10000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 10000ms
+        14 × unexpected value "https://localhost/notebook/bea98e7c-66b1-469d-bd8d-4dbd214a4630"
+
+
+      86 |       const arrowBack = page.locator('button').filter({ has: page.locator('svg') }).first();
+      87 |       await arrowBack.click();
+    > 88 |       await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+         |                          ^
+      89 |     }
+      90 |   });
+      91 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:88:26
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/dashboard/
+    Received string:  "https://localhost/notebook/a4bc0ca5-4c48-42fe-a8a8-58f395355910"
+    Timeout: 10000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 10000ms
+        14 × unexpected value "https://localhost/notebook/a4bc0ca5-4c48-42fe-a8a8-58f395355910"
+
+
+      86 |       const arrowBack = page.locator('button').filter({ has: page.locator('svg') }).first();
+      87 |       await arrowBack.click();
+    > 88 |       await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+         |                          ^
+      89 |     }
+      90 |   });
+      91 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:88:26
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-back-button-navigates-to-dashboard-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Notebook Page › sources panel shows upload option" classname="03-notebook.spec.ts" time="0.356">
+</testcase>
+<testcase name="Notebook Page › chat input is visible and accepts text" classname="03-notebook.spec.ts" time="20.948">
+<failure message="03-notebook.spec.ts:98:7 chat input is visible and accepts text" type="FAILURE">
+<![CDATA[  [chromium] › 03-notebook.spec.ts:98:7 › Notebook Page › chat input is visible and accepts text ───
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('textarea').last()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('textarea').last()
+
+
+       98 |   test('chat input is visible and accepts text', async ({ page }) => {
+       99 |     const textarea = page.locator('textarea').last();
+    > 100 |     await expect(textarea).toBeVisible({ timeout: 10000 });
+          |                            ^
+      101 |     await textarea.fill('Hello, this is a test message');
+      102 |     await expect(textarea).toHaveValue('Hello, this is a test message');
+      103 |   });
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:100:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('textarea').last()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('textarea').last()
+
+
+       98 |   test('chat input is visible and accepts text', async ({ page }) => {
+       99 |     const textarea = page.locator('textarea').last();
+    > 100 |     await expect(textarea).toBeVisible({ timeout: 10000 });
+          |                            ^
+      101 |     await textarea.fill('Hello, this is a test message');
+      102 |     await expect(textarea).toHaveValue('Hello, this is a test message');
+      103 |   });
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:100:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--0fc75-is-visible-and-accepts-text-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Notebook Page › file upload shows input element" classname="03-notebook.spec.ts" time="20.972">
+<failure message="03-notebook.spec.ts:105:7 file upload shows input element" type="FAILURE">
+<![CDATA[  [chromium] › 03-notebook.spec.ts:105:7 › Notebook Page › file upload shows input element ─────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      106 |     const fileInput = page.locator('input[type="file"]');
+      107 |     // File input should exist (might be hidden)
+    > 108 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+          |                             ^
+      109 |   });
+      110 |
+      111 |   test('upload a text file as source', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:108:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      106 |     const fileInput = page.locator('input[type="file"]');
+      107 |     // File input should exist (might be hidden)
+    > 108 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+          |                             ^
+      109 |   });
+      110 |
+      111 |   test('upload a text file as source', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:108:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-file-upload-shows-input-element-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Notebook Page › upload a text file as source" classname="03-notebook.spec.ts" time="20.916">
+<failure message="03-notebook.spec.ts:111:7 upload a text file as source" type="FAILURE">
+<![CDATA[  [chromium] › 03-notebook.spec.ts:111:7 › Notebook Page › upload a text file as source ────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      114 |
+      115 |     const fileInput = page.locator('input[type="file"]');
+    > 116 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+          |                             ^
+      117 |
+      118 |     await fileInput.setInputFiles(testFilePath);
+      119 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:116:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      114 |
+      115 |     const fileInput = page.locator('input[type="file"]');
+    > 116 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+          |                             ^
+      117 |
+      118 |     await fileInput.setInputFiles(testFilePath);
+      119 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:116:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page-upload-a-text-file-as-source-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Notebook Page › notebook page has studio panel area" classname="03-notebook.spec.ts" time="20.944">
+<failure message="03-notebook.spec.ts:129:7 notebook page has studio panel area" type="FAILURE">
+<![CDATA[  [chromium] › 03-notebook.spec.ts:129:7 › Notebook Page › notebook page has studio panel area ─────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator:  locator('button').filter({ hasText: /studio/i }).first().or(locator('[class*="studio"]').first())
+    Expected: visible
+    Received: hidden
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('button').filter({ hasText: /studio/i }).first().or(locator('[class*="studio"]').first())
+        14 × locator resolved to <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-semibold transition-colors text-slate-500 hover:text-slate-700">…</button>
+           - unexpected value "hidden"
+
+
+      133 |     );
+      134 |     // Studio should be somewhere on the page (might be collapsed or as a button)
+    > 135 |     await expect(studioEl).toBeVisible({ timeout: 10000 });
+          |                            ^
+      136 |   });
+      137 | });
+      138 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:135:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator:  locator('button').filter({ hasText: /studio/i }).first().or(locator('[class*="studio"]').first())
+    Expected: visible
+    Received: hidden
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('button').filter({ hasText: /studio/i }).first().or(locator('[class*="studio"]').first())
+        14 × locator resolved to <button class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-semibold transition-colors text-slate-500 hover:text-slate-700">…</button>
+           - unexpected value "hidden"
+
+
+      133 |     );
+      134 |     // Studio should be somewhere on the page (might be collapsed or as a button)
+    > 135 |     await expect(studioEl).toBeVisible({ timeout: 10000 });
+          |                            ^
+      136 |   });
+      137 | });
+      138 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/03-notebook.spec.ts:135:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/03-notebook-Notebook-Page--5a025--page-has-studio-panel-area-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+<testsuite name="04-chat.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="7" failures="7" skipped="0" time="207.031" errors="0">
+<testcase name="AI Chat › chat textarea is visible and enabled" classname="04-chat.spec.ts" time="20.915">
+<failure message="04-chat.spec.ts:59:7 chat textarea is visible and enabled" type="FAILURE">
+<![CDATA[  [chromium] › 04-chat.spec.ts:59:7 › AI Chat › chat textarea is visible and enabled ───────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('textarea').last()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('textarea').last()
+
+
+      59 |   test('chat textarea is visible and enabled', async ({ page }) => {
+      60 |     const textarea = page.locator('textarea').last();
+    > 61 |     await expect(textarea).toBeVisible({ timeout: 10000 });
+         |                            ^
+      62 |     await expect(textarea).toBeEnabled();
+      63 |   });
+      64 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:61:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('textarea').last()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('textarea').last()
+
+
+      59 |   test('chat textarea is visible and enabled', async ({ page }) => {
+      60 |     const textarea = page.locator('textarea').last();
+    > 61 |     await expect(textarea).toBeVisible({ timeout: 10000 });
+         |                            ^
+      62 |     await expect(textarea).toBeEnabled();
+      63 |   });
+      64 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:61:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-chat-textarea-is-visible-and-enabled-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="AI Chat › can type a message in chat input" classname="04-chat.spec.ts" time="31.031">
+<failure message="04-chat.spec.ts:65:7 can type a message in chat input" type="FAILURE">
+<![CDATA[  [chromium] › 04-chat.spec.ts:65:7 › AI Chat › can type a message in chat input ───────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      65 |   test('can type a message in chat input', async ({ page }) => {
+      66 |     const textarea = page.locator('textarea').last();
+    > 67 |     await textarea.fill('What is the main topic?');
+         |                    ^
+      68 |     await expect(textarea).toHaveValue('What is the main topic?');
+      69 |   });
+      70 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:67:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      65 |   test('can type a message in chat input', async ({ page }) => {
+      66 |     const textarea = page.locator('textarea').last();
+    > 67 |     await textarea.fill('What is the main topic?');
+         |                    ^
+      68 |     await expect(textarea).toHaveValue('What is the main topic?');
+      69 |   });
+      70 |
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:67:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-can-type-a-message-in-chat-input-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="AI Chat › send button is visible" classname="04-chat.spec.ts" time="31.01">
+<failure message="04-chat.spec.ts:71:7 send button is visible" type="FAILURE">
+<![CDATA[  [chromium] › 04-chat.spec.ts:71:7 › AI Chat › send button is visible ─────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      71 |   test('send button is visible', async ({ page }) => {
+      72 |     const textarea = page.locator('textarea').last();
+    > 73 |     await textarea.fill('Test message');
+         |                    ^
+      74 |     // Send button should appear or already be visible
+      75 |     const sendBtn = page.locator('button[type="submit"]').last().or(
+      76 |       page.locator('button[aria-label*="send"], button[title*="send"]').first()
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:73:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      71 |   test('send button is visible', async ({ page }) => {
+      72 |     const textarea = page.locator('textarea').last();
+    > 73 |     await textarea.fill('Test message');
+         |                    ^
+      74 |     // Send button should appear or already be visible
+      75 |     const sendBtn = page.locator('button[type="submit"]').last().or(
+      76 |       page.locator('button[aria-label*="send"], button[title*="send"]').first()
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:73:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-send-button-is-visible-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="AI Chat › submitting chat shows user message in conversation" classname="04-chat.spec.ts" time="30.999">
+<failure message="04-chat.spec.ts:81:7 submitting chat shows user message in conversation" type="FAILURE">
+<![CDATA[  [chromium] › 04-chat.spec.ts:81:7 › AI Chat › submitting chat shows user message in conversation ─
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      82 |     const message = 'This is my E2E test question';
+      83 |     const textarea = page.locator('textarea').last();
+    > 84 |     await textarea.fill(message);
+         |                    ^
+      85 |     await textarea.press('Enter');
+      86 |
+      87 |     // User message should appear in chat history
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:84:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      82 |     const message = 'This is my E2E test question';
+      83 |     const textarea = page.locator('textarea').last();
+    > 84 |     await textarea.fill(message);
+         |                    ^
+      85 |     await textarea.press('Enter');
+      86 |
+      87 |     // User message should appear in chat history
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:84:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-submitting-656fa-ser-message-in-conversation-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="AI Chat › empty notebook shows response (or warning)" classname="04-chat.spec.ts" time="31.034">
+<failure message="04-chat.spec.ts:91:7 empty notebook shows response (or warning)" type="FAILURE">
+<![CDATA[  [chromium] › 04-chat.spec.ts:91:7 › AI Chat › empty notebook shows response (or warning) ─────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      92 |     const message = 'Hello?';
+      93 |     const textarea = page.locator('textarea').last();
+    > 94 |     await textarea.fill(message);
+         |                    ^
+      95 |     await textarea.press('Enter');
+      96 |
+      97 |     // Either:
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:94:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      92 |     const message = 'Hello?';
+      93 |     const textarea = page.locator('textarea').last();
+    > 94 |     await textarea.fill(message);
+         |                    ^
+      95 |     await textarea.press('Enter');
+      96 |
+      97 |     // Either:
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:94:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-empty-notebook-shows-response-or-warning--chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="AI Chat › pressing Enter sends message" classname="04-chat.spec.ts" time="31.022">
+<failure message="04-chat.spec.ts:108:7 pressing Enter sends message" type="FAILURE">
+<![CDATA[  [chromium] › 04-chat.spec.ts:108:7 › AI Chat › pressing Enter sends message ──────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      108 |   test('pressing Enter sends message', async ({ page }) => {
+      109 |     const textarea = page.locator('textarea').last();
+    > 110 |     await textarea.fill('Enter key test');
+          |                    ^
+      111 |
+      112 |     const messageBefore = await page.locator('[class*="message"]').count();
+      113 |     await textarea.press('Enter');
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:110:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      108 |   test('pressing Enter sends message', async ({ page }) => {
+      109 |     const textarea = page.locator('textarea').last();
+    > 110 |     await textarea.fill('Enter key test');
+          |                    ^
+      111 |
+      112 |     const messageBefore = await page.locator('[class*="message"]').count();
+      113 |     await textarea.press('Enter');
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:110:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-pressing-Enter-sends-message-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="AI Chat › textarea clears after sending" classname="04-chat.spec.ts" time="31.02">
+<failure message="04-chat.spec.ts:119:7 textarea clears after sending" type="FAILURE">
+<![CDATA[  [chromium] › 04-chat.spec.ts:119:7 › AI Chat › textarea clears after sending ─────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      119 |   test('textarea clears after sending', async ({ page }) => {
+      120 |     const textarea = page.locator('textarea').last();
+    > 121 |     await textarea.fill('Clear test message');
+          |                    ^
+      122 |     await textarea.press('Enter');
+      123 |
+      124 |     // Textarea should be empty after send
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:121:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.fill: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('textarea').last()
+
+
+      119 |   test('textarea clears after sending', async ({ page }) => {
+      120 |     const textarea = page.locator('textarea').last();
+    > 121 |     await textarea.fill('Clear test message');
+          |                    ^
+      122 |     await textarea.press('Enter');
+      123 |
+      124 |     // Textarea should be empty after send
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/04-chat.spec.ts:121:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/04-chat-AI-Chat-textarea-clears-after-sending-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+<testsuite name="05-studio.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="7" failures="2" skipped="0" time="23.624" errors="0">
+<testcase name="Studio Features › studio panel or button is visible" classname="05-studio.spec.ts" time="0.786">
+<failure message="05-studio.spec.ts:59:7 studio panel or button is visible" type="FAILURE">
+<![CDATA[  [chromium] › 05-studio.spec.ts:59:7 › Studio Features › studio panel or button is visible ────────
+
+    Error: expect(received).toBeTruthy()
+
+    Received: false
+
+      65 |       .catch(() => false) || await studioPanel.isVisible({ timeout: 5000 }).catch(() => false);
+      66 |
+    > 67 |     expect(isVisible).toBeTruthy();
+         |                       ^
+      68 |   });
+      69 |
+      70 |   test('summary button or option is present', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/05-studio.spec.ts:67:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeTruthy()
+
+    Received: false
+
+      65 |       .catch(() => false) || await studioPanel.isVisible({ timeout: 5000 }).catch(() => false);
+      66 |
+    > 67 |     expect(isVisible).toBeTruthy();
+         |                       ^
+      68 |   });
+      69 |
+      70 |   test('summary button or option is present', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/05-studio.spec.ts:67:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-studio-panel-or-button-is-visible-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Studio Features › summary button or option is present" classname="05-studio.spec.ts" time="0.363">
+</testcase>
+<testcase name="Studio Features › FAQ option is present" classname="05-studio.spec.ts" time="0.423">
+</testcase>
+<testcase name="Studio Features › study guide option is present" classname="05-studio.spec.ts" time="20.929">
+<failure message="05-studio.spec.ts:81:7 study guide option is present" type="FAILURE">
+<![CDATA[  [chromium] › 05-studio.spec.ts:81:7 › Studio Features › study guide option is present ────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('button, [role="button"]').filter({ hasText: /study guide/i }).first()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('button, [role="button"]').filter({ hasText: /study guide/i }).first()
+
+
+      81 |   test('study guide option is present', async ({ page }) => {
+      82 |     const studyEl = page.locator('button, [role="button"]').filter({ hasText: /study guide/i }).first();
+    > 83 |     await expect(studyEl).toBeVisible({ timeout: 10000 });
+         |                           ^
+      84 |   });
+      85 |
+      86 |   test('saved notes section is present', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/05-studio.spec.ts:83:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('button, [role="button"]').filter({ hasText: /study guide/i }).first()
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('button, [role="button"]').filter({ hasText: /study guide/i }).first()
+
+
+      81 |   test('study guide option is present', async ({ page }) => {
+      82 |     const studyEl = page.locator('button, [role="button"]').filter({ hasText: /study guide/i }).first();
+    > 83 |     await expect(studyEl).toBeVisible({ timeout: 10000 });
+         |                           ^
+      84 |   });
+      85 |
+      86 |   test('saved notes section is present', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/05-studio.spec.ts:83:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/05-studio-Studio-Features-study-guide-option-is-present-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Studio Features › saved notes section is present" classname="05-studio.spec.ts" time="0.363">
+</testcase>
+<testcase name="Studio Features › mind map option is present" classname="05-studio.spec.ts" time="0.354">
+</testcase>
+<testcase name="Studio Features › clicking summary shows generate button or starts generation" classname="05-studio.spec.ts" time="0.406">
+</testcase>
+</testsuite>
+<testsuite name="06-sharing.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="5" failures="2" skipped="0" time="23.035" errors="0">
+<testcase name="Notebook Sharing › share button is visible in notebook" classname="06-sharing.spec.ts" time="0.419">
+</testcase>
+<testcase name="Notebook Sharing › clicking share opens share modal" classname="06-sharing.spec.ts" time="10.891">
+<failure message="06-sharing.spec.ts:65:7 clicking share opens share modal" type="FAILURE">
+<![CDATA[  [chromium] › 06-sharing.spec.ts:65:7 › Notebook Sharing › clicking share opens share modal ───────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[role="dialog"], [class*="modal"]').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('[role="dialog"], [class*="modal"]').first()
+
+
+      69 |     // Modal should appear
+      70 |     const modal = page.locator('[role="dialog"], [class*="modal"]').first();
+    > 71 |     await expect(modal).toBeVisible({ timeout: 5000 });
+         |                         ^
+      72 |   });
+      73 |
+      74 |   test('share modal has invite link section', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/06-sharing.spec.ts:71:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[role="dialog"], [class*="modal"]').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('[role="dialog"], [class*="modal"]').first()
+
+
+      69 |     // Modal should appear
+      70 |     const modal = page.locator('[role="dialog"], [class*="modal"]').first();
+    > 71 |     await expect(modal).toBeVisible({ timeout: 5000 });
+         |                         ^
+      72 |   });
+      73 |
+      74 |   test('share modal has invite link section', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/06-sharing.spec.ts:71:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-clicking-share-opens-share-modal-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Notebook Sharing › share modal has invite link section" classname="06-sharing.spec.ts" time="0.436">
+</testcase>
+<testcase name="Notebook Sharing › invalid join token shows error page" classname="06-sharing.spec.ts" time="0.41">
+</testcase>
+<testcase name="Notebook Sharing › share modal can be closed" classname="06-sharing.spec.ts" time="10.879">
+<failure message="06-sharing.spec.ts:93:7 share modal can be closed" type="FAILURE">
+<![CDATA[  [chromium] › 06-sharing.spec.ts:93:7 › Notebook Sharing › share modal can be closed ──────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[role="dialog"], [class*="modal"]').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('[role="dialog"], [class*="modal"]').first()
+
+
+       96 |
+       97 |     const modal = page.locator('[role="dialog"], [class*="modal"]').first();
+    >  98 |     await expect(modal).toBeVisible({ timeout: 5000 });
+          |                         ^
+       99 |
+      100 |     // Close via X button or Escape key
+      101 |     await page.keyboard.press('Escape');
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/06-sharing.spec.ts:98:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[role="dialog"], [class*="modal"]').first()
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('[role="dialog"], [class*="modal"]').first()
+
+
+       96 |
+       97 |     const modal = page.locator('[role="dialog"], [class*="modal"]').first();
+    >  98 |     await expect(modal).toBeVisible({ timeout: 5000 });
+          |                         ^
+       99 |
+      100 |     // Close via X button or Escape key
+      101 |     await page.keyboard.press('Escape');
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/06-sharing.spec.ts:98:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/06-sharing-Notebook-Sharing-share-modal-can-be-closed-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+<testsuite name="07-upload.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="5" failures="5" skipped="0" time="104.745" errors="0">
+<testcase name="Document Upload › file input element is present" classname="07-upload.spec.ts" time="20.931">
+<failure message="07-upload.spec.ts:61:7 file input element is present" type="FAILURE">
+<![CDATA[  [chromium] › 07-upload.spec.ts:61:7 › Document Upload › file input element is present ────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      61 |   test('file input element is present', async ({ page }) => {
+      62 |     const fileInput = page.locator('input[type="file"]');
+    > 63 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+         |                             ^
+      64 |   });
+      65 |
+      66 |   test('upload a TXT file', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:63:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      61 |   test('file input element is present', async ({ page }) => {
+      62 |     const fileInput = page.locator('input[type="file"]');
+    > 63 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+         |                             ^
+      64 |   });
+      65 |
+      66 |   test('upload a TXT file', async ({ page }) => {
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:63:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-file-input-element-is-present-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Document Upload › upload a TXT file" classname="07-upload.spec.ts" time="20.983">
+<failure message="07-upload.spec.ts:66:7 upload a TXT file" type="FAILURE">
+<![CDATA[  [chromium] › 07-upload.spec.ts:66:7 › Document Upload › upload a TXT file ────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      66 |   test('upload a TXT file', async ({ page }) => {
+      67 |     const fileInput = page.locator('input[type="file"]');
+    > 68 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+         |                             ^
+      69 |
+      70 |     const txtFile = path.join(TESTS_DIR, 'e2e_test.md');
+      71 |     await fileInput.setInputFiles(txtFile);
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:68:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      66 |   test('upload a TXT file', async ({ page }) => {
+      67 |     const fileInput = page.locator('input[type="file"]');
+    > 68 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+         |                             ^
+      69 |
+      70 |     const txtFile = path.join(TESTS_DIR, 'e2e_test.md');
+      71 |     await fileInput.setInputFiles(txtFile);
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:68:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-TXT-file-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Document Upload › upload a CSV file" classname="07-upload.spec.ts" time="20.936">
+<failure message="07-upload.spec.ts:81:7 upload a CSV file" type="FAILURE">
+<![CDATA[  [chromium] › 07-upload.spec.ts:81:7 › Document Upload › upload a CSV file ────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      81 |   test('upload a CSV file', async ({ page }) => {
+      82 |     const fileInput = page.locator('input[type="file"]');
+    > 83 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+         |                             ^
+      84 |
+      85 |     const csvFile = path.join(TESTS_DIR, 't01_test.csv');
+      86 |     await fileInput.setInputFiles(csvFile);
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:83:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 10000ms
+      - waiting for locator('input[type="file"]')
+
+
+      81 |   test('upload a CSV file', async ({ page }) => {
+      82 |     const fileInput = page.locator('input[type="file"]');
+    > 83 |     await expect(fileInput).toBeAttached({ timeout: 10000 });
+         |                             ^
+      84 |
+      85 |     const csvFile = path.join(TESTS_DIR, 't01_test.csv');
+      86 |     await fileInput.setInputFiles(csvFile);
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:83:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-a-CSV-file-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Document Upload › sources panel shows uploaded files" classname="07-upload.spec.ts" time="31.034">
+<failure message="07-upload.spec.ts:94:7 sources panel shows uploaded files" type="FAILURE">
+<![CDATA[  [chromium] › 07-upload.spec.ts:94:7 › Document Upload › sources panel shows uploaded files ───────
+
+    TimeoutError: locator.setInputFiles: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('input[type="file"]')
+
+
+       99 |     const fileInput = page.locator('input[type="file"]');
+      100 |     const txtFile = path.join(TESTS_DIR, 't124_test1.txt');
+    > 101 |     await fileInput.setInputFiles(txtFile);
+          |     ^
+      102 |
+      103 |     // Wait for upload to register
+      104 |     await page.waitForTimeout(2000);
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:101:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.setInputFiles: Timeout 15000ms exceeded.
+    Call log:
+      - waiting for locator('input[type="file"]')
+
+
+       99 |     const fileInput = page.locator('input[type="file"]');
+      100 |     const txtFile = path.join(TESTS_DIR, 't124_test1.txt');
+    > 101 |     await fileInput.setInputFiles(txtFile);
+          |     ^
+      102 |
+      103 |     // Wait for upload to register
+      104 |     await page.waitForTimeout(2000);
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:101:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-sources-panel-shows-uploaded-files-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+<testcase name="Document Upload › upload button triggers file picker" classname="07-upload.spec.ts" time="10.861">
+<failure message="07-upload.spec.ts:111:7 upload button triggers file picker" type="FAILURE">
+<![CDATA[  [chromium] › 07-upload.spec.ts:111:7 › Document Upload › upload button triggers file picker ──────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 5000ms
+      - waiting for locator('input[type="file"]')
+
+
+      115 |     // The file input should become active (we can't open actual picker in headless, but we can verify the input)
+      116 |     const fileInput = page.locator('input[type="file"]');
+    > 117 |     await expect(fileInput).toBeAttached();
+          |                             ^
+      118 |     await expect(uploadBtn).toBeVisible();
+      119 |   });
+      120 | });
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:117:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium/error-context.md
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeAttached() failed
+
+    Locator: locator('input[type="file"]')
+    Expected: attached
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeAttached" with timeout 5000ms
+      - waiting for locator('input[type="file"]')
+
+
+      115 |     // The file input should become active (we can't open actual picker in headless, but we can verify the input)
+      116 |     const fileInput = page.locator('input[type="file"]');
+    > 117 |     await expect(fileInput).toBeAttached();
+          |                             ^
+      118 |     await expect(uploadBtn).toBeVisible();
+      119 |   });
+      120 | });
+        at /Users/tommy/Documents/vibe-coding/Noteflow/e2e/tests/07-upload.spec.ts:117:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/error-context.md
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+<system-out>
+<![CDATA[
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/test-failed-1.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/video.webm]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/error-context.md]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/test-failed-2.png]]
+
+[[ATTACHMENT|../test-results/07-upload-Document-Upload-upload-button-triggers-file-picker-chromium-retry1/trace.zip]]
+]]>
+</system-out>
+</testcase>
+</testsuite>
+<testsuite name="08-navigation.spec.ts" timestamp="2026-03-18T07:24:16.811Z" hostname="chromium" tests="11" failures="0" skipped="0" time="1.546" errors="0">
+<testcase name="Navigation &amp; Public Pages › 404 page for unknown route" classname="08-navigation.spec.ts" time="0.154">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › privacy policy page loads" classname="08-navigation.spec.ts" time="0.133">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › terms of service page loads" classname="08-navigation.spec.ts" time="0.127">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › help center page loads" classname="08-navigation.spec.ts" time="0.139">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › forgot password page loads" classname="08-navigation.spec.ts" time="0.134">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › forgot password page has email input" classname="08-navigation.spec.ts" time="0.137">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › 404 page has link to dashboard" classname="08-navigation.spec.ts" time="0.13">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › login page URL is correct" classname="08-navigation.spec.ts" time="0.148">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › register page URL is correct" classname="08-navigation.spec.ts" time="0.147">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › page title includes Noteflow branding" classname="08-navigation.spec.ts" time="0.139">
+</testcase>
+<testcase name="Navigation &amp; Public Pages › invalid join token page renders (auth guard redirects to login)" classname="08-navigation.spec.ts" time="0.158">
+</testcase>
+</testsuite>
+</testsuites>

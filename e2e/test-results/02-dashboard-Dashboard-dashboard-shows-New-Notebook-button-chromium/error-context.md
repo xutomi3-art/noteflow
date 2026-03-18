@@ -1,0 +1,74 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img "Noteflow" [ref=e6]
+      - generic [ref=e7]: Noteflow
+      - generic [ref=e8]: Beta
+    - generic [ref=e9]:
+      - button "Report Bug" [ref=e10]:
+        - img [ref=e11]
+        - generic [ref=e20]: Report Bug
+      - generic [ref=e21]:
+        - generic [ref=e22]: E2E Dashboard
+        - generic [ref=e23]: e2e_dash_254387@test.com
+      - button "E" [ref=e25]
+  - main [ref=e26]:
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - heading "Personal Notebooks" [level=2] [ref=e29]
+        - button "Create New" [ref=e31]:
+          - img [ref=e32]
+          - text: Create New
+      - generic [ref=e33]:
+        - generic [ref=e34] [cursor=pointer]:
+          - generic [ref=e35]:
+            - button [ref=e37]:
+              - img [ref=e38]
+            - generic [ref=e40]: 🚀
+          - generic [ref=e41]:
+            - generic [ref=e42]:
+              - heading "Getting Started" [level=3] [ref=e43]
+              - generic [ref=e44]: Just now • 1 source
+            - button "More options" [ref=e46]:
+              - img [ref=e47]
+        - generic [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]:
+            - button [ref=e54]:
+              - img [ref=e55]
+            - generic [ref=e57]: 📋
+          - generic [ref=e58]:
+            - generic [ref=e59]:
+              - heading "Meeting Notes" [level=3] [ref=e60]
+              - generic [ref=e61]: Just now • 3 sources
+            - button "More options" [ref=e63]:
+              - img [ref=e64]
+        - generic [ref=e68] [cursor=pointer]:
+          - generic [ref=e69]:
+            - button [ref=e71]:
+              - img [ref=e72]
+            - generic [ref=e74]: 🔬
+          - generic [ref=e75]:
+            - generic [ref=e76]:
+              - heading "My Research" [level=3] [ref=e77]
+              - generic [ref=e78]: Just now • 3 sources
+            - button "More options" [ref=e80]:
+              - img [ref=e81]
+    - generic [ref=e85]:
+      - heading "Team Notebooks" [level=2] [ref=e86]
+      - generic [ref=e87]: No team notebooks yet. Create one or get invited to join.
+    - generic [ref=e88]:
+      - generic [ref=e89]:
+        - text: 上海聚托信息科技有限公司©2026
+        - link "沪ICP备15056478号-5" [ref=e90] [cursor=pointer]:
+          - /url: https://beian.miit.gov.cn/
+      - generic [ref=e91]:
+        - link "Privacy Policy" [ref=e92] [cursor=pointer]:
+          - /url: /privacy
+        - link "Terms of Service" [ref=e93] [cursor=pointer]:
+          - /url: /terms
+        - link "Help Center" [ref=e94] [cursor=pointer]:
+          - /url: /help
+```
