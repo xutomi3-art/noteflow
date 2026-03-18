@@ -1818,7 +1818,7 @@ export default function NotebookPage() {
                     }`}
                   >
                     <Globe className="w-3 h-3 inline-block mr-1 -mt-px" />
-                    Web
+                    Internet {webSearchEnabled ? "On" : "Off"}
                   </button>
                   <span className="text-[11px] text-slate-400 font-medium px-2">
                     {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
