@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = ""
+    GOOGLE_PROXY: str = ""
 
     # Microsoft OAuth (Entra ID / Azure AD)
     MICROSOFT_CLIENT_ID: str = ""

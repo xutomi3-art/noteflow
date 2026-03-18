@@ -10,6 +10,7 @@ const SERVICE_LABELS: Record<string, string> = {
   mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
   qwen: 'Qwen3.5-Plus',
+  google_oauth: 'Google OAuth',
 };
 
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
@@ -20,6 +21,7 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   mineru: 'Document parsing service',
   docmee: 'AI PPT generation service',
   qwen: 'Chat LLM, Embedding & Vision API',
+  google_oauth: 'Google Sign-In connectivity (via proxy if configured)',
 };
 
 interface ConfigField {
@@ -42,6 +44,7 @@ const GOOGLE_OAUTH_FIELDS: ConfigField[] = [
   { key: 'google_client_id', label: 'Google Client ID', placeholder: 'your-client-id.apps.googleusercontent.com' },
   { key: 'google_client_secret', label: 'Google Client Secret', placeholder: 'GOCSPX-...', secret: true },
   { key: 'google_redirect_uri', label: 'Redirect URI', placeholder: 'http://10.200.0.112/api/auth/google/callback' },
+  { key: 'google_proxy', label: 'SOCKS5 Proxy', placeholder: 'socks5://user:pass@host:port (leave empty if direct)' },
 ];
 
 const MICROSOFT_OAUTH_FIELDS: ConfigField[] = [

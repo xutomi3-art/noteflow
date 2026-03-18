@@ -1,3 +1,5 @@
+import os
+
 import httpx
 from datetime import datetime, timezone, timedelta
 
@@ -206,5 +208,26 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
         )
     else:
         services["qwen"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
+
+    # Google OAuth connectivity (via proxy if configured)
+    if settings.GOOGLE_CLIENT_ID:
+        try:
+            proxy_kwargs: dict = {"timeout": 10.0}
+            google_proxy = os.getenv("GOOGLE_PROXY", "") or getattr(settings, "GOOGLE_PROXY", "")
+            if google_proxy:
+                proxy_kwargs["proxy"] = google_proxy
+            async with httpx.AsyncClient(**proxy_kwargs) as client:
+                start = datetime.now()
+                resp = await client.get("https://accounts.google.com/.well-known/openid-configuration")
+                latency = (datetime.now() - start).total_seconds() * 1000
+                if resp.status_code == 200:
+                    proxy_note = " (via proxy)" if google_proxy else ""
+                    services["google_oauth"] = {"status": "ok", "latency_ms": round(latency), "message": f"Reachable{proxy_note}"}
+                else:
+                    services["google_oauth"] = {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}"}
+        except Exception as e:
+            services["google_oauth"] = {"status": "error", "latency_ms": 0, "message": str(e)[:100]}
+    else:
+        services["google_oauth"] = {"status": "error", "latency_ms": 0, "message": "Client ID not configured"}
 
     return services

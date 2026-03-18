@@ -17,7 +17,7 @@ CONFIGURABLE_KEYS = {
     "web_scraper_remove_selector",
     "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_from",
     "alibaba_tts_appkey", "alibaba_tts_token",
-    "google_client_id", "google_client_secret", "google_redirect_uri",
+    "google_client_id", "google_client_secret", "google_redirect_uri", "google_proxy",
     "microsoft_client_id", "microsoft_client_secret", "microsoft_tenant_id", "microsoft_redirect_uri",
 }
 
@@ -45,6 +45,7 @@ _ENV_MAP = {
     "google_client_id": "GOOGLE_CLIENT_ID",
     "google_client_secret": "GOOGLE_CLIENT_SECRET",
     "google_redirect_uri": "GOOGLE_REDIRECT_URI",
+    "google_proxy": "GOOGLE_PROXY",
     "microsoft_client_id": "MICROSOFT_CLIENT_ID",
     "microsoft_client_secret": "MICROSOFT_CLIENT_SECRET",
     "microsoft_tenant_id": "MICROSOFT_TENANT_ID",
