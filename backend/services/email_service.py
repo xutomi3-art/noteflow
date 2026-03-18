@@ -17,8 +17,7 @@ is_smtp_configured = is_email_configured
 
 async def _send(to: str, subject: str, html: str) -> None:
     resend.api_key = settings.RESEND_API_KEY
-    # Use verified domain sender, or Resend's test sender for unverified domains
-    from_addr = settings.RESEND_FROM or "Noteflow <onboarding@resend.dev>"
+    from_addr = settings.RESEND_FROM or "Noteflow <noreply@noteflow.jotoai.com>"
     try:
         resend.Emails.send({
             "from": from_addr,
