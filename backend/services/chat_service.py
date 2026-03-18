@@ -146,6 +146,7 @@ async def stream_chat(
     user_id: uuid.UUID,
     message: str,
     source_ids: list[str] | None = None,
+    web_search: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Stream AI response with citations. Yields SSE-formatted data."""
     # Initialize timing variables
@@ -417,8 +418,12 @@ The uploaded documents do not contain information relevant to this question. Ple
             logger.warning("User content too long (%d chars), truncating to %d (history=%d)", len(user_content), max_user_chars, history_chars)
             user_content = user_content[:max_user_chars - 200] + f"\n\n[Context truncated due to length]\n\nQuestion: {message}"
 
+        system_prompt = SYSTEM_PROMPT
+        if web_search:
+            system_prompt += "\n9. You have access to web search. When the uploaded documents lack relevant information, you may use web search results to supplement your answer. Clearly distinguish between information from uploaded documents (cite with [1][2]) and information from the web (mention it is from web search)."
+
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             *history_messages,
             {"role": "user", "content": user_content},
         ]
@@ -427,7 +432,7 @@ The uploaded documents do not contain information relevant to this question. Ple
         yield ": keepalive\n\n"
         full_response = ""
         t_llm_start = time.time()
-        async for token in qwen_client.stream_chat(messages):
+        async for token in qwen_client.stream_chat(messages, enable_search=web_search):
             if token.startswith("\n\n[Error:") and "maximum context length" in token:
                 friendly = "Selected sources contain too much data. Please select fewer sources and try again."
                 yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"

@@ -252,6 +252,7 @@ class ApiClient {
     onToken: (token: string) => void,
     onDone: (data: { id: string; citations: Citation[] }) => void,
     onError: (error: string) => void,
+    webSearch: boolean = false,
   ): { promise: Promise<void>; abort: () => void } {
     const controller = new AbortController();
     const headers: Record<string, string> = {
@@ -267,7 +268,7 @@ class ApiClient {
       const response = await fetch(`${API_BASE}/notebooks/${notebookId}/chat`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null }),
+        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null, ...(webSearch ? { web_search: true } : {}) }),
         signal: controller.signal,
       });
 

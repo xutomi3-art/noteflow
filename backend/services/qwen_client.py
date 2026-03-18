@@ -31,16 +31,23 @@ class QwenClient:
         messages: list[dict],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        enable_search: bool = False,
     ) -> AsyncGenerator[str, None]:
         """Stream chat completion tokens."""
         try:
-            response = await self.client.chat.completions.create(
+            kwargs: dict = dict(
                 model=self.model,
                 messages=messages,  # type: ignore[arg-type]
                 max_tokens=max_tokens or settings.LLM_MAX_OUTPUT_TOKENS,
                 temperature=temperature,
                 stream=True,
             )
+            if enable_search:
+                kwargs["extra_body"] = {
+                    "enable_search": True,
+                    "search_options": {"search_strategy": "agent"},
+                }
+            response = await self.client.chat.completions.create(**kwargs)
             async for chunk in response:
                 if chunk.choices:
                     delta = chunk.choices[0].delta

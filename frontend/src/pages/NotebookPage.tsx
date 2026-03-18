@@ -274,6 +274,7 @@ export default function NotebookPage() {
   const [overview, setOverview] = useState<{ overview: string; suggested_questions: string[] } | null>(null);
   const pendingOverviewRef = useRef<{ overview: string; suggested_questions: string[] } | null>(null);
   const [chatInput, setChatInput] = useState("");
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<"sources" | "chat" | "studio">("chat");
@@ -677,9 +678,9 @@ export default function NotebookPage() {
   // Handlers
   const handleSend = useCallback(() => {
     if (!id || !canSend) return;
-    sendMessage(id, chatInput.trim(), [...selectedIds]);
+    sendMessage(id, chatInput.trim(), [...selectedIds], webSearchEnabled);
     setChatInput("");
-  }, [id, canSend, chatInput, selectedIds, sendMessage]);
+  }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1791,6 +1792,18 @@ export default function NotebookPage() {
                     : "border-slate-200 focus-within:ring-2 focus-within:ring-[#5b8c15]/20 focus-within:border-[#5b8c15]"
                 }`}
               >
+                <button
+                  type="button"
+                  onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                  className={`ml-1 w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+                    webSearchEnabled
+                      ? "bg-[#5b8c15]/10 text-[#5b8c15]"
+                      : "text-slate-300 hover:text-slate-500"
+                  }`}
+                  title={webSearchEnabled ? "Web search enabled" : "Enable web search"}
+                >
+                  <Globe className="w-4 h-4" />
+                </button>
                 <input
                   type="text"
                   placeholder={
@@ -1800,7 +1813,7 @@ export default function NotebookPage() {
                         ? "Waiting for sources to finish processing..."
                         : "Start typing..."
                   }
-                  className="flex-1 bg-transparent border-none outline-none px-4 text-[14px] text-slate-700 disabled:cursor-not-allowed"
+                  className="flex-1 bg-transparent border-none outline-none px-2 text-[14px] text-slate-700 disabled:cursor-not-allowed"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}

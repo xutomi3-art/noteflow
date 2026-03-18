@@ -10,7 +10,7 @@ interface ChatState {
   abortStream: (() => void) | null;
 
   fetchHistory: (notebookId: string) => Promise<void>;
-  sendMessage: (notebookId: string, message: string, sourceIds: string[]) => Promise<void>;
+  sendMessage: (notebookId: string, message: string, sourceIds: string[], webSearch?: boolean) => Promise<void>;
   stopStream: () => void;
   clearHistory: (notebookId: string) => Promise<void>;
   reset: () => void;
@@ -33,7 +33,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: async (notebookId: string, message: string, sourceIds: string[]) => {
+  sendMessage: async (notebookId: string, message: string, sourceIds: string[], webSearch: boolean = false) => {
     // Add optimistic user message
     const tempUserMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
@@ -110,6 +110,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             abortStream: null,
           }));
         },
+        webSearch,
       );
 
       set({ abortStream: abort });
