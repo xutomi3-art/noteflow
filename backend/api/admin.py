@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import select, func, desc, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -300,3 +302,83 @@ async def get_token_usage(
         "total_cost": _estimate_cost(grand_total_tokens),
         "period_days": period,
     }
+
+
+@router.get("/feedback")
+async def list_feedback(
+    status: str | None = Query(None),
+    type: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all feedback with optional status/type filters and pagination."""
+    from backend.models.feedback import Feedback
+    from backend.models.user import User as UserModel
+
+    query = select(
+        Feedback,
+        UserModel.name.label("user_name"),
+        UserModel.email.label("user_email"),
+    ).join(UserModel, Feedback.user_id == UserModel.id)
+
+    count_query = select(func.count()).select_from(Feedback)
+
+    if status:
+        query = query.where(Feedback.status == status)
+        count_query = count_query.where(Feedback.status == status)
+    if type:
+        query = query.where(Feedback.type == type)
+        count_query = count_query.where(Feedback.type == type)
+
+    total = (await db.execute(count_query)).scalar() or 0
+
+    query = query.order_by(desc(Feedback.created_at)).offset((page - 1) * limit).limit(limit)
+    result = await db.execute(query)
+    rows = result.all()
+
+    items = []
+    for row in rows:
+        fb = row[0]
+        items.append({
+            "id": str(fb.id),
+            "user_name": row[1],
+            "user_email": row[2],
+            "type": fb.type,
+            "content": fb.content,
+            "screenshot_url": fb.screenshot_url,
+            "status": fb.status,
+            "created_at": fb.created_at.isoformat() if fb.created_at else None,
+            "resolved_at": fb.resolved_at.isoformat() if fb.resolved_at else None,
+        })
+
+    return {"items": items, "total": total, "page": page, "limit": limit}
+
+
+@router.patch("/feedback/{feedback_id}")
+async def update_feedback_status(
+    feedback_id: str,
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle feedback status between open and resolved."""
+    import uuid as _uuid
+    from backend.models.feedback import Feedback
+
+    result = await db.execute(
+        select(Feedback).where(Feedback.id == _uuid.UUID(feedback_id))
+    )
+    fb = result.scalar_one_or_none()
+    if not fb:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+
+    if fb.status == "open":
+        fb.status = "resolved"
+        fb.resolved_at = datetime.now(timezone.utc)
+    else:
+        fb.status = "open"
+        fb.resolved_at = None
+
+    await db.commit()
+    return {"id": str(fb.id), "status": fb.status, "resolved_at": fb.resolved_at.isoformat() if fb.resolved_at else None}

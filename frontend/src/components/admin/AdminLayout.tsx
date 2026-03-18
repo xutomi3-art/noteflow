@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, BrainCircuit, Settings, ArrowLeft, BarChart3, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Users, BrainCircuit, Settings, ArrowLeft, BarChart3, ScrollText, MessageSquarePlus } from 'lucide-react';
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -8,6 +8,7 @@ const navItems = [
   { to: '/admin/system', label: 'System', icon: Settings },
   { to: '/admin/usage', label: 'Usage', icon: BarChart3 },
   { to: '/admin/logs', label: 'Logs', icon: ScrollText },
+  { to: '/admin/feedback', label: 'Feedback', icon: MessageSquarePlus },
 ];
 
 export default function AdminLayout() {

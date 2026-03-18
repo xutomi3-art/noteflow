@@ -61,6 +61,18 @@ export interface ChatLogItem {
   created_at: string;
 }
 
+export interface FeedbackItem {
+  id: string;
+  user_name: string;
+  user_email: string;
+  type: 'bug' | 'wish';
+  content: string;
+  screenshot_url: string | null;
+  status: 'open' | 'resolved';
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface UsageStats {
   period_days: number;
   total_queries: number;

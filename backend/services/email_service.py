@@ -1,33 +1,43 @@
-import asyncio
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import logging
+
+import resend
 
 from backend.core.config import settings
 
-
-def is_smtp_configured() -> bool:
-    return bool(settings.SMTP_HOST and settings.SMTP_USER)
+logger = logging.getLogger(__name__)
 
 
-def _build_invite_email(
+def is_email_configured() -> bool:
+    return bool(settings.RESEND_API_KEY)
+
+
+# Alias for backward compatibility
+is_smtp_configured = is_email_configured
+
+
+async def _send(to: str, subject: str, html: str) -> None:
+    resend.api_key = settings.RESEND_API_KEY
+    from_addr = settings.RESEND_FROM or "Noteflow <noreply@noteflow.jotoai.com>"
+    try:
+        resend.Emails.send({
+            "from": from_addr,
+            "to": [to],
+            "subject": subject,
+            "html": html,
+        })
+        logger.info("Email sent to %s: %s", to, subject)
+    except Exception as e:
+        logger.error("Failed to send email to %s: %s", to, e)
+        raise
+
+
+async def send_invite_email(
     to_email: str,
     inviter_name: str,
     notebook_name: str,
     join_url: str,
-) -> MIMEMultipart:
-    sender = settings.SMTP_FROM or settings.SMTP_USER
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"{inviter_name} invited you to \"{notebook_name}\" on Noteflow"
-    msg["From"] = sender
-    msg["To"] = to_email
-
-    text = (
-        f"{inviter_name} invited you to collaborate on \"{notebook_name}\" in Noteflow.\n\n"
-        f"Click to join: {join_url}\n\n"
-        "If you don't have an account yet, you'll need to register first."
-    )
-
+) -> None:
+    subject = f'{inviter_name} invited you to "{notebook_name}" on Noteflow'
     html = f"""\
 <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px">
   <h2 style="font-size:18px;margin:0 0 16px">You're invited to collaborate</h2>
@@ -44,37 +54,11 @@ def _build_invite_email(
     If you don't have a Noteflow account, you'll be asked to register first.
   </p>
 </div>"""
-
-    msg.attach(MIMEText(text, "plain"))
-    msg.attach(MIMEText(html, "html"))
-    return msg
+    await _send(to_email, subject, html)
 
 
-def _send_sync(msg: MIMEMultipart, to_email: str) -> None:
-    if settings.SMTP_PORT == 465:
-        with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as s:
-            s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            s.sendmail(msg["From"], [to_email], msg.as_string())
-    else:
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as s:
-            s.starttls()
-            s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            s.sendmail(msg["From"], [to_email], msg.as_string())
-
-
-def _build_password_reset_email(to_email: str, reset_url: str) -> MIMEMultipart:
-    sender = settings.SMTP_FROM or settings.SMTP_USER
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Reset your Noteflow password"
-    msg["From"] = sender
-    msg["To"] = to_email
-
-    text = (
-        "You requested a password reset for your Noteflow account.\n\n"
-        f"Click the link below to reset your password (valid for 30 minutes):\n{reset_url}\n\n"
-        "If you didn't request this, you can ignore this email."
-    )
-
+async def send_password_reset_email(to_email: str, reset_url: str) -> None:
+    subject = "Reset your Noteflow password"
     html = f"""\
 <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:32px">
   <h2 style="font-size:18px;margin:0 0 16px">Reset your password</h2>
@@ -91,22 +75,4 @@ def _build_password_reset_email(to_email: str, reset_url: str) -> MIMEMultipart:
     If you didn't request this, you can safely ignore this email.
   </p>
 </div>"""
-
-    msg.attach(MIMEText(text, "plain"))
-    msg.attach(MIMEText(html, "html"))
-    return msg
-
-
-async def send_password_reset_email(to_email: str, reset_url: str) -> None:
-    msg = _build_password_reset_email(to_email, reset_url)
-    await asyncio.to_thread(_send_sync, msg, to_email)
-
-
-async def send_invite_email(
-    to_email: str,
-    inviter_name: str,
-    notebook_name: str,
-    join_url: str,
-) -> None:
-    msg = _build_invite_email(to_email, inviter_name, notebook_name, join_url)
-    await asyncio.to_thread(_send_sync, msg, to_email)
+    await _send(to_email, subject, html)

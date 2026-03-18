@@ -15,6 +15,7 @@ import AdminLLMPage from '@/pages/admin/AdminLLMPage';
 import AdminSystemPage from '@/pages/admin/AdminSystemPage';
 import AdminUsagePage from '@/pages/admin/AdminUsagePage';
 import AdminLogsPage from '@/pages/admin/AdminLogsPage';
+import AdminFeedbackPage from '@/pages/admin/AdminFeedbackPage';
 import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage';
 import ResetPasswordPage from '@/pages/ResetPasswordPage';
@@ -131,6 +132,7 @@ function App() {
             <Route path="system" element={<AdminSystemPage />} />
             <Route path="usage" element={<AdminUsagePage />} />
             <Route path="logs" element={<AdminLogsPage />} />
+            <Route path="feedback" element={<AdminFeedbackPage />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<NotFoundPage />} />

@@ -36,6 +36,7 @@ import {
   Link as LinkIcon,
   ChevronRight,
   ChevronUp,
+  MessageSquarePlus,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -46,6 +47,7 @@ import { useSharingStore } from "@/stores/sharing-store";
 import { api } from "@/services/api";
 import type { Notebook, Source, ChatMessage } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
+import FeedbackModal from "@/components/FeedbackModal";
 import PptConfigModal from "@/components/PptConfigModal";
 import type { PptConfig } from "@/components/PptConfigModal";
 import MarkdownContent from "@/components/MarkdownContent";
@@ -283,6 +285,7 @@ export default function NotebookPage() {
   const [podcastLoading, setPodcastLoading] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [leftWidth, setLeftWidth] = useState(300);
   const [rightWidth, setRightWidth] = useState(340);
   const [isDragging, setIsDragging] = useState(false);
@@ -1242,6 +1245,13 @@ export default function NotebookPage() {
               <Users className="w-3.5 h-3.5" /> <span className="hidden md:inline">Share with Team</span>
             </button>
           )}
+          <button
+            onClick={() => setIsFeedbackOpen(true)}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Report Bug & Make a Wish"
+          >
+            <MessageSquarePlus className="w-4 h-4" />
+          </button>
           <div className="text-right hidden md:block">
             <div className="font-semibold text-sm">{user?.name || "User"}</div>
             <div className="text-xs text-slate-500">{user?.email}</div>
@@ -2312,10 +2322,13 @@ export default function NotebookPage() {
                   : 'Upload Sources'}
               </button>
             </div>
-            <p className="text-center text-xs text-slate-400 mt-4">Up to 50 files, 50 MB each.</p>
+            <p className="text-center text-xs text-slate-400 mt-4">Up to 100 files, 50 MB each.</p>
           </div>
         </div>
       )}
+
+      {/* Feedback Modal */}
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
   );
 }

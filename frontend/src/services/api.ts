@@ -1,5 +1,5 @@
 import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member } from "@/types/api";
-import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth, UsageStats, ChatLogItem } from "@/types/admin";
+import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth, UsageStats, ChatLogItem, FeedbackItem } from "@/types/admin";
 
 const API_BASE = "/api";
 
@@ -553,6 +553,53 @@ class ApiClient {
     if (params.limit) searchParams.set('limit', String(params.limit));
     if (params.status) searchParams.set('status', params.status);
     return this.request(`/admin/logs?${searchParams}`);
+  }
+
+  // Feedback
+  async submitFeedback(type: string, content: string, screenshot?: File): Promise<{ id: string }> {
+    const formData = new FormData();
+    formData.append('type', type);
+    formData.append('content', content);
+    if (screenshot) {
+      formData.append('screenshot', screenshot);
+    }
+
+    const headers: Record<string, string> = {};
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    }
+
+    const res = await fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(body.detail || `Request failed: ${res.status}`, res.status);
+    }
+
+    return res.json();
+  }
+
+  // Admin Feedback
+  async getAdminFeedback(params: { status?: string; type?: string; page?: number; limit?: number }): Promise<{
+    items: FeedbackItem[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.set('page', String(params.page));
+    if (params.limit) searchParams.set('limit', String(params.limit));
+    if (params.status) searchParams.set('status', params.status);
+    if (params.type) searchParams.set('type', params.type);
+    return this.request(`/admin/feedback?${searchParams}`);
+  }
+
+  async updateAdminFeedbackStatus(feedbackId: string): Promise<{ id: string; status: string }> {
+    return this.request(`/admin/feedback/${feedbackId}`, { method: 'PATCH' });
   }
 }
 

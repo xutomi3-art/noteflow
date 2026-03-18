@@ -50,11 +50,7 @@ services:
       - LLM_MODEL=qwen3.5-plus
       - LANG=zh_CN.UTF-8
       - LC_ALL=zh_CN.UTF-8
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-465}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
-      - SMTP_FROM=${SMTP_FROM:-}
+      - RESEND_API_KEY=re_TNip1JhN_GHgQMV69ADdT7VeLeLAyJb7w
       - APP_BASE_URL=${APP_BASE_URL:-https://noteflow.jotoai.com}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-test@noteflow.dev}
       - DOCMEE_API_KEY=ak_rJJlxF3vvFvvF2sujD

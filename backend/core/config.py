@@ -48,13 +48,17 @@ class Settings(BaseSettings):
     # Web Scraper (Jina Reader)
     WEB_SCRAPER_REMOVE_SELECTOR: str = "nav, footer, header, aside, .ads, .sidebar, .advertisement, .ad-wrapper, .recommend, .comments, .comment-section, [role='banner'], [role='navigation'], [role='complementary']"
 
-    # SMTP Email
+    # Email (Resend)
+    RESEND_API_KEY: str = ""
+    RESEND_FROM: str = "Noteflow <noreply@noteflow.jotoai.com>"
+    APP_BASE_URL: str = "http://10.200.0.112"
+
+    # Legacy SMTP (kept for backward compat, unused if Resend configured)
     SMTP_HOST: str = ""
     SMTP_PORT: int = 465
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = ""
-    APP_BASE_URL: str = "http://10.200.0.112"
 
     # Admin
     ADMIN_EMAIL: str = ""

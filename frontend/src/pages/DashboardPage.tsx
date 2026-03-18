@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon } from 'lucide-react';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon, MessageSquarePlus } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { setPendingUploadFiles, setPendingUploadUrls } from '@/stores/pending-upload-store';
 import type { Notebook } from '@/types/api';
 import ShareModal from '@/components/sharing/ShareModal';
+import FeedbackModal from '@/components/FeedbackModal';
 
 const EMOJIS = ['📝', '🚀', '🔬', '📈', '💡', '💰', '⚡', '🎨', '🏷️', '📋', '⚙️', '📅', '🌟', '🎯', '📚', '🧪', '🔥', '🌈', '🎵', '🧠'];
 const COLORS = ['#ecfccb', '#dbeafe', '#d1fae5', '#fef08a', '#fed7aa', '#f3e8ff', '#cffafe', '#fce7f3', '#e0e7ff', '#ffedd5'];
@@ -68,6 +69,7 @@ export default function DashboardPage() {
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
   });
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -318,6 +320,14 @@ export default function DashboardPage() {
           <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded-md">Beta</span>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsFeedbackOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Report Bug & Make a Wish"
+          >
+            <MessageSquarePlus className="w-4 h-4" />
+            <span className="hidden md:inline">Feedback</span>
+          </button>
           <div className="text-right hidden md:block">
             <div className="font-semibold text-sm">{userName}</div>
             <div className="text-xs text-slate-500">{user?.email}</div>
@@ -772,7 +782,7 @@ export default function DashboardPage() {
                     </button>
                   )}
                 </div>
-                <p className="text-center text-xs text-slate-400 mt-4">Up to 50 files, 50 MB each.</p>
+                <p className="text-center text-xs text-slate-400 mt-4">Up to 100 files, 50 MB each.</p>
               </>
           </div>
         </div>
@@ -790,6 +800,9 @@ export default function DashboardPage() {
         }}
         notebookId={teamNotebookId || ""}
       />
+
+      {/* Feedback Modal */}
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </div>
   );
 }
