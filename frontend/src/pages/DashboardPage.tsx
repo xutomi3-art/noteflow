@@ -495,39 +495,7 @@ export default function DashboardPage() {
                     className="h-36 flex items-center justify-center text-5xl group-hover:opacity-90 transition-opacity relative"
                     style={{ backgroundColor: cardColor(notebook) }}
                   >
-                    <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-                      <div className="relative" ref={openMenuId === notebook.id ? menuRef : undefined}>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
-                          className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
-                          title="More options"
-                        >
-                          <MoreHorizontal className="w-3.5 h-3.5 text-slate-400" />
-                        </button>
-                        {openMenuId === notebook.id && (
-                          <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenMenuId(null);
-                                setEditingNameValue(notebook.name);
-                                setEditingNameId(notebook.id);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                              Rename
-                            </button>
-                            <button
-                              onClick={(e) => { setOpenMenuId(null); handleDeleteNotebook(notebook, e); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                    <div className="absolute top-3 right-3 z-10">
                       <button
                         onClick={(e) => toggleStarred(notebook.id, e)}
                         className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
@@ -537,27 +505,61 @@ export default function DashboardPage() {
                     </div>
                     <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
-                  <div className="p-5">
-                    {editingNameId === notebook.id ? (
-                      <input
-                        type="text"
-                        value={editingNameValue}
-                        onChange={(e) => setEditingNameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleRenameNotebook(notebook.id, editingNameValue);
-                          if (e.key === 'Escape') setEditingNameId(null);
-                        }}
-                        onBlur={() => handleRenameNotebook(notebook.id, editingNameValue)}
-                        onClick={(e) => e.stopPropagation()}
-                        autoFocus
-                        maxLength={100}
-                        className="font-bold text-base mb-1.5 w-full text-slate-900 border border-slate-300 rounded-lg px-2 py-0.5 outline-none focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
-                      />
-                    ) : (
-                      <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
-                    )}
-                    <div className="text-[13px] text-slate-500 font-medium">
-                      {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
+                  <div className="p-5 flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      {editingNameId === notebook.id ? (
+                        <input
+                          type="text"
+                          value={editingNameValue}
+                          onChange={(e) => setEditingNameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameNotebook(notebook.id, editingNameValue);
+                            if (e.key === 'Escape') setEditingNameId(null);
+                          }}
+                          onBlur={() => handleRenameNotebook(notebook.id, editingNameValue)}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                          maxLength={100}
+                          className="font-bold text-base mb-1.5 w-full text-slate-900 border border-slate-300 rounded-lg px-2 py-0.5 outline-none focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                        />
+                      ) : (
+                        <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
+                      )}
+                      <div className="text-[13px] text-slate-500 font-medium">
+                        {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
+                      </div>
+                    </div>
+                    <div className="relative flex-shrink-0 ml-2" ref={openMenuId === notebook.id ? menuRef : undefined}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        title="More options"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                      {openMenuId === notebook.id && (
+                        <div className="absolute bottom-full right-0 mb-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(null);
+                              setEditingNameValue(notebook.name);
+                              setEditingNameId(notebook.id);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Rename
+                          </button>
+                          <button
+                            onClick={(e) => { setOpenMenuId(null); handleDeleteNotebook(notebook, e); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
