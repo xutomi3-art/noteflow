@@ -193,7 +193,7 @@ async def remove_member(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, "edit"):
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, "share"):
         raise HTTPException(status_code=403, detail="Only owner or editor can remove members")
 
     # Pending invites have manufactured IDs like "invite-{link_id}"
