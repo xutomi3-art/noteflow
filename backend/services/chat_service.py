@@ -406,7 +406,8 @@ The uploaded documents do not contain information relevant to this question. Ple
         MAX_HISTORY_ROUNDS = 30
         MAX_HISTORY_CHARS = 60000
         history = await get_chat_history(db, notebook_id, user_id)
-        history = [h for h in history if h.id != user_msg.id]
+        # Filter out current message and error messages (they poison the context)
+        history = [h for h in history if h.id != user_msg.id and not h.content.strip().startswith("[Error:")]
         recent = history[-(MAX_HISTORY_ROUNDS * 2):]
         history_messages = []
         history_chars = 0
@@ -458,8 +459,14 @@ Follow these rules strictly:
         full_response = ""
         t_llm_start = time.time()
         async for token in qwen_client.stream_chat(messages, enable_search=web_search):
-            if token.startswith("\n\n[Error:") and "maximum context length" in token:
-                friendly = "Selected sources contain too much data. Please select fewer sources and try again."
+            if token.startswith("\n\n[Error:"):
+                # Don't save error tokens to full_response (prevents poisoning chat history)
+                if "maximum context length" in token:
+                    friendly = "Selected sources contain too much data. Please select fewer sources and try again."
+                elif "内容安全审核" in token or "content filter" in token.lower():
+                    friendly = "内容安全审核误拦截，请尝试换个方式提问或减少勾选的文档。"
+                else:
+                    friendly = token.replace("\n\n[Error: ", "").rstrip("]")
                 yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
                 return
             else:
