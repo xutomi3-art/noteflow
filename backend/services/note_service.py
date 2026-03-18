@@ -34,6 +34,17 @@ async def list_notes(db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUI
     return list(result.scalars().all())
 
 
+async def update_note(db: AsyncSession, note_id: uuid.UUID, content: str) -> SavedNote | None:
+    result = await db.execute(select(SavedNote).where(SavedNote.id == note_id))
+    note = result.scalar_one_or_none()
+    if note is None:
+        return None
+    note.content = content
+    await db.commit()
+    await db.refresh(note)
+    return note
+
+
 async def delete_note(db: AsyncSession, note_id: uuid.UUID) -> bool:
     result = await db.execute(select(SavedNote).where(SavedNote.id == note_id))
     note = result.scalar_one_or_none()

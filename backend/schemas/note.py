@@ -8,6 +8,10 @@ class SaveNoteRequest(BaseModel):
     source_message_id: str | None = None
 
 
+class UpdateNoteRequest(BaseModel):
+    content: str
+
+
 class SavedNoteResponse(BaseModel):
     id: str
     notebook_id: str
