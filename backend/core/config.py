@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # Email (Resend)
     RESEND_API_KEY: str = ""
-    RESEND_FROM: str = "Noteflow <noreply@noteflow.jotoai.com>"
+    RESEND_FROM: str = ""
     APP_BASE_URL: str = "http://10.200.0.112"
 
     # Legacy SMTP (kept for backward compat, unused if Resend configured)
