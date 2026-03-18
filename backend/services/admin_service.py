@@ -140,14 +140,13 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
         headers={"Authorization": f"Bearer {settings.RAGFLOW_API_KEY}"},
     )
 
-    # MinerU — POST /file_parse without a file: healthy returns 422, broken returns 500
+    # MinerU — GET /gradio_api/info (Gradio API info endpoint)
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             start = datetime.now()
-            resp = await client.post(f"{settings.MINERU_BASE_URL}/file_parse")
+            resp = await client.get(f"{settings.MINERU_BASE_URL}/gradio_api/info")
             latency = (datetime.now() - start).total_seconds() * 1000
-            if resp.status_code == 422:
-                # 422 = service is up and models are loaded, just missing file param
+            if resp.status_code == 200:
                 services["mineru"] = {"status": "ok", "latency_ms": round(latency), "message": None}
             else:
                 services["mineru"] = {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}"}

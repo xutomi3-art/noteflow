@@ -190,13 +190,13 @@ Each test case corresponds to a bug that was found and fixed. These must pass on
 - **Expected:** Bottom disclaimer is static, never changes
 
 ### TC-019: Dynamic Excel token budget
-- **Bug:** Fixed 60K char budget for all Excel regardless of count — wasteful for 1 file, insufficient for many
-- **Fix:** Dynamic budget: 1 matched→60K, 2→80K, 3+→min(25K×n, 80K)
+- **Bug:** Fixed char budget for all Excel regardless of count — wasteful for 1 file, insufficient for many
+- **Fix:** Dynamic budget scaled for Qwen3.5-Plus 1M context: 1 matched→200K, 2→300K, 3+→min(150K×n, 600K)
 - **Steps:**
-  1. Select 1 Excel source → ask question → check backend log: "Excel budget: 1 matched tables, 60000 char limit"
-  2. Ask question matching 2 Excel files → check log: "80000 char limit"
-  3. Ask question matching 5 Excel files → check log: "80000 char limit" (capped)
-- **Expected:** Budget adjusts based on matched Excel count, capped at 80K
+  1. Select 1 Excel source → ask question → check backend log: "Excel budget: 1 matched tables, 200000 char limit"
+  2. Ask question matching 2 Excel files → check log: "300000 char limit"
+  3. Ask question matching 5 Excel files → check log: "600000 char limit" (capped)
+- **Expected:** Budget adjusts based on matched Excel count, capped at 600K
 
 ### TC-020: Token overflow shows friendly error
 - **Bug:** Raw API error "maximum context length is 131072 tokens" shown to user
