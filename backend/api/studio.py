@@ -593,6 +593,7 @@ async def generate_content(
         raise HTTPException(status_code=400, detail=f"Invalid type. Allowed: {list(PROMPTS.keys())}")
 
     source_ids = body.source_ids if body else None
+    logger.info("Studio %s: received source_ids=%s", content_type, source_ids)
     t_start = time.time()
     context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
     t_context = time.time()
