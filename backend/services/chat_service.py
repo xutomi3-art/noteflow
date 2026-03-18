@@ -474,6 +474,21 @@ Follow these rules strictly:
                     friendly = "内容安全审核误拦截，请尝试换个方式提问或减少勾选的文档。"
                 else:
                     friendly = token.replace("\n\n[Error: ", "").rstrip("]")
+                # Save error to ChatLog so admin panel shows it correctly
+                try:
+                    err_log = ChatLog(
+                        notebook_id=notebook_id,
+                        user_id=user_id,
+                        message_preview=message[:200],
+                        total_duration=round(time.time() - t_start, 2),
+                        status="error",
+                        error_message=friendly[:500],
+                        thinking_mode=False,
+                    )
+                    db.add(err_log)
+                    await db.commit()
+                except Exception:
+                    pass
                 yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
                 return
             else:
