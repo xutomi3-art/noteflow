@@ -133,12 +133,39 @@ export default function AdminLLMPage() {
 
       {/* Token Budget Info */}
       <div className="bg-gray-50 rounded-xl border border-gray-100 p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Token Budget</h3>
-        <p className="text-sm text-gray-600 mb-3">
-          Model: <span className="font-medium">Qwen3.5-Plus</span> | Context: <span className="font-medium">1,000,000 tokens</span> | Max Output: <span className="font-medium">65,536 tokens</span>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Token Budget</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Model: <span className="font-medium text-gray-700">Qwen3.5-Plus</span> &middot; Context: <span className="font-medium text-gray-700">1,000,000 tokens</span> &middot; Max Output: <span className="font-medium text-gray-700">65,536 tokens</span>
         </p>
-        <div className="text-sm text-gray-600">
-          <p className="font-medium text-gray-700 mb-1">Pricing (per million tokens):</p>
+
+        {/* Budget Allocation */}
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-gray-600 mb-2">Current Allocation</p>
+          <div className="space-y-1.5">
+            {[
+              { label: "System Prompt", tokens: "~1K", pct: 0.1, color: "bg-slate-400" },
+              { label: "Chat History", tokens: "~30K (30 rounds)", pct: 3, color: "bg-blue-400" },
+              { label: "RAG Context", tokens: "~20K (top-10 chunks)", pct: 2, color: "bg-emerald-400" },
+              { label: "Excel Context (dynamic)", tokens: "~100-300K", pct: 20, color: "bg-amber-400" },
+            ].map(({ label, tokens, pct, color }) => (
+              <div key={label} className="flex items-center gap-2">
+                <div className="w-[120px] text-xs text-gray-600 truncate">{label}</div>
+                <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+                  <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.max(pct, 1)}%` }} />
+                </div>
+                <div className="w-[130px] text-xs text-gray-500 text-right">{tokens}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <div className="w-[120px] text-xs text-gray-600 truncate">Total Cap</div>
+            <div className="text-xs text-gray-500">Normal: <span className="font-medium text-gray-700">~250K tokens</span> &middot; With Excel: <span className="font-medium text-gray-700">~800K tokens</span></div>
+          </div>
+        </div>
+
+        {/* Pricing */}
+        <div className="border-t border-gray-200 pt-3">
+          <p className="text-xs font-semibold text-gray-600 mb-2">Pricing (per million tokens)</p>
           <div className="grid grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-gray-500">
             <span>&le;128K:</span><span>&yen;0.8 input</span><span>&yen;4.8 output</span>
             <span>128K&ndash;256K:</span><span>&yen;2.0 input</span><span>&yen;12 output</span>
