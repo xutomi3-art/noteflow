@@ -543,7 +543,7 @@ export default function DashboardPage() {
                         <MoreHorizontal className="w-4 h-4" />
                       </button>
                       {openMenuId === notebook.id && (
-                        <div className="absolute bottom-full right-0 mb-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                        <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
