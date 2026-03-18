@@ -13,7 +13,7 @@ export default defineConfig({
   ],
   outputDir: 'e2e/test-results',
   use: {
-    baseURL: 'https://localhost',
+    baseURL: process.env.E2E_BASE_URL || 'https://noteflow.jotoai.com',
     ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',

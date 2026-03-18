@@ -3,7 +3,7 @@
  * - Studio panel renders
  * - Summary button visible
  * - FAQ button visible
- * - Study Guide button visible
+ * - Action Items button visible
  * - Saved Notes section visible
  */
 import { test, expect } from '@playwright/test';
@@ -54,23 +54,16 @@ test.describe('Studio Features', () => {
     await loginViaApi(page, testEmail, testPassword);
     await page.goto(`/notebook/${notebookId}`);
     await expect(page).toHaveURL(`/notebook/${notebookId}`, { timeout: 15000 });
+    // Wait for notebook content to render
+    await expect(page.getByRole('heading', { name: /sources/i })).toBeVisible({ timeout: 15000 });
   });
 
-  test('studio panel or button is visible', async ({ page }) => {
-    // Studio might be a right panel or a button/tab
-    const studioBtn = page.locator('button').filter({ hasText: /studio/i }).first();
-    const studioPanel = page.locator('[class*="studio"]').first();
-
-    const isVisible = await studioBtn.isVisible({ timeout: 5000 })
-      .catch(() => false) || await studioPanel.isVisible({ timeout: 5000 }).catch(() => false);
-
-    expect(isVisible).toBeTruthy();
+  test('studio panel heading is visible', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'Studio', exact: true })).toBeVisible({ timeout: 10000 });
   });
 
   test('summary button or option is present', async ({ page }) => {
-    // Summary could be in Studio panel
-    const summaryEl = page.locator('button, [role="button"]').filter({ hasText: /summary/i }).first();
-    await expect(summaryEl).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: /summary/i })).toBeVisible({ timeout: 10000 });
   });
 
   test('FAQ option is present', async ({ page }) => {
@@ -78,13 +71,13 @@ test.describe('Studio Features', () => {
     await expect(faqEl).toBeVisible({ timeout: 10000 });
   });
 
-  test('study guide option is present', async ({ page }) => {
-    const studyEl = page.locator('button, [role="button"]').filter({ hasText: /study guide/i }).first();
-    await expect(studyEl).toBeVisible({ timeout: 10000 });
+  test('action items option is present', async ({ page }) => {
+    const actionItemsEl = page.getByRole('button', { name: /action items/i }).first();
+    await expect(actionItemsEl).toBeVisible({ timeout: 10000 });
   });
 
   test('saved notes section is present', async ({ page }) => {
-    const savedNotesEl = page.locator('text=/saved notes/i').first();
+    const savedNotesEl = page.getByRole('heading', { name: /saved notes/i });
     await expect(savedNotesEl).toBeVisible({ timeout: 10000 });
   });
 

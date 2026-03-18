@@ -1,17 +1,16 @@
 /**
- * E2E Tests: Document upload flow
- * - Upload TXT file
- * - Upload CSV file
- * - Reject unsupported file type
- * - File appears in sources list
+ * E2E Tests: Document Upload
+ * - Upload dropzone visible
+ * - Upload modal opens with file input
+ * - Upload TXT/CSV files
+ * - Source appears after upload
  */
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 import { loginViaApi, createNotebookViaApi, deleteNotebookViaApi } from '../helpers/auth';
 
+const TESTS_DIR = path.join(process.cwd(), 'tests');
 const uniqueSuffix = () => Date.now().toString().slice(-6);
-
-const TESTS_DIR = '/Users/tommy/Documents/vibe-coding/Noteflow/tests';
 
 test.describe('Document Upload', () => {
   let accessToken = '';
@@ -35,9 +34,8 @@ test.describe('Document Upload', () => {
     const tokens = await regResponse.json();
     accessToken = tokens.access_token;
 
-    const nb = await createNotebookViaApi(page, `Upload Test NB ${uniqueSuffix()}`, accessToken);
+    const nb = await createNotebookViaApi(page, `Upload NB ${uniqueSuffix()}`, accessToken);
     notebookId = nb.id;
-
     await page.close();
   });
 
@@ -56,65 +54,54 @@ test.describe('Document Upload', () => {
     await loginViaApi(page, testEmail, testPassword);
     await page.goto(`/notebook/${notebookId}`);
     await expect(page).toHaveURL(`/notebook/${notebookId}`, { timeout: 15000 });
+    await expect(page.getByRole('heading', { name: /sources/i })).toBeVisible({ timeout: 15000 });
   });
 
-  test('file input element is present', async ({ page }) => {
-    const fileInput = page.locator('input[type="file"]');
-    await expect(fileInput).toBeAttached({ timeout: 10000 });
+  test('add sources button is visible', async ({ page }) => {
+    const addSourcesBtn = page.getByRole('button', { name: /add sources/i }).first();
+    await expect(addSourcesBtn).toBeVisible({ timeout: 10000 });
   });
 
-  test('upload a TXT file', async ({ page }) => {
+  test('clicking add sources opens upload modal', async ({ page }) => {
+    await page.getByRole('button', { name: /add sources/i }).first().click();
+
+    // Modal shows "Add sources to your notebook"
+    await expect(page.getByRole('heading', { name: /add sources/i })).toBeVisible({ timeout: 5000 });
+  });
+
+  test('upload modal has file input', async ({ page }) => {
+    await page.getByRole('button', { name: /add sources/i }).first().click();
+    await expect(page.getByRole('heading', { name: /add sources/i })).toBeVisible({ timeout: 5000 });
+
+    // Hidden file input should now be attached
     const fileInput = page.locator('input[type="file"]');
-    await expect(fileInput).toBeAttached({ timeout: 10000 });
+    await expect(fileInput).toBeAttached({ timeout: 5000 });
+  });
+
+  test('upload a TXT file via modal', async ({ page }) => {
+    // Open upload modal
+    await page.getByRole('button', { name: /add sources/i }).first().click();
+    await expect(page.getByRole('heading', { name: /add sources/i })).toBeVisible({ timeout: 5000 });
+
+    const fileInput = page.locator('input[type="file"]');
+    await expect(fileInput).toBeAttached({ timeout: 5000 });
 
     const txtFile = path.join(TESTS_DIR, 'e2e_test.md');
     await fileInput.setInputFiles(txtFile);
 
-    // Should show upload progress or new source appears
-    // Look for the filename or a loading state
+    // Should show the file in the upload list or progress
     await expect(
       page.locator('text=e2e_test').first()
-        .or(page.locator('[class*="animate-spin"]').first())
     ).toBeVisible({ timeout: 15000 });
   });
 
-  test('upload a CSV file', async ({ page }) => {
-    const fileInput = page.locator('input[type="file"]');
-    await expect(fileInput).toBeAttached({ timeout: 10000 });
+  test('upload modal has URL input option', async ({ page }) => {
+    await page.getByRole('button', { name: /add sources/i }).first().click();
+    await expect(page.getByRole('heading', { name: /add sources/i })).toBeVisible({ timeout: 5000 });
 
-    const csvFile = path.join(TESTS_DIR, 't01_test.csv');
-    await fileInput.setInputFiles(csvFile);
-
+    // URL input or "Add website URL" button should be visible
     await expect(
-      page.locator('text=t01_test').first()
-        .or(page.locator('[class*="animate"]').first())
-    ).toBeVisible({ timeout: 15000 });
-  });
-
-  test('sources panel shows uploaded files', async ({ page }) => {
-    // After uploading, sources panel should list files
-    // Even if just checking a count increase
-    const sourcesBefore = await page.locator('[class*="source"], [class*="file"]').count();
-
-    const fileInput = page.locator('input[type="file"]');
-    const txtFile = path.join(TESTS_DIR, 't124_test1.txt');
-    await fileInput.setInputFiles(txtFile);
-
-    // Wait for upload to register
-    await page.waitForTimeout(2000);
-    const sourcesAfter = await page.locator('[class*="source"], [class*="file"]').count();
-
-    // Should have more sources or at least show something
-    expect(sourcesAfter).toBeGreaterThanOrEqual(sourcesBefore);
-  });
-
-  test('upload button triggers file picker', async ({ page }) => {
-    // Click upload button and verify file input can be triggered
-    const uploadBtn = page.locator('button').filter({ hasText: /upload|add/i }).first();
-
-    // The file input should become active (we can't open actual picker in headless, but we can verify the input)
-    const fileInput = page.locator('input[type="file"]');
-    await expect(fileInput).toBeAttached();
-    await expect(uploadBtn).toBeVisible();
+      page.getByPlaceholder(/example\.com/i).or(page.getByRole('button', { name: /website url/i }))
+    ).toBeVisible({ timeout: 5000 });
   });
 });

@@ -53,32 +53,31 @@ test.describe('Notebook Sharing', () => {
     await loginViaApi(page, testEmail, testPassword);
     await page.goto(`/notebook/${notebookId}`);
     await expect(page).toHaveURL(`/notebook/${notebookId}`, { timeout: 15000 });
+    // Wait for notebook content to render
+    await expect(page.getByRole('heading', { name: /sources/i })).toBeVisible({ timeout: 15000 });
   });
 
   test('share button is visible in notebook', async ({ page }) => {
-    const shareBtn = page.locator('button').filter({ hasText: /share/i }).first().or(
-      page.locator('[aria-label*="share"]').first()
-    );
+    const shareBtn = page.getByRole('button', { name: /share with team/i });
     await expect(shareBtn).toBeVisible({ timeout: 10000 });
   });
 
   test('clicking share opens share modal', async ({ page }) => {
-    const shareBtn = page.locator('button').filter({ hasText: /share/i }).first();
+    const shareBtn = page.getByRole('button', { name: /share with team/i });
     await shareBtn.click();
 
-    // Modal should appear
-    const modal = page.locator('[role="dialog"], [class*="modal"]').first();
-    await expect(modal).toBeVisible({ timeout: 5000 });
+    // Modal should show "Invite your team members" heading
+    await expect(page.getByRole('heading', { name: /invite/i })).toBeVisible({ timeout: 5000 });
   });
 
   test('share modal has invite link section', async ({ page }) => {
-    const shareBtn = page.locator('button').filter({ hasText: /share/i }).first();
+    const shareBtn = page.getByRole('button', { name: /share with team/i });
     await shareBtn.click();
 
-    // Look for link or invite section in the modal
-    await expect(
-      page.locator('text=/invite|share link|link/i').first()
-    ).toBeVisible({ timeout: 10000 });
+    // Look for email input in the share modal
+    await expect(page.getByPlaceholder(/email/i)).toBeVisible({ timeout: 10000 });
+    // And invite link option
+    await expect(page.getByRole('button', { name: /invite link/i })).toBeVisible();
   });
 
   test('invalid join token shows error page', async ({ page }) => {
@@ -91,14 +90,19 @@ test.describe('Notebook Sharing', () => {
   });
 
   test('share modal can be closed', async ({ page }) => {
-    const shareBtn = page.locator('button').filter({ hasText: /share/i }).first();
+    const shareBtn = page.getByRole('button', { name: /share with team/i });
     await shareBtn.click();
 
-    const modal = page.locator('[role="dialog"], [class*="modal"]').first();
-    await expect(modal).toBeVisible({ timeout: 5000 });
+    const inviteHeading = page.getByRole('heading', { name: /invite/i });
+    await expect(inviteHeading).toBeVisible({ timeout: 5000 });
 
-    // Close via X button or Escape key
-    await page.keyboard.press('Escape');
-    await expect(modal).not.toBeVisible({ timeout: 5000 });
+    // Close via "Finish & Open Notebook" button or Escape
+    const finishBtn = page.getByRole('button', { name: /finish/i });
+    if (await finishBtn.isVisible({ timeout: 2000 })) {
+      await finishBtn.click();
+    } else {
+      await page.keyboard.press('Escape');
+    }
+    await expect(inviteHeading).not.toBeVisible({ timeout: 5000 });
   });
 });

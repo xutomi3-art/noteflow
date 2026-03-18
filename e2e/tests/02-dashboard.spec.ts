@@ -51,26 +51,27 @@ test.describe('Dashboard', () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
-  test('dashboard shows "New Notebook" button', async ({ page }) => {
-    const newBtn = page.getByRole('button', { name: /new notebook/i });
+  test('dashboard shows "Create New" button', async ({ page }) => {
+    const newBtn = page.getByRole('button', { name: /create new/i });
     await expect(newBtn.first()).toBeVisible();
   });
 
   test('create notebook via modal and navigate to it', async ({ page }) => {
     const name = `Test NB ${uniqueSuffix()}`;
 
-    // Click the New Notebook button
-    await page.getByRole('button', { name: /new notebook/i }).first().click();
+    // Hover to open dropdown, then click "Personal Notebook"
+    await page.getByRole('button', { name: /create new/i }).first().hover();
+    await page.getByRole('button', { name: /personal notebook/i }).click();
 
-    // Modal appears
-    const modalInput = page.locator('input[type="text"]').last();
-    await expect(modalInput).toBeVisible({ timeout: 5000 });
+    // Modal appears with "Notebook name" input
+    const nameInput = page.getByRole('textbox', { name: /notebook name/i });
+    await expect(nameInput).toBeVisible({ timeout: 5000 });
 
-    await modalInput.clear();
-    await modalInput.fill(name);
+    await nameInput.clear();
+    await nameInput.fill(name);
 
-    const createBtn = page.getByRole('button', { name: /^create$/i });
-    await createBtn.click();
+    // Click "Create Notebook" button
+    await page.getByRole('button', { name: /create notebook/i }).click();
 
     // Should navigate to the new notebook
     await expect(page).toHaveURL(/\/notebook\//, { timeout: 15000 });
@@ -108,26 +109,15 @@ test.describe('Dashboard', () => {
   });
 
   test('logout from dashboard redirects to login', async ({ page }) => {
-    // Find and click user avatar/menu button
-    // The dashboard has a user menu in the top right
-    const avatarBtn = page.locator('button').filter({ has: page.locator('[class*="rounded-full"]') }).last();
-    if (await avatarBtn.isVisible({ timeout: 3000 })) {
-      await avatarBtn.click();
-      const logoutBtn = page.getByRole('button', { name: /sign out|log out/i }).or(
-        page.locator('button').filter({ hasText: /sign out|logout/i })
-      ).first();
-      if (await logoutBtn.isVisible({ timeout: 2000 })) {
-        await logoutBtn.click();
-        await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
-        return;
-      }
-    }
-    // Fallback: clear tokens manually and verify redirect
-    await page.evaluate(() => {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-    });
-    await page.goto('/dashboard');
+    // Click the avatar button to open dropdown
+    await page.getByRole('button', { name: /^[A-Z]$/ }).last().click();
+
+    // Click "Log out" button
+    const logoutBtn = page.getByRole('button', { name: /log out/i });
+    await expect(logoutBtn).toBeVisible({ timeout: 3000 });
+    await logoutBtn.click();
+
+    await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
     await expect(page).toHaveURL(/\/login/);
   });
 });
