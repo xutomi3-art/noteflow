@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon, MessageSquarePlus } from 'lucide-react';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon, Bug, MoreHorizontal, Pencil } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
+import { api } from '@/services/api';
 import { setPendingUploadFiles, setPendingUploadUrls } from '@/stores/pending-upload-store';
 import type { Notebook } from '@/types/api';
 import ShareModal from '@/components/sharing/ShareModal';
@@ -70,6 +71,10 @@ export default function DashboardPage() {
     } catch { return new Set(); }
   });
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState('');
+  const menuRef = useRef<HTMLDivElement>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -108,6 +113,33 @@ export default function DashboardPage() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [createModalType]);
+
+  // Close card menu dropdown when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuId]);
+
+  const handleRenameNotebook = async (notebookId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      setEditingNameId(null);
+      return;
+    }
+    try {
+      await api.updateNotebook(notebookId, { name: trimmed });
+      await fetchNotebooks();
+    } catch {
+      // silently fail
+    }
+    setEditingNameId(null);
+  };
 
   const personalNotebooks = notebooks.filter(
     (nb) => nb.user_role === 'owner' && !nb.is_shared
@@ -325,8 +357,8 @@ export default function DashboardPage() {
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
             title="Report Bug & Make a Wish"
           >
-            <MessageSquarePlus className="w-4 h-4" />
-            <span className="hidden md:inline">Feedback</span>
+            <Bug className="w-4 h-4" />
+            <span className="hidden md:inline">Report Bug</span>
           </button>
           <div className="text-right hidden md:block">
             <div className="font-semibold text-sm">{userName}</div>
@@ -464,13 +496,38 @@ export default function DashboardPage() {
                     style={{ backgroundColor: cardColor(notebook) }}
                   >
                     <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-                      <button
-                        onClick={(e) => handleDeleteNotebook(notebook, e)}
-                        className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Delete notebook"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500" />
-                      </button>
+                      <div className="relative" ref={openMenuId === notebook.id ? menuRef : undefined}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
+                          className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
+                          title="More options"
+                        >
+                          <MoreHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                        </button>
+                        {openMenuId === notebook.id && (
+                          <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(null);
+                                setEditingNameValue(notebook.name);
+                                setEditingNameId(notebook.id);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              Rename
+                            </button>
+                            <button
+                              onClick={(e) => { setOpenMenuId(null); handleDeleteNotebook(notebook, e); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={(e) => toggleStarred(notebook.id, e)}
                         className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
@@ -481,7 +538,24 @@ export default function DashboardPage() {
                     <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
                   <div className="p-5">
-                    <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
+                    {editingNameId === notebook.id ? (
+                      <input
+                        type="text"
+                        value={editingNameValue}
+                        onChange={(e) => setEditingNameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameNotebook(notebook.id, editingNameValue);
+                          if (e.key === 'Escape') setEditingNameId(null);
+                        }}
+                        onBlur={() => handleRenameNotebook(notebook.id, editingNameValue)}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                        maxLength={100}
+                        className="font-bold text-base mb-1.5 w-full text-slate-900 border border-slate-300 rounded-lg px-2 py-0.5 outline-none focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                      />
+                    ) : (
+                      <h3 className="font-bold text-base mb-1.5 truncate text-slate-900">{notebook.name}</h3>
+                    )}
                     <div className="text-[13px] text-slate-500 font-medium">
                       {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
                     </div>
@@ -542,13 +616,38 @@ export default function DashboardPage() {
                     </div>
                     <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
                       {notebook.user_role === 'owner' && (
-                        <button
-                          onClick={(e) => handleDeleteNotebook(notebook, e)}
-                          className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                          title="Delete notebook"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-500" />
-                        </button>
+                        <div className="relative" ref={openMenuId === notebook.id ? menuRef : undefined}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
+                            className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
+                            title="More options"
+                          >
+                            <MoreHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                          </button>
+                          {openMenuId === notebook.id && (
+                            <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuId(null);
+                                  setEditingNameValue(notebook.name);
+                                  setEditingNameId(notebook.id);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Rename
+                              </button>
+                              <button
+                                onClick={(e) => { setOpenMenuId(null); handleDeleteNotebook(notebook, e); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                       <button
                         onClick={(e) => toggleStarred(notebook.id, e)}
@@ -560,12 +659,29 @@ export default function DashboardPage() {
                     <span className="text-6xl drop-shadow-sm">{notebook.emoji}</span>
                   </div>
                   <div className="p-5">
+                    {editingNameId === notebook.id ? (
+                      <input
+                        type="text"
+                        value={editingNameValue}
+                        onChange={(e) => setEditingNameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameNotebook(notebook.id, editingNameValue);
+                          if (e.key === 'Escape') setEditingNameId(null);
+                        }}
+                        onBlur={() => handleRenameNotebook(notebook.id, editingNameValue)}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                        maxLength={100}
+                        className="font-bold text-base mb-1.5 w-full text-slate-900 border border-slate-300 rounded-lg px-2 py-0.5 outline-none focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                      />
+                    ) : (
                     <h3 className="font-bold text-base mb-1.5 truncate text-slate-900 flex items-center gap-2">
                       {notebook.name}
                       {isNewInvite(notebook) && (
                         <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-600 rounded-md shrink-0">New</span>
                       )}
                     </h3>
+                    )}
                     <div className="text-[13px] text-slate-500 font-medium">
                       {notebook.user_role !== 'owner' ? `Shared with you` : `${notebook.member_count} ${notebook.member_count === 1 ? 'member' : 'members'}`}
                     </div>

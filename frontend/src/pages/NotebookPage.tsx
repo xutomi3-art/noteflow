@@ -36,7 +36,7 @@ import {
   Link as LinkIcon,
   ChevronRight,
   ChevronUp,
-  MessageSquarePlus,
+  Bug,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -1250,7 +1250,7 @@ export default function NotebookPage() {
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
             title="Report Bug & Make a Wish"
           >
-            <MessageSquarePlus className="w-4 h-4" />
+            <Bug className="w-4 h-4" />
           </button>
           <div className="text-right hidden md:block">
             <div className="font-semibold text-sm">{user?.name || "User"}</div>
