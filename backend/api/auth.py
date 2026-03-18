@@ -37,7 +37,7 @@ _DEMO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "
 _DEFAULT_NOTEBOOKS = [
     # Order: last created appears first on dashboard
     {
-        "name": "My Research", "emoji": "🔬", "cover_color": "#dbeafe",
+        "name": "Sample Research", "emoji": "🔬", "cover_color": "#dbeafe",
         "sources": [
             "ai-education-research-report.md",
             "ai-education-cost-analysis.xlsx",
@@ -57,7 +57,7 @@ _DEFAULT_NOTEBOOKS = [
         },
     },
     {
-        "name": "Meeting Notes", "emoji": "📋", "cover_color": "#fef08a",
+        "name": "Sample Meeting Notes", "emoji": "📋", "cover_color": "#fef08a",
         "sources": [
             "meeting-2026-03-03-kickoff.md",
             "meeting-2026-03-10-review.md",
