@@ -1792,18 +1792,6 @@ export default function NotebookPage() {
                     : "border-slate-200 focus-within:ring-2 focus-within:ring-[#5b8c15]/20 focus-within:border-[#5b8c15]"
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                  className={`ml-1 w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
-                    webSearchEnabled
-                      ? "bg-[#5b8c15]/10 text-[#5b8c15]"
-                      : "text-slate-300 hover:text-slate-500"
-                  }`}
-                  title={webSearchEnabled ? "Web search enabled" : "Enable web search"}
-                >
-                  <Globe className="w-4 h-4" />
-                </button>
                 <input
                   type="text"
                   placeholder={
@@ -1813,13 +1801,25 @@ export default function NotebookPage() {
                         ? "Waiting for sources to finish processing..."
                         : "Start typing..."
                   }
-                  className="flex-1 bg-transparent border-none outline-none px-2 text-[14px] text-slate-700 disabled:cursor-not-allowed"
+                  className="flex-1 bg-transparent border-none outline-none px-4 text-[14px] text-slate-700 disabled:cursor-not-allowed"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={isStreaming || hasProcessingSelected || readySources.length === 0}
                 />
                 <div className="flex items-center gap-2 pr-1">
+                  <button
+                    type="button"
+                    onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
+                      webSearchEnabled
+                        ? "bg-[#5b8c15] text-white"
+                        : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
+                    }`}
+                  >
+                    <Globe className="w-3 h-3 inline-block mr-1 -mt-px" />
+                    Web
+                  </button>
                   <span className="text-[11px] text-slate-400 font-medium px-2">
                     {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
                   </span>
