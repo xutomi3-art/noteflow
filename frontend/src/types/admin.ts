@@ -73,6 +73,29 @@ export interface FeedbackItem {
   resolved_at: string | null;
 }
 
+export interface HostResources {
+  cpu_percent: number;
+  memory_percent: number;
+  memory_used_gb: number;
+  memory_total_gb: number;
+  disk_percent: number;
+  disk_used_gb: number;
+  disk_total_gb: number;
+}
+
+export interface ContainerResources {
+  name: string;
+  cpu_percent: number;
+  memory_mb: number;
+  memory_limit_mb: number;
+  memory_percent: number;
+}
+
+export interface ResourcesData {
+  host: HostResources;
+  containers: ContainerResources[];
+}
+
 export interface UsageStats {
   period_days: number;
   total_queries: number;

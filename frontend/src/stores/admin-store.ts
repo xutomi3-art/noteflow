@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/services/api";
-import type { DashboardStats, AdminUser, SystemSettingItem, ServiceHealth, UsageStats, ChatLogItem } from "@/types/admin";
+import type { DashboardStats, AdminUser, SystemSettingItem, ServiceHealth, ResourcesData, UsageStats, ChatLogItem } from "@/types/admin";
 
 interface AdminState {
   stats: DashboardStats | null;
@@ -10,6 +10,7 @@ interface AdminState {
   usersSearch: string;
   settings: SystemSettingItem[];
   health: Record<string, ServiceHealth>;
+  resources: ResourcesData | null;
   usage: UsageStats | null;
   usagePeriod: number;
   isLoading: boolean;
@@ -22,6 +23,7 @@ interface AdminState {
   fetchSettings: () => Promise<void>;
   saveSettings: (settings: Record<string, string>) => Promise<void>;
   fetchHealth: () => Promise<void>;
+  fetchResources: () => Promise<void>;
   fetchUsage: (period?: number) => Promise<void>;
 
   logs: ChatLogItem[];
@@ -39,6 +41,7 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   usersSearch: "",
   settings: [],
   health: {},
+  resources: null,
   usage: null,
   usagePeriod: 7,
   isLoading: false,
@@ -113,6 +116,15 @@ export const useAdminStore = create<AdminState>((set, get) => ({
       set({ health });
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  fetchResources: async () => {
+    try {
+      const resources = await api.getAdminResources();
+      set({ resources });
+    } catch {
+      // Resource monitoring may not be available
     }
   },
 

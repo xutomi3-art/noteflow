@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Users, BookOpen, FileText, HardDrive, Activity, RefreshCw, Loader2 } from 'lucide-react';
+import { Users, BookOpen, FileText, HardDrive, Activity, Cpu, MemoryStick, Server } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -21,13 +21,23 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+function PercentBar({ value, warn = 80, danger = 90 }: { value: number; warn?: number; danger?: number }) {
+  const color = value >= danger ? 'bg-red-500' : value >= warn ? 'bg-amber-500' : 'bg-green-500';
+  return (
+    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.min(value, 100)}%` }} />
+    </div>
+  );
+}
+
 export default function AdminDashboardPage() {
-  const { stats, health, fetchDashboard, fetchHealth, isLoading } = useAdminStore();
+  const { stats, health, resources, fetchDashboard, fetchHealth, fetchResources, isLoading } = useAdminStore();
 
   useEffect(() => {
     fetchDashboard();
     fetchHealth();
-  }, [fetchDashboard, fetchHealth]);
+    fetchResources();
+  }, [fetchDashboard, fetchHealth, fetchResources]);
 
   const cards = [
     { label: 'Total Users', value: stats?.total_users ?? '-', icon: Users, color: '#5b8c15' },
@@ -59,6 +69,97 @@ export default function AdminDashboardPage() {
               <div className="text-sm text-gray-500 mt-1">{label}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Host Resources */}
+      {resources && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Server Resources</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* CPU */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Cpu size={14} className="text-blue-500" />
+                <span className="text-sm text-gray-600">CPU</span>
+                <span className="ml-auto text-sm font-semibold text-gray-900">{resources.host.cpu_percent}%</span>
+              </div>
+              <PercentBar value={resources.host.cpu_percent} />
+            </div>
+            {/* Memory */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <MemoryStick size={14} className="text-purple-500" />
+                <span className="text-sm text-gray-600">Memory</span>
+                <span className="ml-auto text-sm font-semibold text-gray-900">
+                  {resources.host.memory_used_gb}GB / {resources.host.memory_total_gb}GB
+                </span>
+              </div>
+              <PercentBar value={resources.host.memory_percent} />
+            </div>
+            {/* Disk */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <HardDrive size={14} className="text-amber-500" />
+                <span className="text-sm text-gray-600">Disk</span>
+                <span className="ml-auto text-sm font-semibold text-gray-900">
+                  {resources.host.disk_used_gb}GB / {resources.host.disk_total_gb}GB
+                </span>
+              </div>
+              <PercentBar value={resources.host.disk_percent} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Container Resources */}
+      {resources && resources.containers.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">
+            <div className="flex items-center gap-2">
+              <Server size={14} className="text-gray-500" />
+              Containers
+            </div>
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 text-xs border-b border-gray-100">
+                  <th className="pb-2 font-medium">Name</th>
+                  <th className="pb-2 font-medium w-[200px]">CPU</th>
+                  <th className="pb-2 font-medium w-[200px]">Memory</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resources.containers.map((c) => (
+                  <tr key={c.name} className="border-b border-gray-50 last:border-0">
+                    <td className="py-2.5 text-gray-800 font-medium">{c.name}</td>
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <PercentBar value={c.cpu_percent} warn={60} danger={80} />
+                        </div>
+                        <span className="text-xs text-gray-500 w-12 text-right">{c.cpu_percent}%</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <PercentBar value={c.memory_percent} warn={70} danger={85} />
+                        </div>
+                        <span className="text-xs text-gray-500 w-20 text-right">
+                          {c.memory_mb < 1024
+                            ? `${c.memory_mb}MB`
+                            : `${(c.memory_mb / 1024).toFixed(1)}GB`
+                          }
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
