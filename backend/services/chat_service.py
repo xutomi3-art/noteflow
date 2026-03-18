@@ -224,14 +224,18 @@ async def stream_chat(
             for chunk in chunks:
                 doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "")).lower()
                 doc_id = chunk.get("document_id", chunk.get("doc_id", ""))
-                # Match by doc_id
+                # Match by doc_id (exact)
                 if doc_id in excel_by_doc_id:
                     src = excel_by_doc_id[doc_id]
                     matched_excel[str(src.id)] = src
-                # Match by filename
-                for key, src in excel_by_filename.items():
-                    if key in doc_name or doc_name in key:
-                        matched_excel[str(src.id)] = src
+                # Match by filename (exact match on full name or base name)
+                if doc_name in excel_by_filename:
+                    src = excel_by_filename[doc_name]
+                    matched_excel[str(src.id)] = src
+
+            logger.info("Excel matching: %d Excel sources, %d matched from %d chunks. Matched: %s",
+                        len(excel_sources), len(matched_excel), len(chunks),
+                        [s.filename for s in matched_excel.values()])
 
             if matched_excel:
                 # Dynamic budget: generous with Qwen3.5-Plus 1M context
