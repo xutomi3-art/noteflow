@@ -54,8 +54,12 @@ class QwenClient:
                     if delta.content:
                         yield delta.content
         except Exception as e:
+            error_str = str(e)
             logger.error("LLM stream_chat failed: %s", e)
-            yield f"\n\n[Error: AI generation failed - {e}]"
+            if "data_inspection_failed" in error_str.lower() or "DataInspectionFailed" in error_str:
+                yield f"\n\n[Error: 内容安全审核误拦截，请尝试换个方式提问或减少勾选的文档。The AI content filter flagged this request — try rephrasing or selecting fewer sources.]"
+            else:
+                yield f"\n\n[Error: AI generation failed - {e}]"
 
     async def generate(
         self,
