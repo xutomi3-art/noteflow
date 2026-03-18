@@ -38,7 +38,7 @@ const STATUS_FILTERS = [
 function ExpandedRow({ log }: { log: ChatLogItem }) {
   return (
     <tr>
-      <td colSpan={9} className="px-4 py-3 bg-gray-50/80">
+      <td colSpan={11} className="px-4 py-3 bg-gray-50/80">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-xs">
           <div>
             <span className="text-gray-400">Model:</span>{' '}
@@ -176,6 +176,7 @@ export default function AdminLogsPage() {
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100 bg-gray-50/50">
                 <th className="px-4 py-3 font-medium w-8"></th>
+                <th className="px-4 py-3 font-medium">ID</th>
                 <th className="px-4 py-3 font-medium">Time</th>
                 <th className="px-4 py-3 font-medium">User</th>
                 <th className="px-4 py-3 font-medium">Notebook</th>
@@ -190,7 +191,7 @@ export default function AdminLogsPage() {
             <tbody className="divide-y divide-gray-50">
               {logs.length === 0 && !isLoading ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={11} className="px-4 py-12 text-center text-gray-400">
                     No logs found
                   </td>
                 </tr>
@@ -266,6 +267,9 @@ function LogRow({
       >
         <td className="px-4 py-2.5 text-gray-400">
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </td>
+        <td className="px-4 py-2.5 text-gray-400 font-mono text-[10px]">
+          {log.id?.slice(0, 8)}
         </td>
         <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-xs">
           {timeAgo(log.created_at)}
