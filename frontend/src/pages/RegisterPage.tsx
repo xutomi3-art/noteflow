@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -16,35 +16,33 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   // Microsoft OAuth via popup (same as LoginPage)
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'microsoft-oauth-callback') {
+        const { token, refresh } = event.data;
+        if (token && refresh) {
+          setTokens(token, refresh).then(() => {
+            navigate(searchParams.get('redirect') || '/dashboard', { replace: true });
+          });
+        }
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [setTokens, navigate, searchParams]);
+
   const handleMicrosoftLogin = useCallback(() => {
     const width = 500;
     const height = 700;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
-    const popup = window.open(
+    window.open(
       '/api/auth/microsoft',
       'microsoft-login',
       `width=${width},height=${height},left=${left},top=${top},popup=yes`
     );
-    const interval = setInterval(() => {
-      try {
-        if (!popup || popup.closed) { clearInterval(interval); return; }
-        const url = popup.location.href;
-        if (url.includes('/auth/callback')) {
-          const params = new URL(url).searchParams;
-          const token = params.get('token');
-          const refresh = params.get('refresh');
-          if (token && refresh) {
-            clearInterval(interval);
-            popup.close();
-            setTokens(token, refresh).then(() => {
-              navigate(searchParams.get('redirect') || '/dashboard', { replace: true });
-            });
-          }
-        }
-      } catch { /* cross-origin, keep polling */ }
-    }, 300);
-  }, [setTokens, navigate, searchParams]);
+  }, []);
 
   const passwordErrors = (() => {
     if (!password) return [];

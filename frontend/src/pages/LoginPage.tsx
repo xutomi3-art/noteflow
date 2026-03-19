@@ -21,43 +21,34 @@ export default function LoginPage() {
 
   // Microsoft OAuth via popup — avoids ms-sso.copilot.microsoft.com
   // redirect that is blocked in China (ERR_CONNECTION_RESET)
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'microsoft-oauth-callback') {
+        const { token, refresh } = event.data;
+        if (token && refresh) {
+          setTokens(token, refresh).then(() => {
+            const redirect = searchParams.get('redirect') || '/dashboard';
+            navigate(redirect, { replace: true });
+          });
+        }
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [setTokens, navigate, searchParams]);
+
   const handleMicrosoftLogin = useCallback(() => {
     const width = 500;
     const height = 700;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
-    const popup = window.open(
+    window.open(
       '/api/auth/microsoft',
       'microsoft-login',
       `width=${width},height=${height},left=${left},top=${top},popup=yes`
     );
-
-    // Poll for callback completion
-    const interval = setInterval(() => {
-      try {
-        if (!popup || popup.closed) {
-          clearInterval(interval);
-          return;
-        }
-        const url = popup.location.href;
-        if (url.includes('/auth/callback')) {
-          const params = new URL(url).searchParams;
-          const token = params.get('token');
-          const refresh = params.get('refresh');
-          if (token && refresh) {
-            clearInterval(interval);
-            popup.close();
-            setTokens(token, refresh).then(() => {
-              const redirect = searchParams.get('redirect') || '/dashboard';
-              navigate(redirect, { replace: true });
-            });
-          }
-        }
-      } catch {
-        // Cross-origin — popup is still on Microsoft's domain, keep polling
-      }
-    }, 300);
-  }, [setTokens, navigate, searchParams]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -12,14 +12,26 @@ export default function AuthCallbackPage() {
     if (processed.current) return;
     processed.current = true;
 
+    const token = searchParams.get('token');
+    const refresh = searchParams.get('refresh');
     const error = searchParams.get('error');
+
+    // If opened as popup (by Microsoft OAuth), send tokens to opener and close
+    if (window.opener && token && refresh) {
+      // Post message to parent window with tokens
+      window.opener.postMessage(
+        { type: 'microsoft-oauth-callback', token, refresh },
+        window.location.origin
+      );
+      window.close();
+      return;
+    }
+
+    // Normal (non-popup) flow
     if (error) {
       navigate(`/login?error=${encodeURIComponent(error)}`, { replace: true });
       return;
     }
-
-    const token = searchParams.get('token');
-    const refresh = searchParams.get('refresh');
 
     if (!token || !refresh) {
       navigate('/login?error=Missing+tokens', { replace: true });
