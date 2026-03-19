@@ -221,8 +221,8 @@ async def process_document(
             if not success:
                 raise Exception("Failed to trigger RAGFlow parsing")
 
-            # Poll for completion (max 5 minutes)
-            for _ in range(60):
+            # Poll for completion (max 15 minutes — large files need more time)
+            for _ in range(180):
                 await asyncio.sleep(5)
                 doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
                 if doc_status is None:
