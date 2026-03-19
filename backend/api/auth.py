@@ -35,47 +35,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _DEMO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "demo")
 
 _DEFAULT_NOTEBOOKS = [
-    # Order: last created appears first on dashboard
-    {
-        "name": "Sample Research", "emoji": "🔬", "cover_color": "#dbeafe",
-        "sources": [
-            "ai-education-research-report.md",
-            "ai-education-cost-analysis.xlsx",
-            "ai-in-education-overview.md",
-        ],
-        "notes": [
-            "## Key Findings: AI in Education\n\n- Global AI in Education market: **$5.1B (2024) → $47.7B (2030)**, 36% CAGR\n- Content generation & language learning are the fastest growing segments (40%+ CAGR)\n- **73% of universities** plan to deploy AI teaching assistants by 2027\n- AI tutoring shows **18% improvement** in test scores and **25% reduction** in dropout rates\n- Main barriers: data privacy (FERPA/GDPR), academic integrity concerns, faculty readiness (only 34% feel prepared)\n\n> Source: AI Education Research Report, March 2026",
-            "## Budget Summary: AI Implementation\n\n| Category | Cost |\n|----------|------|\n| Infrastructure | $10,200 |\n| Software & APIs | $19,200 |\n| Personnel | $99,000 |\n| Training | $13,000 |\n| Contingency (15%) | $21,060 |\n| **Total Year 1** | **$162,460** |\n\nROI breakeven in **Year 2**. By Year 5: cumulative benefit of **$610,540** (3.8x return).\n\n> Source: Cost Analysis Spreadsheet",
-        ],
-        "overview": {
-            "overview": "These documents analyze the AI in Education market landscape, covering market size projections, implementation costs, and strategic recommendations. They include a research report with industry trends, a detailed cost-benefit analysis spreadsheet, and an overview of AI applications in educational settings.",
-            "suggested_questions": [
-                "What is the projected market size for AI in Education by 2030?",
-                "What are the main cost categories for implementing AI in education?",
-                "What are the biggest barriers to AI adoption in universities?"
-            ],
-        },
-    },
-    {
-        "name": "Sample Meeting Notes", "emoji": "📋", "cover_color": "#fef08a",
-        "sources": [
-            "meeting-2026-03-03-kickoff.md",
-            "meeting-2026-03-10-review.md",
-            "meeting-2026-03-17-approval.md",
-        ],
-        "notes": [
-            "## FY2026 Budget Approved: $4.425M\n\n**Key numbers:**\n- Personnel (existing): $2.16M (48.8%)\n- New hires (4 positions): $680K (15.4%)\n- AI/ML infrastructure: $312K (7.0%)\n- Cloud infrastructure: $368K (8.3%)\n- Contingency: $230K (5.2%)\n\n**Conditions:**\n1. Quarterly budget reviews with variance analysis\n2. AI ROI dashboard by end of Q1\n3. Monthly hiring progress reports\n\n> Approved by CEO Michael Zhou on March 17, 2026",
-            "## Open Action Items\n\n| Owner | Task | Due |\n|-------|------|-----|\n| Kevin | Negotiate AI API volume discount | Mar 17 |\n| Rachel | Extend offers to ML engineer candidates | Mar 21 |\n| Tony | AI infrastructure provisioned | Mar 25 |\n| Tony | Cost monitoring dashboards live | Mar 28 |\n| Sarah | Q1 review meeting | Jun 15 |\n\n**Next milestone:** Budget codes activated by Mar 20",
-        ],
-        "overview": {
-            "overview": "These documents outline the planning and approval process for the FY2026 engineering budget, tracking from initial kickoff through detailed review to final CEO approval. The total approved budget is $4.425M covering personnel, infrastructure, AI/ML initiatives, and new hires.",
-            "suggested_questions": [
-                "What is the total approved budget for FY2026?",
-                "What new positions were approved in the budget?",
-                "What are the conditions attached to the budget approval?"
-            ],
-        },
-    },
     {
         "name": "Getting Started", "emoji": "🚀", "cover_color": "#ecfccb",
         "sources": [
