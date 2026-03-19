@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -6,7 +6,6 @@ import { useAuthStore } from '@/stores/auth-store';
 export default function LoginPage() {
   const navigate = useNavigate();
   const login = useAuthStore(s => s.login);
-  const setTokens = useAuthStore(s => s.setTokens);
   const [searchParams] = useSearchParams();
 
   const [email, setEmail] = useState('');
@@ -18,37 +17,6 @@ export default function LoginPage() {
     const urlError = searchParams.get('error');
     if (urlError) setError(decodeURIComponent(urlError));
   }, [searchParams]);
-
-  // Microsoft OAuth via popup — avoids ms-sso.copilot.microsoft.com
-  // redirect that is blocked in China (ERR_CONNECTION_RESET)
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'microsoft-oauth-callback') {
-        const { token, refresh } = event.data;
-        if (token && refresh) {
-          setTokens(token, refresh).then(() => {
-            const redirect = searchParams.get('redirect') || '/dashboard';
-            navigate(redirect, { replace: true });
-          });
-        }
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [setTokens, navigate, searchParams]);
-
-  const handleMicrosoftLogin = useCallback(() => {
-    const width = 500;
-    const height = 700;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-    window.open(
-      '/api/auth/microsoft',
-      'microsoft-login',
-      `width=${width},height=${height},left=${left},top=${top},popup=yes`
-    );
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,7 +115,7 @@ export default function LoginPage() {
             {/* Microsoft Sign-In */}
             <button
               type="button"
-              onClick={handleMicrosoftLogin}
+              onClick={() => { window.location.href = '/api/auth/microsoft'; }}
               className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
             >
               <svg width="18" height="18" viewBox="0 0 23 23">
