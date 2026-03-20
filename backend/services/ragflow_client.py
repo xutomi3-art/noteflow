@@ -169,7 +169,7 @@ class RAGFlowClient:
                     "vector_similarity_weight": settings.RAG_VECTOR_WEIGHT,
                     "top_k": top_k,
                     "keyword": True,
-                    "rerank_id": "qwen3-rerank",
+                    "rerank_id": "gte-rerank",
                 }
                 if document_ids:
                     payload["document_ids"] = document_ids
