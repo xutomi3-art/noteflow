@@ -41,12 +41,11 @@ class QwenClient:
                 max_tokens=max_tokens or settings.LLM_MAX_OUTPUT_TOKENS,
                 temperature=temperature,
                 stream=True,
+                extra_body={"enable_thinking": False},
             )
             if enable_search:
-                kwargs["extra_body"] = {
-                    "enable_search": True,
-                    "search_options": {"search_strategy": "agent"},
-                }
+                kwargs["extra_body"]["enable_search"] = True
+                kwargs["extra_body"]["search_options"] = {"search_strategy": "agent"}
             response = await self.client.chat.completions.create(**kwargs)
             async for chunk in response:
                 if chunk.choices:
@@ -76,6 +75,7 @@ class QwenClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=False,
+                extra_body={"enable_thinking": False},
             )
             return response.choices[0].message.content or ""
         except Exception as e:
