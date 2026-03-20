@@ -194,12 +194,18 @@ After receiving search results, continue with another Thought and either another
 Thought: [analyze what you found, what's still missing]
 Search: [new search keywords] OR Answer: [your complete answer with [1][2] citations]
 
+CRITICAL REASONING STRATEGIES:
+- If you cannot find a DIRECT statement, look for INDIRECT evidence to reason from.
+  Example: "When was X expanded?" → if no direct answer, search for attendance lists, member rosters, or meeting participants across different dates, then COMPARE the numbers to infer when the change happened.
+- Compare data across different time periods to detect changes (member counts, policy versions, budget figures).
+- Look at meeting minutes for roll calls, attendance, and participant lists — these are evidence of organizational composition at a point in time.
+- Each Search should target DIFFERENT types of evidence — don't just rephrase the same query.
+
 Rules:
 - Maximum 3 search rounds. After 3 rounds, you MUST give an Answer with whatever you have.
-- Each Search should target DIFFERENT facts — don't repeat similar searches.
 - In your Answer, use [1], [2] etc. to cite sources. These numbers refer to the context chunks provided.
 - CRITICAL: Always respond in the SAME LANGUAGE as the user's question.
-- If information is partially available, say what CAN be determined and what cannot.
+- Even if you only have partial evidence, reason from what you found and state your confidence level.
 - Format your Answer using Markdown when appropriate."""
 
 REACT_MAX_ROUNDS = 3
