@@ -8,6 +8,22 @@ logger = logging.getLogger(__name__)
 
 TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
+# Map file extensions to optimal RAGFlow chunk methods
+_CHUNK_METHOD_BY_EXT: dict[str, str] = {
+    ".pptx": "presentation",
+    ".ppt": "presentation",
+}
+
+
+def _choose_chunk_method(filename: str | None) -> str:
+    """Choose the best chunk method based on file extension."""
+    if filename:
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        method = _CHUNK_METHOD_BY_EXT.get(f".{ext}")
+        if method:
+            return method
+    return "naive"
+
 
 class RAGFlowClient:
     """HTTP client for RAGFlow API."""
@@ -27,7 +43,14 @@ class RAGFlowClient:
                 resp = await client.post(
                     f"{self.base_url}/api/v1/datasets",
                     headers=self._headers,
-                    json={"name": name, "chunk_method": "naive"},
+                    json={
+                        "name": name,
+                        "chunk_method": "naive",
+                        "parser_config": {
+                            "chunk_token_num": 512,
+                            "raptor": {"use_raptor": True},
+                        },
+                    },
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -99,7 +122,6 @@ class RAGFlowClient:
                 data = resp.json()
                 if data.get("code") == 0 and data.get("data"):
                     docs = data["data"]
-                    # RAGFlow v0.17 wraps docs in {"docs": [...], "total": N}
                     if isinstance(docs, dict) and "docs" in docs:
                         docs = docs["docs"]
                     if isinstance(docs, list):
@@ -116,12 +138,13 @@ class RAGFlowClient:
             return None
 
     async def retrieve(
-        self, dataset_ids: list[str], question: str, top_k: int = 6,
+        self, dataset_ids: list[str], question: str, top_k: int = 15,
         document_ids: list[str] | None = None,
     ) -> list[dict]:
         """Retrieve relevant chunks from RAGFlow datasets.
 
         Args:
+            top_k: Number of final chunks to return to LLM.
             document_ids: Optional list of RAGFlow document IDs to scope
                 retrieval to specific documents within the datasets.
         """
@@ -131,8 +154,9 @@ class RAGFlowClient:
                     "question": question,
                     "dataset_ids": dataset_ids,
                     "similarity_threshold": 0.2,
-                    "vector_similarity_weight": 0.7,
+                    "vector_similarity_weight": 0.5,
                     "top_k": top_k,
+                    "keyword": True,
                 }
                 if document_ids:
                     payload["document_ids"] = document_ids
