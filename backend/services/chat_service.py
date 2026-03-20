@@ -181,16 +181,26 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     return message
 
 
-DECOMPOSE_PROMPT = """You are a search query decomposition expert.
-Break down the user's question into 3 search queries from different angles.
-Each query should use different keywords and focus on a different aspect.
+DECOMPOSE_PROMPT = """You are a search query decomposition expert for document retrieval.
 
-Example:
+Your job: break a complex question into 3 sub-queries that together find ALL the pieces needed to answer it.
+
+Strategy:
+- Think about what FACTS are needed to answer the question, then write a query for each fact.
+- For "when/how did X change" questions: find the BEFORE state, the AFTER state, and the EVENT that changed it.
+- For "what is the relationship between A and B" questions: find info about A, info about B, and where they connect.
+- For "why did X happen" questions: find the event X, the context before X, and the decision/reason.
+- Each sub-query should target a DIFFERENT piece of evidence, not just rephrase the same concept.
+
+Examples:
 Q: "When was the Board last expanded?"
-→ ["Board size composition number trustees members", "Articles of Association amendment revision history", "Board membership change increase expand"]
+→ ["Board of Trustees total number size thirteen fifteen members", "Board expansion new trustees added increased membership", "Articles of Association Board composition amended revised date"]
 
 Q: "What's the relationship between tuition policy and enrollment?"
-→ ["tuition fee policy schedule amount", "enrollment admission student acceptance", "tuition enrollment relationship impact connection"]
+→ ["tuition fee policy schedule increase decrease history", "enrollment numbers admission acceptance rate trend", "tuition impact enrollment policy decision connection"]
+
+Q: "Why did the school change its grading system?"
+→ ["old grading system previous assessment method", "new grading system current assessment policy", "grading system change reason decision rationale"]
 
 Output ONLY a JSON array of 3 query strings. No explanation.
 
