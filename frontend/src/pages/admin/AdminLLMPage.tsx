@@ -27,9 +27,11 @@ const GROUPS: FieldGroup[] = [
     fields: [
       { key: 'ragflow_api_key', label: 'API Key', secret: true },
       { key: 'ragflow_base_url', label: 'Base URL' },
-      { key: 'rag_top_k', label: 'Top-K Chunks', placeholder: 'default: 15' },
-      { key: 'rag_similarity_threshold', label: 'Similarity Threshold', placeholder: 'default: 0.2 (0.0–1.0, lower = more results)' },
-      { key: 'rag_vector_weight', label: 'Vector Weight', placeholder: 'default: 0.6 (0.0–1.0, higher = more semantic)' },
+      { key: 'rag_top_k', label: 'Top-K Chunks', placeholder: 'default: 8' },
+      { key: 'rag_similarity_threshold', label: 'Similarity Threshold', placeholder: 'default: 0.0 (0.0–1.0, lower = more results)' },
+      { key: 'rag_vector_weight', label: 'Vector Weight', placeholder: 'default: 0.7 (0.0–1.0, higher = more semantic)' },
+      { key: 'rag_rewrite_model', label: 'Query Rewrite Model', placeholder: 'default: qwen-turbo (fast, for keyword rewriting)' },
+      { key: 'rag_decompose_model', label: 'Deep Think Model', placeholder: 'empty = use main model (for CoT query decomposition)' },
     ],
   },
 ];

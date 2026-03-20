@@ -166,9 +166,10 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
             )},
             {"role": "user", "content": f"Q: {message}\nA:"},
         ]
+        rewrite_model = settings.RAG_REWRITE_MODEL or None  # None = use default
         rewritten = await qwen_client.generate(
             rewrite_messages,
-            model="qwen-turbo",
+            model=rewrite_model,
             temperature=0.0,
             max_tokens=80,
         )
@@ -195,8 +196,10 @@ async def _decompose_query(message: str) -> list[str]:
     """Use LLM to decompose user question into 3 sub-queries from different angles."""
     try:
         prompt = DECOMPOSE_PROMPT.format(question=message)
+        decompose_model = settings.RAG_DECOMPOSE_MODEL or None  # None = use default main model
         result = await qwen_client.generate(
             [{"role": "user", "content": prompt}],
+            model=decompose_model,
             temperature=0.0,
             max_tokens=200,
         )
