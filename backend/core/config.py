@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = 8
     RAG_SIMILARITY_THRESHOLD: float = 0.0
     RAG_VECTOR_WEIGHT: float = 0.7
-    RAG_REWRITE_MODEL: str = "qwen-turbo"
+    RAG_REWRITE_MODEL: str = ""  # empty = use main LLM_MODEL
     RAG_DECOMPOSE_MODEL: str = ""  # empty = use main LLM_MODEL
 
     # LLM API key
