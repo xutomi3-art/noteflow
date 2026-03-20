@@ -2,6 +2,15 @@ import { create } from "zustand";
 import type { ChatMessage, Citation } from "@/types/api";
 import { api } from "@/services/api";
 
+export interface ThinkingStep {
+  type: "thinking" | "searching" | "observation";
+  step: number;
+  thought?: string;
+  query?: string;
+  found?: number;
+  new?: number;
+}
+
 interface ChatState {
   messages: ChatMessage[];
   isStreaming: boolean;
@@ -9,6 +18,7 @@ interface ChatState {
   isLoading: boolean;
   abortStream: (() => void) | null;
   deepThinking: boolean;
+  thinkingSteps: ThinkingStep[];
 
   fetchHistory: (notebookId: string) => Promise<void>;
   sendMessage: (notebookId: string, message: string, sourceIds: string[], webSearch?: boolean, deepThinking?: boolean) => Promise<void>;
@@ -25,6 +35,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   abortStream: null,
   deepThinking: false,
+  thinkingSteps: [],
 
   fetchHistory: async (notebookId: string) => {
     set({ isLoading: true });
@@ -55,6 +66,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isStreaming: true,
       streamingContent: "",
       abortStream: null,
+      thinkingSteps: [],
     }));
 
     let retried = false;
@@ -64,11 +76,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         notebookId,
         message,
         sourceIds,
-        // onToken
+        // onToken — parse ReAct thinking events
         (token: string) => {
-          set(state => ({
-            streamingContent: state.streamingContent + token,
-          }));
+          if (token.startsWith("__REACT__") && token.endsWith("__REACT__")) {
+            try {
+              const data = JSON.parse(token.slice(9, -9));
+              set(state => ({ thinkingSteps: [...state.thinkingSteps, data as ThinkingStep] }));
+            } catch { /* ignore */ }
+          } else {
+            set(state => ({ streamingContent: state.streamingContent + token }));
+          }
         },
         // onDone
         (data: { id: string; citations: Citation[] }) => {

@@ -353,7 +353,7 @@ export default function NotebookPage() {
   const { user, logout } = useAuthStore();
   const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt } =
     useSourceStore();
-  const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, reset: resetChat } = useChatStore();
+  const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, thinkingSteps, reset: resetChat } = useChatStore();
   const {
     content: studioContent,
     isGenerating,
@@ -1803,6 +1803,47 @@ export default function NotebookPage() {
                   </div>
                 ))}
 
+                {/* ReAct Thinking Steps */}
+                {isStreaming && thinkingSteps.length > 0 && (
+                  <div className="flex justify-start mb-3">
+                    <div className="w-full max-w-full">
+                      <div className="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3 space-y-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-600">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Deep Thinking
+                        </div>
+                        {thinkingSteps.map((step, i) => (
+                          <div key={i} className="text-[12px] leading-relaxed">
+                            {step.type === "thinking" && (
+                              <div className="text-purple-700">
+                                <span className="font-medium text-purple-500">Thought {step.step}:</span>{" "}
+                                {step.thought}
+                              </div>
+                            )}
+                            {step.type === "searching" && (
+                              <div className="text-blue-600 flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span className="font-medium">Searching:</span> {step.query}
+                              </div>
+                            )}
+                            {step.type === "observation" && (
+                              <div className="text-slate-500">
+                                Found {step.found} results ({step.new} new)
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {!streamingContent && (
+                          <div className="flex items-center gap-1 text-[11px] text-purple-400">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Reasoning...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Streaming bubble */}
                 {isStreaming && streamingContent && (
                   <div className="flex justify-start">
@@ -1814,7 +1855,7 @@ export default function NotebookPage() {
                 )}
 
                 {/* Streaming without content yet — typing indicator */}
-                {isStreaming && !streamingContent && (
+                {isStreaming && !streamingContent && thinkingSteps.length === 0 && (
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 px-4 py-3">
                       <div className="flex items-center gap-1">

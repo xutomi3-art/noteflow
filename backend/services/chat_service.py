@@ -182,36 +182,65 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     return message
 
 
-DECOMPOSE_PROMPT = """Think step by step: what specific facts or evidence would you need to find in documents to answer this question?
+REACT_SYSTEM_PROMPT = """You are a research assistant that finds answers by searching through documents step by step.
 
-For each fact, write a concise search query (keywords only, no full sentences).
-Generate exactly 3 queries, each targeting a DIFFERENT piece of evidence — not rephrasing the same concept.
+Use this EXACT format — output Thought, then Search on the next line:
 
-Output ONLY a JSON array of 3 query strings. No explanation, no reasoning, just the JSON array.
+Thought: [your reasoning about what information you need to find]
+Search: [concise search keywords to find that information]
 
-User question: {question}"""
+After receiving search results, continue with another Thought and either another Search or a final Answer:
+
+Thought: [analyze what you found, what's still missing]
+Search: [new search keywords] OR Answer: [your complete answer with [1][2] citations]
+
+Rules:
+- Maximum 3 search rounds. After 3 rounds, you MUST give an Answer with whatever you have.
+- Each Search should target DIFFERENT facts — don't repeat similar searches.
+- In your Answer, use [1], [2] etc. to cite sources. These numbers refer to the context chunks provided.
+- CRITICAL: Always respond in the SAME LANGUAGE as the user's question.
+- If information is partially available, say what CAN be determined and what cannot.
+- Format your Answer using Markdown when appropriate."""
+
+REACT_MAX_ROUNDS = 3
 
 
-async def _decompose_query(message: str) -> list[str]:
-    """Use LLM to decompose user question into 3 sub-queries from different angles."""
-    try:
-        prompt = DECOMPOSE_PROMPT.format(question=message)
-        decompose_model = settings.RAG_DECOMPOSE_MODEL or None  # None = use default main model
-        result = await qwen_client.generate(
-            [{"role": "user", "content": prompt}],
-            model=decompose_model,
-            temperature=0.0,
-            max_tokens=200,
-        )
-        result = result.strip()
-        # Parse JSON array from response
-        parsed = json.loads(result)
-        if isinstance(parsed, list) and len(parsed) >= 1:
-            logger.info("Query decomposition: [%s] -> %s", message, parsed[:3])
-            return [str(q) for q in parsed[:3]]
-    except Exception as e:
-        logger.warning("Query decomposition failed, skipping: %s", e)
-    return []
+async def _react_step(messages: list[dict], model: str | None = None) -> str:
+    """Run one ReAct step: get Thought + Search or Answer from LLM."""
+    decompose_model = model or settings.RAG_DECOMPOSE_MODEL or None
+    return await qwen_client.generate(
+        messages,
+        model=decompose_model,
+        temperature=0.0,
+        max_tokens=500,
+    )
+
+
+def _parse_react_output(text: str) -> tuple[str, str | None, str | None]:
+    """Parse ReAct output into (thought, search_query, answer).
+
+    Returns (thought, search_query, None) if more search needed,
+    or (thought, None, answer) if final answer reached.
+    """
+    thought = ""
+    search_query = None
+    answer = None
+
+    lines = text.strip().split("\n")
+    for line in lines:
+        line_stripped = line.strip()
+        if line_stripped.lower().startswith("thought:"):
+            thought = line_stripped[len("Thought:"):].strip()
+        elif line_stripped.lower().startswith("search:"):
+            search_query = line_stripped[len("Search:"):].strip()
+        elif line_stripped.lower().startswith("answer:"):
+            # Answer may span multiple lines — take everything after "Answer:"
+            answer_start = text.lower().find("answer:")
+            if answer_start >= 0:
+                answer = text[answer_start + len("Answer:"):].strip()
+            break
+
+    return thought, search_query, answer
 
 
 async def stream_chat(
@@ -279,34 +308,82 @@ async def stream_chat(
         sql_answer = None
 
         chunks = []
+        react_steps: list[dict] = []  # Track ReAct steps for logging
         if dataset_ids:
-            import asyncio
             filter_doc_ids = document_ids if source_ids and document_ids else None
 
             if deep_thinking:
-                # Deep Thinking: decompose query + concurrent multi-angle retrieval
-                sub_queries = await _decompose_query(message)
-                all_queries = [retrieval_query] + sub_queries
+                # ReAct loop: Thought → Search → Observation → ... → Answer
+                all_chunks: dict[str, dict] = {}  # chunk_id → chunk (deduped)
+                react_messages = [
+                    {"role": "system", "content": REACT_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Question: {message}"},
+                ]
+                react_answer = None
 
-                async def _retrieve_one(q: str) -> list[dict]:
-                    return await ragflow_client.retrieve(
-                        dataset_ids, q, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
+                for round_num in range(1, REACT_MAX_ROUNDS + 1):
+                    # Get LLM thought + action
+                    step_output = await _react_step(react_messages)
+                    thought, search_query, answer = _parse_react_output(step_output)
+
+                    # Stream thinking step to user
+                    if thought:
+                        yield f"data: {json.dumps({'type': 'thinking', 'step': round_num, 'thought': thought})}\n\n"
+
+                    if answer:
+                        # LLM decided it has enough info — but we'll regenerate with full context later
+                        react_answer = answer
+                        react_steps.append({"round": round_num, "thought": thought, "action": "answer"})
+                        logger.info("ReAct round %d: answer reached", round_num)
+                        break
+
+                    if not search_query:
+                        # No search query and no answer — force move on
+                        react_steps.append({"round": round_num, "thought": thought, "action": "no_action"})
+                        break
+
+                    # Stream searching event
+                    yield f"data: {json.dumps({'type': 'searching', 'step': round_num, 'query': search_query})}\n\n"
+
+                    # Execute retrieval
+                    round_chunks = await ragflow_client.retrieve(
+                        dataset_ids, search_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
                     )
 
-                results = await asyncio.gather(*[_retrieve_one(q) for q in all_queries])
-
-                # Merge and deduplicate by chunk_id, keep highest similarity
-                seen: dict[str, dict] = {}
-                for result_chunks in results:
-                    for chunk in result_chunks:
+                    # Deduplicate into all_chunks
+                    new_count = 0
+                    for chunk in round_chunks:
                         chunk_id = chunk.get("id", chunk.get("chunk_id", ""))
-                        existing = seen.get(chunk_id)
-                        if existing is None or chunk.get("similarity", 0) > existing.get("similarity", 0):
-                            seen[chunk_id] = chunk
-                # Sort by similarity descending, take top-12 (more context for multi-angle)
-                chunks = sorted(seen.values(), key=lambda c: c.get("similarity", 0), reverse=True)[:12]
-                logger.info("Deep thinking: %d queries, %d total chunks -> %d unique after dedup",
-                            len(all_queries), sum(len(r) for r in results), len(chunks))
+                        if chunk_id not in all_chunks:
+                            all_chunks[chunk_id] = chunk
+                            new_count += 1
+
+                    # Build observation summary for LLM
+                    obs_parts = []
+                    for i, c in enumerate(round_chunks[:5], 1):
+                        text = c.get("content_with_weight", c.get("content", ""))[:200]
+                        doc = c.get("document_keyword", c.get("docnm_kwd", "unknown"))
+                        obs_parts.append(f"  [{i}] ({doc}): {text}")
+                    observation = f"Found {len(round_chunks)} results ({new_count} new). Top excerpts:\n" + "\n".join(obs_parts)
+
+                    # Stream observation to user
+                    yield f"data: {json.dumps({'type': 'observation', 'step': round_num, 'found': len(round_chunks), 'new': new_count})}\n\n"
+
+                    react_steps.append({
+                        "round": round_num, "thought": thought,
+                        "search": search_query, "found": len(round_chunks), "new": new_count,
+                    })
+                    logger.info("ReAct round %d: search=[%s], found=%d, new=%d, total=%d",
+                                round_num, search_query, len(round_chunks), new_count, len(all_chunks))
+
+                    # Feed observation back to LLM for next round
+                    react_messages.append({"role": "assistant", "content": step_output})
+                    react_messages.append({"role": "user", "content": f"Observation: {observation}\n\nContinue with another Thought and Search, or provide your Answer if you have enough information."})
+
+                # Collect all unique chunks sorted by similarity, take top-15
+                chunks = sorted(all_chunks.values(), key=lambda c: c.get("similarity", 0), reverse=True)[:15]
+                logger.info("ReAct complete: %d rounds, %d total unique chunks -> top %d",
+                            len(react_steps), len(all_chunks), len(chunks))
             else:
                 chunks = await ragflow_client.retrieve(
                     dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
@@ -562,16 +639,14 @@ Follow these rules strictly:
         else:
             system_prompt = SYSTEM_PROMPT
 
-        # Deep Thinking: augment system prompt with chain-of-thought reasoning
+        # Deep Thinking: ReAct already did multi-round reasoning — final answer should synthesize
         if deep_thinking:
             system_prompt += """
-9. DEEP THINKING MODE — you must reason step by step before answering:
-   a. First, list the key facts found in each source (silently, do not show this to the user).
-   b. Identify connections, contradictions, or gaps between sources.
-   c. If the answer requires combining facts from multiple sources, explicitly show your reasoning chain:
+9. DEEP THINKING MODE — these sources were gathered through multi-round research. Synthesize them:
+   a. If the answer requires combining facts from multiple sources, show your reasoning:
       "Source [X] states A. Source [Y] states B. Combining these, we can conclude C."
-   d. If information is partially available, say what CAN be determined and what cannot.
-   e. Do NOT just summarize each source separately — synthesize and reason across them."""
+   b. If information is partially available, say what CAN be determined and what cannot.
+   c. Do NOT just summarize each source separately — synthesize and reason across them."""
 
         messages = [
             {"role": "system", "content": system_prompt},

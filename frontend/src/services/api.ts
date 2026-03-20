@@ -307,6 +307,8 @@ class ApiClient {
               } else if (data.type === "error") {
                 onError(data.message);
                 return;
+              } else if (data.type === "thinking" || data.type === "searching" || data.type === "observation") {
+                onToken(`__REACT__${JSON.stringify(data)}__REACT__`);
               }
             } catch { /* ignore parse errors */ }
           }
