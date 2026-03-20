@@ -35,17 +35,23 @@ class QwenClient:
     ) -> AsyncGenerator[str, None]:
         """Stream chat completion tokens."""
         try:
+            extra: dict = {}
+            # Disable built-in reasoning for models that support it (Qwen, GLM)
+            # DeepSeek deepseek-chat doesn't support this param
+            if "deepseek" not in self.model.lower():
+                extra["enable_thinking"] = False
             kwargs: dict = dict(
                 model=self.model,
                 messages=messages,  # type: ignore[arg-type]
                 max_tokens=max_tokens or settings.LLM_MAX_OUTPUT_TOKENS,
                 temperature=temperature,
                 stream=True,
-                extra_body={"enable_thinking": False},
             )
             if enable_search:
-                kwargs["extra_body"]["enable_search"] = True
-                kwargs["extra_body"]["search_options"] = {"search_strategy": "agent"}
+                extra["enable_search"] = True
+                extra["search_options"] = {"search_strategy": "agent"}
+            if extra:
+                kwargs["extra_body"] = extra
             response = await self.client.chat.completions.create(**kwargs)
             async for chunk in response:
                 if chunk.choices:
@@ -69,14 +75,20 @@ class QwenClient:
     ) -> str:
         """Non-streaming chat completion."""
         try:
-            response = await self.client.chat.completions.create(
-                model=model or self.model,
+            gen_model = model or self.model
+            gen_extra: dict = {}
+            if "deepseek" not in gen_model.lower():
+                gen_extra["enable_thinking"] = False
+            gen_kwargs: dict = dict(
+                model=gen_model,
                 messages=messages,  # type: ignore[arg-type]
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=False,
-                extra_body={"enable_thinking": False},
             )
+            if gen_extra:
+                gen_kwargs["extra_body"] = gen_extra
+            response = await self.client.chat.completions.create(**gen_kwargs)
             return response.choices[0].message.content or ""
         except Exception as e:
             logger.error("LLM generate failed: %s", e)
