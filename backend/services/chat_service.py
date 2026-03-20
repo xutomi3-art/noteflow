@@ -197,7 +197,6 @@ async def _decompose_query(message: str) -> list[str]:
         prompt = DECOMPOSE_PROMPT.format(question=message)
         result = await qwen_client.generate(
             [{"role": "user", "content": prompt}],
-            model="qwen-turbo",
             temperature=0.0,
             max_tokens=200,
         )
