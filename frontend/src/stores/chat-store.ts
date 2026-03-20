@@ -8,11 +8,13 @@ interface ChatState {
   streamingContent: string;
   isLoading: boolean;
   abortStream: (() => void) | null;
+  deepThinking: boolean;
 
   fetchHistory: (notebookId: string) => Promise<void>;
-  sendMessage: (notebookId: string, message: string, sourceIds: string[], webSearch?: boolean) => Promise<void>;
+  sendMessage: (notebookId: string, message: string, sourceIds: string[], webSearch?: boolean, deepThinking?: boolean) => Promise<void>;
   stopStream: () => void;
   clearHistory: (notebookId: string) => Promise<void>;
+  setDeepThinking: (enabled: boolean) => void;
   reset: () => void;
 }
 
@@ -22,6 +24,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streamingContent: "",
   isLoading: false,
   abortStream: null,
+  deepThinking: false,
 
   fetchHistory: async (notebookId: string) => {
     set({ isLoading: true });
@@ -33,7 +36,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  sendMessage: async (notebookId: string, message: string, sourceIds: string[], webSearch: boolean = false) => {
+  setDeepThinking: (enabled: boolean) => set({ deepThinking: enabled }),
+
+  sendMessage: async (notebookId: string, message: string, sourceIds: string[], webSearch: boolean = false, deepThinking: boolean = false) => {
     // Add optimistic user message
     const tempUserMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
@@ -111,6 +116,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }));
         },
         webSearch,
+        deepThinking,
       );
 
       set({ abortStream: abort });

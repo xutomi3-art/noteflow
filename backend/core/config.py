@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     LLM_CONTEXT_WINDOW: int = 256000  # model context window in tokens
     RAG_TOP_K: int = 8
     RAG_SIMILARITY_THRESHOLD: float = 0.0
-    RAG_VECTOR_WEIGHT: float = 0.6
+    RAG_VECTOR_WEIGHT: float = 0.7
 
     # LLM API key
     QWEN_API_KEY: str = ""

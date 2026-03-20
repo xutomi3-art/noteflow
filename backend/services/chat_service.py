@@ -181,6 +181,43 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     return message
 
 
+DECOMPOSE_PROMPT = """You are a search query decomposition expert.
+Break down the user's question into 3 search queries from different angles.
+Each query should use different keywords and focus on a different aspect.
+
+Example:
+Q: "When was the Board last expanded?"
+→ ["Board size composition number trustees members", "Articles of Association amendment revision history", "Board membership change increase expand"]
+
+Q: "What's the relationship between tuition policy and enrollment?"
+→ ["tuition fee policy schedule amount", "enrollment admission student acceptance", "tuition enrollment relationship impact connection"]
+
+Output ONLY a JSON array of 3 query strings. No explanation.
+
+User question: {question}"""
+
+
+async def _decompose_query(message: str) -> list[str]:
+    """Use LLM to decompose user question into 3 sub-queries from different angles."""
+    try:
+        prompt = DECOMPOSE_PROMPT.format(question=message)
+        result = await qwen_client.generate(
+            [{"role": "user", "content": prompt}],
+            model="qwen-turbo",
+            temperature=0.0,
+            max_tokens=200,
+        )
+        result = result.strip()
+        # Parse JSON array from response
+        parsed = json.loads(result)
+        if isinstance(parsed, list) and len(parsed) >= 1:
+            logger.info("Query decomposition: [%s] -> %s", message, parsed[:3])
+            return [str(q) for q in parsed[:3]]
+    except Exception as e:
+        logger.warning("Query decomposition failed, skipping: %s", e)
+    return []
+
+
 async def stream_chat(
     db: AsyncSession,
     notebook_id: uuid.UUID,
@@ -188,6 +225,7 @@ async def stream_chat(
     message: str,
     source_ids: list[str] | None = None,
     web_search: bool = False,
+    deep_thinking: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Stream AI response with citations. Yields SSE-formatted data."""
     # Initialize timing variables
@@ -246,8 +284,37 @@ async def stream_chat(
 
         chunks = []
         if dataset_ids:
+            import asyncio
             filter_doc_ids = document_ids if source_ids and document_ids else None
-            chunks = await ragflow_client.retrieve(dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids)
+
+            if deep_thinking:
+                # Deep Thinking: decompose query + concurrent multi-angle retrieval
+                sub_queries = await _decompose_query(message)
+                all_queries = [retrieval_query] + sub_queries
+
+                async def _retrieve_one(q: str) -> list[dict]:
+                    return await ragflow_client.retrieve(
+                        dataset_ids, q, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
+                    )
+
+                results = await asyncio.gather(*[_retrieve_one(q) for q in all_queries])
+
+                # Merge and deduplicate by chunk_id, keep highest similarity
+                seen: dict[str, dict] = {}
+                for result_chunks in results:
+                    for chunk in result_chunks:
+                        chunk_id = chunk.get("id", chunk.get("chunk_id", ""))
+                        existing = seen.get(chunk_id)
+                        if existing is None or chunk.get("similarity", 0) > existing.get("similarity", 0):
+                            seen[chunk_id] = chunk
+                # Sort by similarity descending, take top-12 (more context for multi-angle)
+                chunks = sorted(seen.values(), key=lambda c: c.get("similarity", 0), reverse=True)[:12]
+                logger.info("Deep thinking: %d queries, %d total chunks -> %d unique after dedup",
+                            len(all_queries), sum(len(r) for r in results), len(chunks))
+            else:
+                chunks = await ragflow_client.retrieve(
+                    dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
+                )
         t_ragflow_end = time.time()
 
         # Step 2c: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
@@ -448,9 +515,10 @@ The uploaded documents do not contain information relevant to this question. Ple
 
 The uploaded documents do not contain information relevant to this question. Please inform the user that you cannot find relevant content in the uploaded source documents, and suggest they upload additional documents or rephrase their question."""
 
-        # Fetch conversation history — up to 30 rounds (60 messages) but capped at ~30K tokens (~60K chars)
-        MAX_HISTORY_ROUNDS = 30
-        MAX_HISTORY_CHARS = 60000
+        # Fetch conversation history — up to 10 rounds (20 messages) capped at ~10K tokens (~20K chars)
+        # RAG best practice: 5-10 rounds. More history dilutes retrieval relevance.
+        MAX_HISTORY_ROUNDS = 10
+        MAX_HISTORY_CHARS = 20000
         history = await get_chat_history(db, notebook_id, user_id)
         history = [h for h in history if h.id != user_msg.id]
         # If last assistant message was an error, skip all history to avoid content filter loops
@@ -498,6 +566,13 @@ Follow these rules strictly:
         else:
             system_prompt = SYSTEM_PROMPT
 
+        # Deep Thinking: augment system prompt with reasoning instructions
+        if deep_thinking:
+            system_prompt += (
+                "\n9. Analyze the retrieved information from multiple angles. "
+                "If the answer requires reasoning across multiple sources, explain your reasoning step by step."
+            )
+
         messages = [
             {"role": "system", "content": system_prompt},
             *history_messages,
@@ -530,7 +605,7 @@ Follow these rules strictly:
                         total_duration=round(time.time() - t_start, 2),
                         status="error",
                         error_message=friendly[:500],
-                        thinking_mode=False,
+                        thinking_mode=deep_thinking,
                     )
                     db.add(err_log)
                     await db.commit()
@@ -577,7 +652,7 @@ Follow these rules strictly:
                 llm_first_token=round(t_first_token - t_llm_start, 2) if t_first_token else None,
                 source_count=len(sources_map),
                 chunk_count=len(chunks),
-                thinking_mode=False,
+                thinking_mode=deep_thinking,
                 has_excel=bool(excel_sources),
                 llm_model=settings.LLM_MODEL,
                 token_count=len(full_response),  # approximate by char count
@@ -601,7 +676,7 @@ Follow these rules strictly:
                 total_duration=round(time.time() - t_start, 2),
                 status="error",
                 error_message=str(e)[:500],
-                thinking_mode=False,
+                thinking_mode=deep_thinking,
             )
             db.add(error_log)
             await db.commit()

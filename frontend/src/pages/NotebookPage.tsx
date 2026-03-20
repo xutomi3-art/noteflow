@@ -275,6 +275,7 @@ export default function NotebookPage() {
   const pendingOverviewRef = useRef<{ overview: string; suggested_questions: string[] } | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   const [mobileTab, setMobileTab] = useState<"sources" | "chat" | "studio">("chat");
@@ -352,7 +353,7 @@ export default function NotebookPage() {
   const { user, logout } = useAuthStore();
   const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt } =
     useSourceStore();
-  const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, reset: resetChat } = useChatStore();
+  const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, reset: resetChat } = useChatStore();
   const {
     content: studioContent,
     isGenerating,
@@ -688,9 +689,9 @@ export default function NotebookPage() {
   // Handlers
   const handleSend = useCallback(() => {
     if (!id || !canSend) return;
-    sendMessage(id, chatInput.trim(), [...selectedIds], webSearchEnabled);
+    sendMessage(id, chatInput.trim(), [...selectedIds], webSearchEnabled, deepThinking);
     setChatInput("");
-  }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled]);
+  }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled, deepThinking]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -1644,6 +1645,35 @@ export default function NotebookPage() {
         <section className={`flex-1 bg-white flex-col overflow-hidden relative ${isMobile ? (mobileTab === "chat" ? "flex" : "hidden") : "flex"}`}>
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-6 shrink-0">
             <h2 className="text-[13px] font-semibold text-slate-700">Chat</h2>
+            {messages.length > 0 && (
+              <div className="relative">
+                {showClearConfirm ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500">Clear chat?</span>
+                    <button
+                      className="text-[11px] font-medium text-red-600 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50"
+                      onClick={() => { if (id) { clearHistory(id); setShowClearConfirm(false); } }}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      className="text-[11px] font-medium text-slate-500 hover:text-slate-700 px-1.5 py-0.5 rounded hover:bg-slate-100"
+                      onClick={() => setShowClearConfirm(false)}
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100"
+                    onClick={() => setShowClearConfirm(true)}
+                    title="Clear chat history"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div
@@ -1834,6 +1864,19 @@ export default function NotebookPage() {
                   disabled={isStreaming || hasProcessingSelected || readySources.length === 0}
                 />
                 <div className="flex items-center gap-2 pr-1">
+                  <button
+                    type="button"
+                    onClick={() => setDeepThinking(!deepThinking)}
+                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
+                      deepThinking
+                        ? "bg-purple-600 text-white"
+                        : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
+                    }`}
+                    title={deepThinking ? "Deep Thinking is on — queries are decomposed for multi-angle retrieval" : "Enable Deep Thinking for complex questions"}
+                  >
+                    <Sparkles className="w-3 h-3 inline-block mr-1 -mt-px" />
+                    Deep {deepThinking ? "On" : "Off"}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setWebSearchEnabled(!webSearchEnabled)}

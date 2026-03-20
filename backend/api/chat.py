@@ -34,6 +34,7 @@ async def chat(
             message=req.message,
             source_ids=req.source_ids,
             web_search=req.web_search,
+            deep_thinking=req.deep_thinking,
         ),
         media_type='text/event-stream',
         headers={

@@ -253,6 +253,7 @@ class ApiClient {
     onDone: (data: { id: string; citations: Citation[] }) => void,
     onError: (error: string) => void,
     webSearch: boolean = false,
+    deepThinking: boolean = false,
   ): { promise: Promise<void>; abort: () => void } {
     const controller = new AbortController();
     const headers: Record<string, string> = {
@@ -268,7 +269,7 @@ class ApiClient {
       const response = await fetch(`${API_BASE}/notebooks/${notebookId}/chat`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null, ...(webSearch ? { web_search: true } : {}) }),
+        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null, ...(webSearch ? { web_search: true } : {}), ...(deepThinking ? { deep_thinking: true } : {}) }),
         signal: controller.signal,
       });
 

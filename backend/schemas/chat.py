@@ -7,6 +7,7 @@ class ChatRequest(BaseModel):
     message: str
     source_ids: list[str] | None = None
     web_search: bool = False
+    deep_thinking: bool = False
 
 
 class CitationSchema(BaseModel):
