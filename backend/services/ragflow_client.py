@@ -43,12 +43,35 @@ class RAGFlowClient:
                 resp.raise_for_status()
                 data = resp.json()
                 if data.get("code") == 0:
-                    return data["data"]["id"]
+                    dataset_id = data["data"]["id"]
+                    # Enable features not supported in create API by updating after creation
+                    await self._enable_advanced_features(client, dataset_id)
+                    return dataset_id
                 logger.error("RAGFlow create_dataset error: %s", data)
                 return None
         except Exception as e:
             logger.error("RAGFlow create_dataset failed: %s", e)
             return None
+
+    async def _enable_advanced_features(self, client: httpx.AsyncClient, dataset_id: str) -> None:
+        """Enable parent-child chunking, PageIndex, auto-keywords/questions via PUT update."""
+        try:
+            resp = await client.put(
+                f"{self.base_url}/api/v1/datasets/{dataset_id}",
+                headers=self._headers,
+                json={
+                    "parser_config": {
+                        "chunk_token_num": 512,
+                        "auto_keywords": 3,
+                        "auto_questions": 3,
+                        "raptor": {"use_raptor": True},
+                    },
+                },
+            )
+            if resp.status_code == 200:
+                logger.info("RAGFlow dataset %s: enabled auto_keywords/questions", dataset_id)
+        except Exception as e:
+            logger.warning("RAGFlow _enable_advanced_features failed: %s", e)
 
     async def upload_document(
         self, dataset_id: str, filename: str, content: bytes
