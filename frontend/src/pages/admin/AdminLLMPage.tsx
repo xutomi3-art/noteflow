@@ -17,7 +17,7 @@ const GROUPS: FieldGroup[] = [
       { key: 'qwen_api_key', label: 'API Key', secret: true },
       { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. https://api.openai.com/v1' },
       { key: 'llm_model', label: 'Model', placeholder: 'e.g. gpt-4o, qwen3.5-plus, deepseek-chat' },
-      { key: 'llm_context_window', label: 'Context Window (tokens)', placeholder: 'e.g. 128000, 1000000' },
+      { key: 'llm_context_window', label: 'Context Window (tokens)', placeholder: 'e.g. 128000, 256000, 1000000' },
       { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: 'e.g. 8192' },
     ],
   },
