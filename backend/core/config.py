@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     LLM_MAX_OUTPUT_TOKENS: int = 8192
     LLM_CONTEXT_WINDOW: int = 256000  # model context window in tokens
     RAG_TOP_K: int = 15
-    RAG_SIMILARITY_THRESHOLD: float = 0.2
+    RAG_SIMILARITY_THRESHOLD: float = 0.1
     RAG_VECTOR_WEIGHT: float = 0.6
 
     # LLM API key

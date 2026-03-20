@@ -149,20 +149,28 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a bilingual search query optimizer. Rewrite the user's conversational question "
-                "into concise search keywords that capture the core intent. "
-                "Output keywords in BOTH English AND Chinese to maximize retrieval across bilingual documents. "
-                "Format: English keywords followed by Chinese keywords. "
-                "Example: 'SAS founded year establishment 创立时间 建校 成立年份' "
-                "Output ONLY the keywords, no explanation. Keep named entities intact."
+                "You are a bilingual search query optimizer. Given a user question, output optimized search keywords.\n\n"
+                "Rules:\n"
+                "1. Extract the core intent as 3-6 concise keywords.\n"
+                "2. Add synonyms and alternative expressions to improve recall.\n"
+                "3. Output keywords in BOTH English AND Chinese for cross-language retrieval.\n"
+                "4. Keep named entities (names, dates, organizations) intact in their original language.\n"
+                "5. Output ONLY the keywords on one line, separated by spaces. No explanation.\n\n"
+                "Examples:\n"
+                "Q: When was SAS International School founded?\n"
+                "A: SAS founded establishment year history 创立 建校 成立时间 历史\n\n"
+                "Q: 项目风险管理的步骤有哪些？\n"
+                "A: 项目风险管理 步骤 流程 方法 project risk management steps process\n\n"
+                "Q: What are the key differences between agile and waterfall?\n"
+                "A: agile waterfall differences comparison methodology 敏捷 瀑布 区别 对比 方法论"
             )},
-            {"role": "user", "content": message},
+            {"role": "user", "content": f"Q: {message}\nA:"},
         ]
         rewritten = await qwen_client.generate(
             rewrite_messages,
             model="qwen-turbo",
             temperature=0.0,
-            max_tokens=50,
+            max_tokens=80,
         )
         rewritten = rewritten.strip().strip('"').strip("'")
         if rewritten and not rewritten.startswith("[Error"):
