@@ -331,6 +331,13 @@ class ApiClient {
     await this.request(`/notebooks/${notebookId}/chat/history`, { method: "DELETE" });
   }
 
+  async submitChatFeedback(notebookId: string, messageId: string, vote: string): Promise<void> {
+    await this.request(`/notebooks/${notebookId}/chat/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ message_id: messageId, vote }),
+    });
+  }
+
   // Saved Notes
   async saveNote(notebookId: string, content: string, sourceMessageId?: string): Promise<SavedNote> {
     return this.request(`/notebooks/${notebookId}/notes`, {

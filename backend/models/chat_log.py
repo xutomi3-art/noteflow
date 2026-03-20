@@ -31,6 +31,14 @@ class ChatLog(Base):
     llm_model: Mapped[str] = mapped_column(String(50), nullable=True)
     token_count: Mapped[int] = mapped_column(Integer, nullable=True)  # response token count approx
 
+    # Response
+    response_preview: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    response_full: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # User feedback (thumbs up/down)
+    feedback: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "up", "down", or null
+    message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)  # links to chat_messages.id
+
     # Status
     status: Mapped[str] = mapped_column(String(20), default="ok")  # ok, error, timeout
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

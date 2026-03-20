@@ -45,6 +45,9 @@ export interface ChatLogItem {
   user_name: string;
   notebook_name: string;
   message_preview: string;
+  response_preview: string | null;
+  response_full: string | null;
+  feedback: string | null;
   total_duration: number | null;
   ragflow_duration: number | null;
   excel_duration: number | null;

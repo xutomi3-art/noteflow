@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 import type { ChatLogItem } from '@/types/admin';
 
@@ -36,44 +36,70 @@ const STATUS_FILTERS = [
 ];
 
 function ExpandedRow({ log }: { log: ChatLogItem }) {
+  const [showFullResponse, setShowFullResponse] = useState(false);
+
   return (
     <tr>
-      <td colSpan={11} className="px-4 py-3 bg-gray-50/80">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-xs">
-          <div>
-            <span className="text-gray-400">Model:</span>{' '}
-            <span className="text-gray-700 font-medium">{log.llm_model || '-'}</span>
+      <td colSpan={12} className="px-4 py-3 bg-gray-50/80">
+        <div className="space-y-3">
+          {/* Metrics grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+            <div>
+              <span className="text-gray-400">Model:</span>{' '}
+              <span className="text-gray-700 font-medium">{log.llm_model || '-'}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Thinking:</span>{' '}
+              <span className="text-gray-700 font-medium">{log.thinking_mode ? 'Yes' : 'No'}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Excel:</span>{' '}
+              <span className="text-gray-700 font-medium">{log.has_excel ? 'Yes' : 'No'}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Excel Duration:</span>{' '}
+              <span className="text-gray-700 font-medium">{formatDuration(log.excel_duration)}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Sources:</span>{' '}
+              <span className="text-gray-700 font-medium">{log.source_count ?? '-'}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Chunks:</span>{' '}
+              <span className="text-gray-700 font-medium">{log.chunk_count ?? '-'}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">Tokens:</span>{' '}
+              <span className="text-gray-700 font-medium">{log.token_count ?? '-'}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">User:</span>{' '}
+              <span className="text-gray-700 font-medium">{log.user_name}</span>
+            </div>
           </div>
-          <div>
-            <span className="text-gray-400">Thinking:</span>{' '}
-            <span className="text-gray-700 font-medium">{log.thinking_mode ? 'Yes' : 'No'}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Excel:</span>{' '}
-            <span className="text-gray-700 font-medium">{log.has_excel ? 'Yes' : 'No'}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Excel Duration:</span>{' '}
-            <span className="text-gray-700 font-medium">{formatDuration(log.excel_duration)}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Sources:</span>{' '}
-            <span className="text-gray-700 font-medium">{log.source_count ?? '-'}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Chunks:</span>{' '}
-            <span className="text-gray-700 font-medium">{log.chunk_count ?? '-'}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">Tokens:</span>{' '}
-            <span className="text-gray-700 font-medium">{log.token_count ?? '-'}</span>
-          </div>
-          <div>
-            <span className="text-gray-400">User:</span>{' '}
-            <span className="text-gray-700 font-medium">{log.user_name}</span>
-          </div>
+
+          {/* AI Response */}
+          {log.response_preview && (
+            <div className="text-xs">
+              <span className="text-gray-400 font-medium">Response:</span>
+              <div className="mt-1 p-2 bg-white rounded border border-gray-200 text-gray-700 whitespace-pre-wrap">
+                {showFullResponse && log.response_full
+                  ? log.response_full
+                  : log.response_preview}
+                {log.response_full && log.response_full.length > 200 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowFullResponse(!showFullResponse); }}
+                    className="ml-1 text-blue-500 hover:text-blue-700 font-medium"
+                  >
+                    {showFullResponse ? '...collapse' : '...expand'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {log.error_message && (
-            <div className="col-span-2 sm:col-span-4">
+            <div className="text-xs">
               <span className="text-gray-400">Error:</span>{' '}
               <span className="text-red-600 font-medium">{log.error_message}</span>
             </div>
@@ -185,13 +211,14 @@ export default function AdminLogsPage() {
                 <th className="px-4 py-3 font-medium text-right">RAGFlow</th>
                 <th className="px-4 py-3 font-medium text-right">LLM</th>
                 <th className="px-4 py-3 font-medium text-right">1st Token</th>
+                <th className="px-4 py-3 font-medium text-center">Feedback</th>
                 <th className="px-4 py-3 font-medium text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {logs.length === 0 && !isLoading ? (
                 <tr>
-                  <td colSpan={11} className="px-4 py-12 text-center text-gray-400">
+                  <td colSpan={12} className="px-4 py-12 text-center text-gray-400">
                     No logs found
                   </td>
                 </tr>
@@ -300,6 +327,15 @@ function LogRow({
         </td>
         <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-500">
           {formatDuration(log.llm_first_token)}
+        </td>
+        <td className="px-4 py-2.5 text-center">
+          {log.feedback === 'up' ? (
+            <ThumbsUp size={14} className="inline text-green-600" />
+          ) : log.feedback === 'down' ? (
+            <ThumbsDown size={14} className="inline text-red-500" />
+          ) : (
+            <span className="text-gray-300">-</span>
+          )}
         </td>
         <td className="px-4 py-2.5 text-center">
           <span

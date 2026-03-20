@@ -962,11 +962,15 @@ export default function NotebookPage() {
   }, []);
 
   const handleMessageFeedback = useCallback((msgId: string, vote: 'up' | 'down') => {
+    const newVote = messageFeedback[msgId] === vote ? null : vote;
     setMessageFeedback((prev) => ({
       ...prev,
-      [msgId]: prev[msgId] === vote ? null : vote,
+      [msgId]: newVote,
     }));
-  }, []);
+    if (id) {
+      api.submitChatFeedback(id, msgId, newVote || "none").catch(() => {});
+    }
+  }, [id, messageFeedback]);
 
   const handleCopyToClipboard = useCallback((text: string) => {
     if (navigator.clipboard) {
