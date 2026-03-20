@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     LLM_MODEL: str = "qwen3.5-plus"
     LLM_MAX_OUTPUT_TOKENS: int = 8192
-    LLM_CONTEXT_WINDOW: int = 1000000  # model context window in tokens
+    LLM_CONTEXT_WINDOW: int = 256000  # model context window in tokens
     RAG_TOP_K: int = 15
 
     # LLM API key
