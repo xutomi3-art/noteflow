@@ -1875,7 +1875,7 @@ export default function NotebookPage() {
                     title={deepThinking ? "Deep Thinking is on — queries are decomposed for multi-angle retrieval" : "Enable Deep Thinking for complex questions"}
                   >
                     <Sparkles className="w-3 h-3 inline-block mr-1 -mt-px" />
-                    {deepThinking ? "Thinking" : "Think"}
+                    {deepThinking ? "Thinking" : "Think Off"}
                   </button>
                   <button
                     type="button"
