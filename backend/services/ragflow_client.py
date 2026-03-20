@@ -131,10 +131,9 @@ class RAGFlowClient:
     ) -> list[dict]:
         """Retrieve relevant chunks from RAGFlow datasets.
 
-        Uses RAGFlow's recommended settings:
-        - vector_similarity_weight=0.3 (keyword-heavy, good for Chinese)
-        - toc_enhance=True (PageIndex for long document context)
-        - cross_languages for Chinese/English mixed content
+        Uses optimized settings for English-primary, Chinese-secondary content:
+        - vector_similarity_weight=0.4 (slightly more vector for English semantic matching)
+        - keyword=True for BM25 hybrid search
         """
         try:
             async with httpx.AsyncClient(timeout=RETRIEVAL_TIMEOUT, limits=_POOL_LIMITS) as client:
@@ -142,7 +141,7 @@ class RAGFlowClient:
                     "question": question,
                     "dataset_ids": dataset_ids,
                     "similarity_threshold": 0.2,
-                    "vector_similarity_weight": 0.3,
+                    "vector_similarity_weight": 0.4,
                     "top_k": top_k,
                     "keyword": True,
                 }
