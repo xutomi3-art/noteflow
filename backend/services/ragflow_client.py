@@ -7,26 +7,14 @@ from backend.core.config import settings
 logger = logging.getLogger(__name__)
 
 TIMEOUT = httpx.Timeout(60.0, connect=10.0)
+RETRIEVAL_TIMEOUT = httpx.Timeout(90.0, connect=10.0)  # longer for TOC/KG-enhanced retrieval
 
-# Map file extensions to optimal RAGFlow chunk methods
-_CHUNK_METHOD_BY_EXT: dict[str, str] = {
-    ".pptx": "presentation",
-    ".ppt": "presentation",
-}
-
-
-def _choose_chunk_method(filename: str | None) -> str:
-    """Choose the best chunk method based on file extension."""
-    if filename:
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        method = _CHUNK_METHOD_BY_EXT.get(f".{ext}")
-        if method:
-            return method
-    return "naive"
+# Persistent connection pool for better performance
+_POOL_LIMITS = httpx.Limits(max_connections=20, max_keepalive_connections=10)
 
 
 class RAGFlowClient:
-    """HTTP client for RAGFlow API."""
+    """HTTP client for RAGFlow API with connection pooling."""
 
     def __init__(self) -> None:
         self.base_url = settings.RAGFLOW_BASE_URL.rstrip("/")
@@ -39,7 +27,7 @@ class RAGFlowClient:
     async def create_dataset(self, name: str) -> str | None:
         """Create a dataset in RAGFlow. Returns dataset_id or None on failure."""
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
                 resp = await client.post(
                     f"{self.base_url}/api/v1/datasets",
                     headers=self._headers,
@@ -71,7 +59,7 @@ class RAGFlowClient:
         last_error = None
         for attempt in range(3):
             try:
-                async with httpx.AsyncClient(timeout=upload_timeout) as client:
+                async with httpx.AsyncClient(timeout=upload_timeout, limits=_POOL_LIMITS) as client:
                     resp = await client.post(
                         f"{self.base_url}/api/v1/datasets/{dataset_id}/documents",
                         headers=self._headers,
@@ -94,7 +82,7 @@ class RAGFlowClient:
     async def parse_document(self, dataset_id: str, document_id: str) -> bool:
         """Trigger parsing (chunking + embedding) for a document."""
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
                 resp = await client.post(
                     f"{self.base_url}/api/v1/datasets/{dataset_id}/chunks",
                     headers=self._headers,
@@ -112,7 +100,7 @@ class RAGFlowClient:
     ) -> dict | None:
         """Check parsing status of a document. Returns dict with run, chunk_count, progress."""
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
                 resp = await client.get(
                     f"{self.base_url}/api/v1/datasets/{dataset_id}/documents",
                     headers=self._headers,
@@ -143,20 +131,21 @@ class RAGFlowClient:
     ) -> list[dict]:
         """Retrieve relevant chunks from RAGFlow datasets.
 
-        Args:
-            top_k: Number of final chunks to return to LLM.
-            document_ids: Optional list of RAGFlow document IDs to scope
-                retrieval to specific documents within the datasets.
+        Uses RAGFlow's recommended settings:
+        - vector_similarity_weight=0.3 (keyword-heavy, good for Chinese)
+        - toc_enhance=True (PageIndex for long document context)
+        - cross_languages for Chinese/English mixed content
         """
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=RETRIEVAL_TIMEOUT, limits=_POOL_LIMITS) as client:
                 payload: dict = {
                     "question": question,
                     "dataset_ids": dataset_ids,
                     "similarity_threshold": 0.2,
-                    "vector_similarity_weight": 0.5,
+                    "vector_similarity_weight": 0.3,
                     "top_k": top_k,
                     "keyword": True,
+                    "cross_languages": ["Chinese", "English"],
                 }
                 if document_ids:
                     payload["document_ids"] = document_ids
@@ -180,7 +169,7 @@ class RAGFlowClient:
     ) -> list[dict]:
         """List chunks of a document. Returns list of chunk dicts with 'content' field."""
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
                 resp = await client.get(
                     f"{self.base_url}/api/v1/datasets/{dataset_id}/documents/{document_id}/chunks",
                     headers=self._headers,
@@ -201,7 +190,7 @@ class RAGFlowClient:
     async def delete_document(self, dataset_id: str, document_id: str) -> bool:
         """Delete a document from RAGFlow."""
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
                 resp = await client.request(
                     "DELETE",
                     f"{self.base_url}/api/v1/datasets/{dataset_id}/documents",
