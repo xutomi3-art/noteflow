@@ -155,7 +155,7 @@ class RAGFlowClient:
         """Retrieve relevant chunks from RAGFlow datasets.
 
         Uses optimized settings for English-primary, Chinese-secondary content:
-        - top_k=128: ES KNN candidate pool for reranking (best practice: 50-128)
+        - top_k=80: ES KNN candidate pool (just above RERANK_LIMIT=75)
         - size=top_k: final number of chunks returned after reranking
         - vector_similarity_weight from settings (default 0.6, higher = more semantic)
         - similarity_threshold from settings (default 0.0, filtering disabled)
@@ -169,7 +169,7 @@ class RAGFlowClient:
                     "dataset_ids": dataset_ids,
                     "similarity_threshold": settings.RAG_SIMILARITY_THRESHOLD,
                     "vector_similarity_weight": settings.RAG_VECTOR_WEIGHT,
-                    "top_k": 128,
+                    "top_k": 80,
                     "size": top_k,
                     "keyword": True,
                     "rerank_id": "gte-rerank",
