@@ -155,10 +155,12 @@ class RAGFlowClient:
         """Retrieve relevant chunks from RAGFlow datasets.
 
         Uses optimized settings for English-primary, Chinese-secondary content:
+        - top_k=256: ES candidate pool for reranking (large pool → better rerank quality)
+        - size=top_k: final number of chunks returned after reranking
         - vector_similarity_weight from settings (default 0.6, higher = more semantic)
-        - similarity_threshold from settings (default 0.2)
+        - similarity_threshold from settings (default 0.0, filtering disabled)
         - keyword=True for BM25 hybrid search
-        - rerank_id=qwen3-rerank for result reranking
+        - rerank_id=gte-rerank for result reranking
         """
         try:
             async with httpx.AsyncClient(timeout=RETRIEVAL_TIMEOUT, limits=_POOL_LIMITS) as client:
@@ -167,7 +169,8 @@ class RAGFlowClient:
                     "dataset_ids": dataset_ids,
                     "similarity_threshold": settings.RAG_SIMILARITY_THRESHOLD,
                     "vector_similarity_weight": settings.RAG_VECTOR_WEIGHT,
-                    "top_k": top_k,
+                    "top_k": 256,
+                    "size": top_k,
                     "keyword": True,
                     "rerank_id": "gte-rerank",
                 }
