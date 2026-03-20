@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     LLM_MODEL: str = "qwen3.5-plus"
     LLM_MAX_OUTPUT_TOKENS: int = 8192
-    RAG_TOP_K: int = 6
+    RAG_TOP_K: int = 15
 
     # Qwen API key (shared across chat, embedding, vision)
     QWEN_API_KEY: str = ""

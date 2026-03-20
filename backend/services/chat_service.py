@@ -140,6 +140,36 @@ async def _get_source_dataset_ids(
     return dataset_ids, document_ids, sources_map
 
 
+async def _rewrite_query_for_retrieval(message: str) -> str:
+    """Rewrite a conversational query into concise keywords for better RAG retrieval.
+
+    Only rewrites if the query is conversational (>5 words). Uses a fast LLM call
+    with Qwen-Turbo to minimize latency.
+    """
+    try:
+        rewrite_messages = [
+            {"role": "system", "content": (
+                "You are a search query optimizer. Rewrite the user's conversational question "
+                "into 3-8 concise search keywords that capture the core intent. "
+                "Output ONLY the keywords, no explanation. Keep named entities intact."
+            )},
+            {"role": "user", "content": message},
+        ]
+        rewritten = await qwen_client.generate(
+            rewrite_messages,
+            model="qwen-turbo",
+            temperature=0.0,
+            max_tokens=50,
+        )
+        rewritten = rewritten.strip().strip('"').strip("'")
+        if rewritten and not rewritten.startswith("[Error"):
+            logger.info("Query rewrite: [%s] -> [%s]", message, rewritten)
+            return rewritten
+    except Exception as e:
+        logger.warning("Query rewrite failed, using original: %s", e)
+    return message
+
+
 async def stream_chat(
     db: AsyncSession,
     notebook_id: uuid.UUID,
@@ -194,17 +224,22 @@ async def stream_chat(
         excel_sources = list(excel_result.scalars().all())
         logger.info("Excel sources found: %d, source_ids: %s", len(excel_sources), source_ids)
 
-        # Step 2a: RAGFlow retrieval first — find relevant chunks across all sources
+        # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
+        retrieval_query = message
+        if dataset_ids and len(message.split()) > 5:
+            retrieval_query = await _rewrite_query_for_retrieval(message)
+
+        # Step 2b: RAGFlow retrieval — find relevant chunks across all sources
         excel_context = None
         sql_answer = None
 
         chunks = []
         if dataset_ids:
             filter_doc_ids = document_ids if source_ids and document_ids else None
-            chunks = await ragflow_client.retrieve(dataset_ids, message, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids)
+            chunks = await ragflow_client.retrieve(dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids)
         t_ragflow_end = time.time()
 
-        # Step 2b: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
+        # Step 2c: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
         # If so, send only those matched Excel tables in full to LLM.
         # For data computation questions, also try SQL on matched tables.
         t_excel_start = time.time()
