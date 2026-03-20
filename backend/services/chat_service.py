@@ -296,7 +296,7 @@ async def stream_chat(
             excel_query = excel_query.where(Source.id.in_([uuid.UUID(sid) for sid in source_ids]))
         excel_result = await db.execute(excel_query)
         excel_sources = list(excel_result.scalars().all())
-        logger.info("Excel sources found: %d, source_ids: %s", len(excel_sources), source_ids)
+        logger.info("Excel sources found: %d, source_ids: %s, deep_thinking: %s", len(excel_sources), source_ids, deep_thinking)
 
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
         retrieval_query = message
