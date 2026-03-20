@@ -132,7 +132,7 @@ class RAGFlowClient:
         """Retrieve relevant chunks from RAGFlow datasets.
 
         Uses optimized settings for English-primary, Chinese-secondary content:
-        - vector_similarity_weight=0.4 (slightly more vector for English semantic matching)
+        - vector_similarity_weight=0.6 (higher vector weight for English semantic matching)
         - keyword=True for BM25 hybrid search
         """
         try:
@@ -141,7 +141,7 @@ class RAGFlowClient:
                     "question": question,
                     "dataset_ids": dataset_ids,
                     "similarity_threshold": 0.2,
-                    "vector_similarity_weight": 0.4,
+                    "vector_similarity_weight": 0.6,
                     "top_k": top_k,
                     "keyword": True,
                 }
