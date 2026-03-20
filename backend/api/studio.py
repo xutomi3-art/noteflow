@@ -222,7 +222,7 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID, source_i
                     chunks = await ragflow_client.retrieve(
                         dataset_ids=[dataset_id],
                         question=query,
-                        top_k=15,
+                        top_k=settings.RAG_TOP_K,
                         document_ids=filter_doc_ids,
                     )
                 except Exception:

@@ -149,8 +149,11 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a search query optimizer. Rewrite the user's conversational question "
-                "into 3-8 concise search keywords that capture the core intent. "
+                "You are a bilingual search query optimizer. Rewrite the user's conversational question "
+                "into concise search keywords that capture the core intent. "
+                "Output keywords in BOTH English AND Chinese to maximize retrieval across bilingual documents. "
+                "Format: English keywords followed by Chinese keywords. "
+                "Example: 'SAS founded year establishment 创立时间 建校 成立年份' "
                 "Output ONLY the keywords, no explanation. Keep named entities intact."
             )},
             {"role": "user", "content": message},
