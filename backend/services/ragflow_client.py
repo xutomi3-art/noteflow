@@ -145,7 +145,6 @@ class RAGFlowClient:
                     "vector_similarity_weight": 0.3,
                     "top_k": top_k,
                     "keyword": True,
-                    "cross_languages": ["Chinese", "English"],
                 }
                 if document_ids:
                     payload["document_ids"] = document_ids
