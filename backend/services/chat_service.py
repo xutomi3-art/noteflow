@@ -560,12 +560,16 @@ Follow these rules strictly:
         else:
             system_prompt = SYSTEM_PROMPT
 
-        # Deep Thinking: augment system prompt with reasoning instructions
+        # Deep Thinking: augment system prompt with chain-of-thought reasoning
         if deep_thinking:
-            system_prompt += (
-                "\n9. Analyze the retrieved information from multiple angles. "
-                "If the answer requires reasoning across multiple sources, explain your reasoning step by step."
-            )
+            system_prompt += """
+9. DEEP THINKING MODE — you must reason step by step before answering:
+   a. First, list the key facts found in each source (silently, do not show this to the user).
+   b. Identify connections, contradictions, or gaps between sources.
+   c. If the answer requires combining facts from multiple sources, explicitly show your reasoning chain:
+      "Source [X] states A. Source [Y] states B. Combining these, we can conclude C."
+   d. If information is partially available, say what CAN be determined and what cannot.
+   e. Do NOT just summarize each source separately — synthesize and reason across them."""
 
         messages = [
             {"role": "system", "content": system_prompt},
