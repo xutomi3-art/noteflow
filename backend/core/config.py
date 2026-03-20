@@ -13,13 +13,14 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # LLM API (Qwen3.5-Plus via DashScope OpenAI-compatible API)
+    # LLM API (OpenAI-compatible endpoint)
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     LLM_MODEL: str = "qwen3.5-plus"
     LLM_MAX_OUTPUT_TOKENS: int = 8192
+    LLM_CONTEXT_WINDOW: int = 1000000  # model context window in tokens
     RAG_TOP_K: int = 15
 
-    # Qwen API key (shared across chat, embedding, vision)
+    # LLM API key
     QWEN_API_KEY: str = ""
     QWEN_EMBEDDING_MODEL: str = "text-embedding-v3"
 

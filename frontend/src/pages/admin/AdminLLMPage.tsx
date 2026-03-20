@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Save, TestTube, Loader2 } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 import { api } from '@/services/api';
@@ -6,18 +6,19 @@ import { api } from '@/services/api';
 interface FieldGroup {
   title: string;
   description: string;
-  fields: { key: string; label: string; secret?: boolean }[];
+  fields: { key: string; label: string; secret?: boolean; placeholder?: string }[];
 }
 
 const GROUPS: FieldGroup[] = [
   {
-    title: 'Qwen3.5-Plus (Chat LLM)',
-    description: 'Unified Qwen API for chat, embedding, and vision',
+    title: 'LLM (Chat Model)',
+    description: 'Any OpenAI-compatible API — Qwen, GPT, DeepSeek, Claude, etc.',
     fields: [
       { key: 'qwen_api_key', label: 'API Key', secret: true },
-      { key: 'llm_base_url', label: 'Base URL' },
-      { key: 'llm_model', label: 'Model' },
-      { key: 'llm_max_output_tokens', label: 'Max Output Tokens' },
+      { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. https://api.openai.com/v1' },
+      { key: 'llm_model', label: 'Model', placeholder: 'e.g. gpt-4o, qwen3.5-plus, deepseek-chat' },
+      { key: 'llm_context_window', label: 'Context Window (tokens)', placeholder: 'e.g. 128000, 1000000' },
+      { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: 'e.g. 8192' },
     ],
   },
   {
@@ -26,12 +27,18 @@ const GROUPS: FieldGroup[] = [
     fields: [
       { key: 'ragflow_api_key', label: 'API Key', secret: true },
       { key: 'ragflow_base_url', label: 'Base URL' },
-      { key: 'rag_top_k', label: 'Top-K Chunks (default: 6)' },
+      { key: 'rag_top_k', label: 'Top-K Chunks', placeholder: 'default: 15' },
     ],
   },
 ];
 
 const ALL_KEYS = GROUPS.flatMap((g) => g.fields.map((f) => f.key));
+
+function formatTokens(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${Math.round(n / 1000)}K`;
+  return String(n);
+}
 
 export default function AdminLLMPage() {
   const { settings, fetchSettings, saveSettings, isLoading } = useAdminStore();
@@ -59,6 +66,22 @@ export default function AdminLLMPage() {
     const s = settings.find((s) => s.key === key);
     return s?.source ?? 'env';
   };
+
+  // Compute dynamic token budget from context window
+  const budget = useMemo(() => {
+    const contextWindow = parseInt(form.llm_context_window || '0') || 128000;
+    const maxOutput = parseInt(form.llm_max_output_tokens || '0') || 8192;
+    const topK = parseInt(form.rag_top_k || '0') || 15;
+
+    const systemPrompt = 1000;
+    const historyBudget = Math.min(Math.round(contextWindow * 0.06), 60000); // ~6% for history
+    const ragBudget = topK * 1500; // ~1500 tokens per chunk
+    const excelBudget = Math.min(Math.round(contextWindow * 0.4), 600000);
+    const normalCap = Math.round(contextWindow * 0.25);
+    const excelCap = Math.round(contextWindow * 0.8);
+
+    return { contextWindow, maxOutput, systemPrompt, historyBudget, ragBudget, excelBudget, normalCap, excelCap, topK };
+  }, [form.llm_context_window, form.llm_max_output_tokens, form.rag_top_k]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -98,6 +121,15 @@ export default function AdminLLMPage() {
     }
   };
 
+  const budgetRows = [
+    { label: "System Prompt", tokens: budget.systemPrompt, color: "bg-slate-400" },
+    { label: "Chat History", tokens: budget.historyBudget, color: "bg-blue-400" },
+    { label: `RAG Context (top-${budget.topK})`, tokens: budget.ragBudget, color: "bg-emerald-400" },
+    { label: "Excel Context", tokens: budget.excelBudget, color: "bg-amber-400" },
+    { label: "Max Output", tokens: budget.maxOutput, color: "bg-purple-400" },
+  ];
+  const totalBudget = budgetRows.reduce((sum, r) => sum + r.tokens, 0);
+
   return (
     <div className="max-w-2xl space-y-6">
       <h2 className="text-2xl font-semibold text-gray-900 mb-2">LLM & Services</h2>
@@ -107,7 +139,7 @@ export default function AdminLLMPage() {
           <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{group.title}</h3>
           <p className="text-xs text-gray-400 mb-4">{group.description}</p>
           <div className="space-y-4">
-            {group.fields.map(({ key, label, secret }) => (
+            {group.fields.map(({ key, label, secret, placeholder }) => (
               <div key={key}>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-sm font-medium text-gray-700">{label}</label>
@@ -123,7 +155,7 @@ export default function AdminLLMPage() {
                   type={secret ? 'password' : 'text'}
                   value={form[key] ?? ''}
                   onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  placeholder={label}
+                  placeholder={placeholder || label}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
                 />
               </div>
@@ -132,47 +164,46 @@ export default function AdminLLMPage() {
         </div>
       ))}
 
-      {/* Token Budget Info */}
+      {/* Token Budget — auto-calculated */}
       <div className="bg-gray-50 rounded-xl border border-gray-100 p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Token Budget</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Token Budget (auto-calculated)</h3>
         <p className="text-xs text-gray-500 mb-4">
-          Model: <span className="font-medium text-gray-700">Qwen3.5-Plus</span> &middot; Context: <span className="font-medium text-gray-700">1,000,000 tokens</span> &middot; Max Output: <span className="font-medium text-gray-700">65,536 tokens</span>
+          Model: <span className="font-medium text-gray-700">{form.llm_model || '-'}</span>
+          {' '}&middot; Context Window: <span className="font-medium text-gray-700">{formatTokens(budget.contextWindow)} tokens</span>
+          {' '}&middot; Max Output: <span className="font-medium text-gray-700">{formatTokens(budget.maxOutput)} tokens</span>
         </p>
 
-        {/* Budget Allocation */}
         <div className="mb-4">
-          <p className="text-xs font-semibold text-gray-600 mb-2">Current Allocation</p>
+          <p className="text-xs font-semibold text-gray-600 mb-2">Allocation</p>
           <div className="space-y-1.5">
-            {[
-              { label: "System Prompt", tokens: "~1K", pct: 0.1, color: "bg-slate-400" },
-              { label: "Chat History", tokens: "~30K (30 rounds)", pct: 3, color: "bg-blue-400" },
-              { label: "RAG Context", tokens: "~20K (top-10 chunks)", pct: 2, color: "bg-emerald-400" },
-              { label: "Excel Context (dynamic)", tokens: "~100-300K", pct: 20, color: "bg-amber-400" },
-            ].map(({ label, tokens, pct, color }) => (
-              <div key={label} className="flex items-center gap-2">
-                <div className="w-[120px] text-xs text-gray-600 truncate">{label}</div>
-                <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
-                  <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.max(pct, 1)}%` }} />
+            {budgetRows.map(({ label, tokens, color }) => {
+              const pct = Math.max((tokens / budget.contextWindow) * 100, 0.5);
+              return (
+                <div key={label} className="flex items-center gap-2">
+                  <div className="w-[140px] text-xs text-gray-600 truncate">{label}</div>
+                  <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
+                    <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                  </div>
+                  <div className="w-[80px] text-xs text-gray-500 text-right">{formatTokens(tokens)}</div>
                 </div>
-                <div className="w-[130px] text-xs text-gray-500 text-right">{tokens}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <div className="mt-2 flex items-center gap-2">
-            <div className="w-[120px] text-xs text-gray-600 truncate">Total Cap</div>
-            <div className="text-xs text-gray-500">Normal: <span className="font-medium text-gray-700">~250K tokens</span> &middot; With Excel: <span className="font-medium text-gray-700">~800K tokens</span></div>
+          <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+            <div className="w-[140px] text-gray-600">Total Cap</div>
+            <div>
+              Normal: <span className="font-medium text-gray-700">~{formatTokens(budget.normalCap)}</span>
+              {' '}&middot; With Excel: <span className="font-medium text-gray-700">~{formatTokens(budget.excelCap)}</span>
+            </div>
           </div>
         </div>
 
-        {/* Pricing */}
-        <div className="border-t border-gray-200 pt-3">
-          <p className="text-xs font-semibold text-gray-600 mb-2">Pricing (per million tokens)</p>
-          <div className="grid grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-gray-500">
-            <span>&le;128K:</span><span>&yen;0.8 input</span><span>&yen;4.8 output</span>
-            <span>128K&ndash;256K:</span><span>&yen;2.0 input</span><span>&yen;12 output</span>
-            <span>256K&ndash;1M:</span><span>&yen;4.0 input</span><span>&yen;24 output</span>
+        {/* Utilization warning */}
+        {totalBudget > budget.contextWindow && (
+          <div className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2 mb-3">
+            Warning: Total budget ({formatTokens(totalBudget)}) exceeds context window ({formatTokens(budget.contextWindow)}). The system will truncate context dynamically.
           </div>
-        </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3">

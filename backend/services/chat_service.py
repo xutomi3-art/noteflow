@@ -462,11 +462,12 @@ The uploaded documents do not contain information relevant to this question. Ple
         history_messages.reverse()
         logger.info("Chat history: %d messages, %d chars", len(history_messages), history_chars)
 
-        # Safety cap: Qwen3.5-Plus has 1M context.
-        # Normal questions: cap at ~250K tokens (≤256K pricing tier)
-        # Excel questions: cap at ~800K tokens (utilize 1M context)
+        # Dynamic context budget based on configured context window.
+        # Reserve 25% for normal queries, 80% for Excel-heavy queries.
+        # Convert tokens to chars (~2 chars per token).
+        context_window = settings.LLM_CONTEXT_WINDOW
         has_excel_data = excel_context is not None or sql_answer is not None
-        MAX_TOTAL_CHARS = 1600000 if has_excel_data else 500000
+        MAX_TOTAL_CHARS = int(context_window * 1.6) if has_excel_data else int(context_window * 0.5)
         max_user_chars = MAX_TOTAL_CHARS - len(SYSTEM_PROMPT) - history_chars
         if len(user_content) > max_user_chars:
             logger.warning("User content too long (%d chars), truncating to %d (history=%d)", len(user_content), max_user_chars, history_chars)
