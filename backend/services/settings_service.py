@@ -149,7 +149,10 @@ async def load_db_settings() -> None:
     # Reinitialize qwen_client with DB-loaded settings
     from backend.services.qwen_client import qwen_client
     qwen_client.__init__()
-    logger.info("Loaded DB settings into memory and reinitialized LLM client")
+    logger.info(
+        "Loaded DB settings into memory — LLM_MODEL=%s, LLM_BASE_URL=%s, RAG_TOP_K=%s",
+        settings.LLM_MODEL, settings.LLM_BASE_URL, settings.RAG_TOP_K,
+    )
 
 
 async def get_all_settings(db: AsyncSession) -> list[dict]:
