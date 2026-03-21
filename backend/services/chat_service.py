@@ -213,7 +213,7 @@ Rules:
 - Even with partial evidence, reason from what you found and state your confidence level.
 - Format your Answer using Markdown when appropriate."""
 
-REACT_MAX_ROUNDS = 3
+REACT_MAX_ROUNDS = settings.RAG_THINK_ROUNDS or 5
 
 
 async def _react_step(messages: list[dict], model: str | None = None) -> str:
@@ -339,17 +339,18 @@ async def stream_chat(
                     logger.info("ReAct round %d raw output: %s", round_num, step_output[:500])
                     thought, search_queries, answer = _parse_react_output(step_output)
 
-                    # Force search in early rounds — don't let LLM skip retrieval
-                    if round_num < REACT_MAX_ROUNDS and answer and not search_queries:
-                        logger.info("ReAct round %d: LLM tried to answer early, forcing search from thought", round_num)
-                        search_queries = [thought[:100] if thought else message]
+                    # Force search in first 2 rounds — don't let LLM skip retrieval
+                    if round_num <= 2 and (answer or not search_queries):
+                        if not search_queries:
+                            logger.info("ReAct round %d: no queries, forcing search from thought", round_num)
+                            search_queries = [thought[:100] if thought else message]
                         answer = None
 
                     # Stream thinking step to user
                     if thought:
                         yield f"data: {json.dumps({'type': 'thinking', 'step': round_num, 'thought': thought})}\n\n"
 
-                    if answer and round_num >= REACT_MAX_ROUNDS:
+                    if answer and round_num >= 3:
                         react_answer = answer
                         react_steps.append({"round": round_num, "thought": thought, "action": "answer"})
                         logger.info("ReAct round %d: answer reached", round_num)
@@ -409,6 +410,7 @@ async def stream_chat(
 
                     # Feed observation back to LLM with escalating strategy guidance
                     react_messages.append({"role": "assistant", "content": step_output})
+                    max_rounds = REACT_MAX_ROUNDS
                     if round_num == 1:
                         guidance = (
                             "Look at the excerpts above. Based on what you found, think about what OTHER data in these documents "
@@ -417,12 +419,24 @@ async def stream_chat(
                         )
                     elif round_num == 2:
                         guidance = (
-                            "Based on all evidence so far, if you still don't have a direct answer, think about INDIRECT evidence. "
-                            "What patterns, numbers, lists, or records in these documents could you compare across time periods to infer the answer? "
-                            "Output Thought + 3 Search queries targeting that indirect evidence, or Answer if you can reason from what you have."
+                            "Based on all evidence so far, if you still don't have a direct answer, try DIFFERENT types of documents or sections. "
+                            "Look for meeting records, attendance lists, policy documents, budget reports, or any structured data that might contain the answer. "
+                            "Do NOT give an Answer yet. Output Thought + 3 Search queries."
+                        )
+                    elif round_num == 3:
+                        guidance = (
+                            "If you still haven't found a direct answer, search for INDIRECT evidence. "
+                            "What patterns, numbers, lists, or records could you compare across different time periods to INFER the answer? "
+                            "For example: compare participant lists, membership counts, or organizational charts from different dates. "
+                            "Output Thought + 3 Search queries targeting indirect evidence, or Answer if you can reason from what you have."
+                        )
+                    elif round_num < max_rounds:
+                        guidance = (
+                            "Try one more creative angle. Search for specific names, dates, or numbers mentioned in previous results "
+                            "that might lead to the answer. You may give an Answer if you have enough evidence."
                         )
                     else:
-                        guidance = "Provide your Answer based on all evidence gathered so far."
+                        guidance = "Provide your final Answer based on ALL evidence gathered across all rounds. Reason from what you have."
                     react_messages.append({"role": "user", "content": f"Observation: {observation}\n\n{guidance}"})
 
                 # Collect all unique chunks sorted by similarity, take top-15

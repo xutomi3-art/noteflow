@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     RAG_VECTOR_WEIGHT: float = 0.7
     RAG_REWRITE_MODEL: str = ""  # empty = use main LLM_MODEL
     RAG_DECOMPOSE_MODEL: str = ""  # empty = use main LLM_MODEL
+    RAG_THINK_ROUNDS: int = 5  # max ReAct rounds for deep thinking
 
     # LLM API key
     QWEN_API_KEY: str = ""

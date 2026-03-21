@@ -9,7 +9,7 @@ from backend.models.system_setting import SystemSetting
 
 # Keys that can be configured via admin panel
 CONFIGURABLE_KEYS = {
-    "llm_base_url", "llm_model", "llm_max_output_tokens", "llm_context_window", "rag_top_k", "rag_similarity_threshold", "rag_vector_weight", "rag_rewrite_model", "rag_decompose_model",
+    "llm_base_url", "llm_model", "llm_max_output_tokens", "llm_context_window", "rag_top_k", "rag_similarity_threshold", "rag_vector_weight", "rag_rewrite_model", "rag_decompose_model", "rag_think_rounds",
     "qwen_api_key",
     "ragflow_api_key", "ragflow_base_url",
     "docmee_api_key",
@@ -38,6 +38,7 @@ _ENV_MAP = {
     "rag_vector_weight": "RAG_VECTOR_WEIGHT",
     "rag_rewrite_model": "RAG_REWRITE_MODEL",
     "rag_decompose_model": "RAG_DECOMPOSE_MODEL",
+    "rag_think_rounds": "RAG_THINK_ROUNDS",
     "qwen_api_key": "QWEN_API_KEY",
     "ragflow_api_key": "RAGFLOW_API_KEY",
     "ragflow_base_url": "RAGFLOW_BASE_URL",

@@ -32,6 +32,7 @@ const GROUPS: FieldGroup[] = [
       { key: 'rag_vector_weight', label: 'Vector Weight', placeholder: 'default: 0.7 (0.0–1.0, higher = more semantic)' },
       { key: 'rag_rewrite_model', label: 'Query Rewrite Model', placeholder: 'default: qwen-turbo (fast, for keyword rewriting)' },
       { key: 'rag_decompose_model', label: 'Deep Think Model', placeholder: 'empty = use main model (for CoT query decomposition)' },
+      { key: 'rag_think_rounds', label: 'Deep Think Rounds', placeholder: 'default: 5 (max ReAct search rounds)' },
     ],
   },
 ];
