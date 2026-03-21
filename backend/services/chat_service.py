@@ -307,9 +307,12 @@ async def stream_chat(
         logger.info("Excel sources found: %d, source_ids: %s, deep_thinking: %s", len(excel_sources), source_ids, deep_thinking)
 
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
+        # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
         retrieval_query = message
         if dataset_ids and len(message.split()) > 5:
-            retrieval_query = await _rewrite_query_for_retrieval(message)
+            rewritten = await _rewrite_query_for_retrieval(message)
+            if rewritten != message:
+                retrieval_query = f"{message}\n{rewritten}"
 
         # Step 2b: RAGFlow retrieval — find relevant chunks across all sources
         excel_context = None
