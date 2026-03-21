@@ -24,7 +24,12 @@ RETRY_DELAYS = [60, 120, 240]  # seconds — exponential backoff
 
 
 async def _maybe_trigger_raptor(notebook_id: uuid.UUID) -> None:
-    """Check if all sources in a notebook are ready, and trigger Raptor if so."""
+    """Trigger Raptor only when ALL sources in the notebook are ready.
+
+    Raptor is a dataset-level full re-clustering operation, so running it
+    before all sources are ready wastes resources — every subsequent run
+    redoes the entire clustering from scratch.
+    """
     from backend.models.source import Source
 
     try:
@@ -40,7 +45,6 @@ async def _maybe_trigger_raptor(notebook_id: uuid.UUID) -> None:
             if not all_ready:
                 return
 
-            # Get the dataset_id from any source
             dataset_id = next((s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id), None)
             if not dataset_id:
                 return
@@ -50,7 +54,7 @@ async def _maybe_trigger_raptor(notebook_id: uuid.UUID) -> None:
             if task_id:
                 logger.info("Raptor task started: %s", task_id)
             else:
-                logger.warning("Failed to trigger Raptor for dataset %s", dataset_id)
+                logger.warning("Raptor not triggered for dataset %s (may already be running)", dataset_id)
     except Exception as e:
         logger.error("_maybe_trigger_raptor failed: %s", e)
 
