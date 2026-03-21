@@ -128,8 +128,8 @@ export default function AdminLogsPage() {
   }, [settings]);
 
   const handleSaveRetention = async () => {
-    const days = parseInt(retentionDays);
-    if (!days || days < 1) return;
+    const days = Math.min(Math.max(parseInt(retentionDays) || 7, 1), 30);
+    setRetentionDays(String(days));
     await saveSettings({ log_retention_days: String(days) });
     setRetentionSaved(true);
     setTimeout(() => setRetentionSaved(false), 2000);
@@ -175,7 +175,7 @@ export default function AdminLogsPage() {
           <input
             type="number"
             min="1"
-            max="365"
+            max="30"
             value={retentionDays}
             onChange={(e) => setRetentionDays(e.target.value)}
             className="w-16 px-2 py-1 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
