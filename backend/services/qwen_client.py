@@ -36,8 +36,10 @@ class QwenClient:
         """Stream chat completion tokens."""
         try:
             extra: dict = {}
-            # Only Qwen models support enable_thinking param
-            if "qwen" in self.model.lower() or "qwq" in self.model.lower():
+            # Disable built-in thinking for models that support it (Qwen, GLM)
+            # DeepSeek doesn't support this param
+            model_lower = self.model.lower()
+            if "deepseek" not in model_lower:
                 extra["enable_thinking"] = False
             kwargs: dict = dict(
                 model=self.model,
@@ -76,7 +78,7 @@ class QwenClient:
         try:
             gen_model = model or self.model
             gen_extra: dict = {}
-            if "qwen" in gen_model.lower() or "qwq" in gen_model.lower():
+            if "deepseek" not in gen_model.lower():
                 gen_extra["enable_thinking"] = False
             gen_kwargs: dict = dict(
                 model=gen_model,
