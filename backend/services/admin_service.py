@@ -205,10 +205,11 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     else:
         services["docmee"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
 
-    # Qwen API (DashScope) — used for chat, embedding, and vision
+    # LLM API — used for chat, embedding, and vision
     if settings.QWEN_API_KEY:
+        base = settings.LLM_BASE_URL.rstrip("/")
         services["qwen"] = await _check_http(
-            "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+            f"{base}/models",
             headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"},
         )
     else:
