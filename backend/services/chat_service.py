@@ -184,29 +184,31 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
 
 REACT_SYSTEM_PROMPT = """You are a research assistant that finds answers by searching through documents step by step.
 
-Use this EXACT format — output Thought, then exactly 3 Search queries on separate lines:
+Use this EXACT format:
 
-Thought: [your reasoning about what information you need to find]
+Thought: [your reasoning about what you need to find]
 Search: [first search query — concise keywords]
-Search: [second search query — different angle or aspect]
+Search: [second search query — different angle]
 Search: [third search query — yet another angle]
 
-After receiving search results, continue with another Thought and either 3 more Search queries or a final Answer:
+After receiving search results, you MUST first update your research notes, then continue:
 
-Thought: [analyze what you found, what's still missing]
+Notes: [cumulative summary of ALL facts learned so far, and what is still MISSING to answer the question]
+Thought: [based on your notes, what should you search next?]
 Search: [query 1]
 Search: [query 2]
 Search: [query 3]
 
-OR if you have enough information:
+OR if you have enough evidence:
 
-Thought: [your analysis]
+Notes: [final summary of all evidence]
+Thought: [your reasoning chain connecting the evidence to the answer]
 Answer: [your complete answer with [1][2] citations]
 
 Rules:
+- ALWAYS include Notes: to track what you've learned across rounds. This is critical.
 - Output EXACTLY 3 Search queries per round, each targeting DIFFERENT evidence.
-- Maximum 3 search rounds. After 3 rounds, you MUST give an Answer.
-- IMPORTANT: If direct search fails, think about what INDIRECT evidence could answer the question. Ask yourself: "What observable data would change if the answer were X?" Then search for that data.
+- If direct search fails, think about what INDIRECT evidence could answer the question.
 - Compare information across different time periods or documents to detect changes.
 - In your Answer, use [1], [2] etc. to cite sources.
 - CRITICAL: Always respond in the SAME LANGUAGE as the user's question.
@@ -227,12 +229,13 @@ async def _react_step(messages: list[dict], model: str | None = None) -> str:
     )
 
 
-def _parse_react_output(text: str) -> tuple[str, list[str], str | None]:
-    """Parse ReAct output into (thought, search_queries, answer).
+def _parse_react_output(text: str) -> tuple[str, str, list[str], str | None]:
+    """Parse ReAct output into (notes, thought, search_queries, answer).
 
-    Returns (thought, [queries], None) if more search needed,
-    or (thought, [], answer) if final answer reached.
+    Returns (notes, thought, [queries], None) if more search needed,
+    or (notes, thought, [], answer) if final answer reached.
     """
+    notes = ""
     thought = ""
     search_queries: list[str] = []
     answer = None
@@ -240,7 +243,9 @@ def _parse_react_output(text: str) -> tuple[str, list[str], str | None]:
     lines = text.strip().split("\n")
     for line in lines:
         line_stripped = line.strip()
-        if line_stripped.lower().startswith("thought:"):
+        if line_stripped.lower().startswith("notes:"):
+            notes = line_stripped[len("Notes:"):].strip()
+        elif line_stripped.lower().startswith("thought:"):
             thought = line_stripped[len("Thought:"):].strip()
         elif line_stripped.lower().startswith("search:"):
             q = line_stripped[len("Search:"):].strip()
@@ -252,7 +257,7 @@ def _parse_react_output(text: str) -> tuple[str, list[str], str | None]:
                 answer = text[answer_start + len("Answer:"):].strip()
             break
 
-    return thought, search_queries, answer
+    return notes, thought, search_queries, answer
 
 
 async def stream_chat(
@@ -337,7 +342,7 @@ async def stream_chat(
                     # Get LLM thought + action
                     step_output = await _react_step(react_messages)
                     logger.info("ReAct round %d raw output: %s", round_num, step_output[:500])
-                    thought, search_queries, answer = _parse_react_output(step_output)
+                    notes, thought, search_queries, answer = _parse_react_output(step_output)
 
                     # Force search in first 2 rounds — don't let LLM skip retrieval
                     if round_num <= 2 and (answer or not search_queries):
@@ -346,7 +351,9 @@ async def stream_chat(
                             search_queries = [thought[:100] if thought else message]
                         answer = None
 
-                    # Stream thinking step to user
+                    # Stream notes + thinking step to user
+                    if notes:
+                        yield f"data: {json.dumps({'type': 'thinking', 'step': round_num, 'thought': '📝 ' + notes})}\n\n"
                     if thought:
                         yield f"data: {json.dumps({'type': 'thinking', 'step': round_num, 'thought': thought})}\n\n"
 
@@ -393,7 +400,7 @@ async def stream_chat(
                     all_round.sort(key=lambda c: c.get("similarity", 0), reverse=True)
                     obs_parts = []
                     for idx, c in enumerate(all_round[:8], 1):
-                        text = c.get("content_with_weight", c.get("content", ""))[:200]
+                        text = c.get("content_with_weight", c.get("content", ""))[:500]
                         doc = c.get("document_keyword", c.get("docnm_kwd", "unknown"))
                         obs_parts.append(f"  [{idx}] ({doc}): {text}")
                     observation = f"Found {round_total} results from {len(search_queries)} queries ({new_count} new unique). Top excerpts:\n" + "\n".join(obs_parts)
@@ -413,30 +420,34 @@ async def stream_chat(
                     max_rounds = REACT_MAX_ROUNDS
                     if round_num == 1:
                         guidance = (
-                            "Look at the excerpts above. Based on what you found, think about what OTHER data in these documents "
-                            "could help answer the question. What clues did you see? What related information should you search for next? "
-                            "Do NOT give an Answer yet. Output Thought + 3 new Search queries based on what you learned."
+                            "First, write Notes: summarizing what facts you learned from these excerpts and what is still MISSING. "
+                            "Then based on your notes, output Thought + 3 new Search queries targeting what's missing. "
+                            "Do NOT give an Answer yet."
                         )
                     elif round_num == 2:
                         guidance = (
-                            "Based on all evidence so far, if you still don't have a direct answer, try DIFFERENT types of documents or sections. "
-                            "Look for meeting records, attendance lists, policy documents, budget reports, or any structured data that might contain the answer. "
-                            "Do NOT give an Answer yet. Output Thought + 3 Search queries."
+                            "Update your Notes: with new facts learned. What do you know now? What's still missing? "
+                            "Try DIFFERENT types of documents or data that might contain the missing information. "
+                            "Do NOT give an Answer yet. Output Notes + Thought + 3 Search queries."
                         )
                     elif round_num == 3:
                         guidance = (
-                            "If you still haven't found a direct answer, search for INDIRECT evidence. "
-                            "What patterns, numbers, lists, or records could you compare across different time periods to INFER the answer? "
-                            "For example: compare participant lists, membership counts, or organizational charts from different dates. "
-                            "Output Thought + 3 Search queries targeting indirect evidence, or Answer if you can reason from what you have."
+                            "Review your Notes carefully. If you still lack a direct answer, search for INDIRECT evidence. "
+                            "What data in these documents could you compare across different time periods or versions to INFER the answer? "
+                            "Update your Notes, then output Thought + 3 Search queries, or Answer if you can reason from your accumulated evidence."
                         )
                     elif round_num < max_rounds:
                         guidance = (
-                            "Try one more creative angle. Search for specific names, dates, or numbers mentioned in previous results "
-                            "that might lead to the answer. You may give an Answer if you have enough evidence."
+                            "Update your Notes. Based on everything you've accumulated, try searching for specific details "
+                            "mentioned in your notes — names, dates, numbers — that could fill the remaining gaps. "
+                            "Output Notes + Thought + 3 Search queries, or Answer with Notes if you can reason from your evidence."
                         )
                     else:
-                        guidance = "Provide your final Answer based on ALL evidence gathered across all rounds. Reason from what you have."
+                        guidance = (
+                            "Final round. Write your complete Notes summarizing ALL evidence gathered. "
+                            "Then provide your Answer, reasoning from your accumulated notes. "
+                            "If the answer requires inference, show your reasoning chain."
+                        )
                     react_messages.append({"role": "user", "content": f"Observation: {observation}\n\n{guidance}"})
 
                 # Collect all unique chunks sorted by similarity, take top-15
