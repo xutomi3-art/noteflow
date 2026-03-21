@@ -326,13 +326,21 @@ async def stream_chat(
                 for round_num in range(1, REACT_MAX_ROUNDS + 1):
                     # Get LLM thought + action
                     step_output = await _react_step(react_messages)
+                    logger.info("ReAct round %d raw output: %s", round_num, step_output[:300])
                     thought, search_query, answer = _parse_react_output(step_output)
+
+                    # First round MUST search — don't let LLM skip retrieval
+                    if round_num == 1 and answer and not search_query:
+                        logger.info("ReAct round 1: LLM tried to answer without searching, forcing search from thought")
+                        # Use the thought as a search query instead
+                        search_query = thought[:100] if thought else message
+                        answer = None
 
                     # Stream thinking step to user
                     if thought:
                         yield f"data: {json.dumps({'type': 'thinking', 'step': round_num, 'thought': thought})}\n\n"
 
-                    if answer:
+                    if answer and round_num > 1:
                         # LLM decided it has enough info — but we'll regenerate with full context later
                         react_answer = answer
                         react_steps.append({"round": round_num, "thought": thought, "action": "answer"})
