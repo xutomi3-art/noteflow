@@ -184,22 +184,31 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
 
 REACT_SYSTEM_PROMPT = """You are a research assistant that finds answers by searching through documents step by step.
 
-Use this EXACT format — output Thought, then Search on the next line:
+Use this EXACT format — output Thought, then exactly 3 Search queries on separate lines:
 
 Thought: [your reasoning about what information you need to find]
-Search: [concise search keywords to find that information]
+Search: [first search query — concise keywords]
+Search: [second search query — different angle or aspect]
+Search: [third search query — yet another angle]
 
-After receiving search results, continue with another Thought and either another Search or a final Answer:
+After receiving search results, continue with another Thought and either 3 more Search queries or a final Answer:
 
 Thought: [analyze what you found, what's still missing]
-Search: [new search keywords] OR Answer: [your complete answer with [1][2] citations]
+Search: [query 1]
+Search: [query 2]
+Search: [query 3]
+
+OR if you have enough information:
+
+Thought: [your analysis]
+Answer: [your complete answer with [1][2] citations]
 
 Rules:
-- Maximum 3 search rounds. After 3 rounds, you MUST give an Answer with whatever you have.
-- Each Search should target DIFFERENT types of evidence — don't just rephrase the same query.
+- Output EXACTLY 3 Search queries per round, each targeting DIFFERENT evidence.
+- Maximum 3 search rounds. After 3 rounds, you MUST give an Answer.
 - IMPORTANT: If direct search fails, think about what INDIRECT evidence could answer the question. Ask yourself: "What observable data would change if the answer were X?" Then search for that data.
 - Compare information across different time periods or documents to detect changes.
-- In your Answer, use [1], [2] etc. to cite sources. These numbers refer to the context chunks provided.
+- In your Answer, use [1], [2] etc. to cite sources.
 - CRITICAL: Always respond in the SAME LANGUAGE as the user's question.
 - Even with partial evidence, reason from what you found and state your confidence level.
 - Format your Answer using Markdown when appropriate."""
@@ -208,7 +217,7 @@ REACT_MAX_ROUNDS = 3
 
 
 async def _react_step(messages: list[dict], model: str | None = None) -> str:
-    """Run one ReAct step: get Thought + Search or Answer from LLM."""
+    """Run one ReAct step: get Thought + Search queries or Answer from LLM."""
     decompose_model = model or settings.RAG_DECOMPOSE_MODEL or None
     return await qwen_client.generate(
         messages,
@@ -218,14 +227,14 @@ async def _react_step(messages: list[dict], model: str | None = None) -> str:
     )
 
 
-def _parse_react_output(text: str) -> tuple[str, str | None, str | None]:
-    """Parse ReAct output into (thought, search_query, answer).
+def _parse_react_output(text: str) -> tuple[str, list[str], str | None]:
+    """Parse ReAct output into (thought, search_queries, answer).
 
-    Returns (thought, search_query, None) if more search needed,
-    or (thought, None, answer) if final answer reached.
+    Returns (thought, [queries], None) if more search needed,
+    or (thought, [], answer) if final answer reached.
     """
     thought = ""
-    search_query = None
+    search_queries: list[str] = []
     answer = None
 
     lines = text.strip().split("\n")
@@ -234,15 +243,16 @@ def _parse_react_output(text: str) -> tuple[str, str | None, str | None]:
         if line_stripped.lower().startswith("thought:"):
             thought = line_stripped[len("Thought:"):].strip()
         elif line_stripped.lower().startswith("search:"):
-            search_query = line_stripped[len("Search:"):].strip()
+            q = line_stripped[len("Search:"):].strip()
+            if q:
+                search_queries.append(q)
         elif line_stripped.lower().startswith("answer:"):
-            # Answer may span multiple lines — take everything after "Answer:"
             answer_start = text.lower().find("answer:")
             if answer_start >= 0:
                 answer = text[answer_start + len("Answer:"):].strip()
             break
 
-    return thought, search_query, answer
+    return thought, search_queries, answer
 
 
 async def stream_chat(
@@ -326,13 +336,13 @@ async def stream_chat(
                 for round_num in range(1, REACT_MAX_ROUNDS + 1):
                     # Get LLM thought + action
                     step_output = await _react_step(react_messages)
-                    logger.info("ReAct round %d raw output: %s", round_num, step_output[:300])
-                    thought, search_query, answer = _parse_react_output(step_output)
+                    logger.info("ReAct round %d raw output: %s", round_num, step_output[:500])
+                    thought, search_queries, answer = _parse_react_output(step_output)
 
                     # Force search in early rounds — don't let LLM skip retrieval
-                    if round_num < REACT_MAX_ROUNDS and answer and not search_query:
+                    if round_num < REACT_MAX_ROUNDS and answer and not search_queries:
                         logger.info("ReAct round %d: LLM tried to answer early, forcing search from thought", round_num)
-                        search_query = thought[:100] if thought else message
+                        search_queries = [thought[:100] if thought else message]
                         answer = None
 
                     # Stream thinking step to user
@@ -340,64 +350,76 @@ async def stream_chat(
                         yield f"data: {json.dumps({'type': 'thinking', 'step': round_num, 'thought': thought})}\n\n"
 
                     if answer and round_num >= REACT_MAX_ROUNDS:
-                        # LLM decided it has enough info — but we'll regenerate with full context later
                         react_answer = answer
                         react_steps.append({"round": round_num, "thought": thought, "action": "answer"})
                         logger.info("ReAct round %d: answer reached", round_num)
                         break
 
-                    if not search_query:
-                        # No search query and no answer — force move on
+                    if not search_queries:
                         react_steps.append({"round": round_num, "thought": thought, "action": "no_action"})
                         break
 
-                    # Stream searching event
-                    yield f"data: {json.dumps({'type': 'searching', 'step': round_num, 'query': search_query})}\n\n"
+                    # Stream searching event — show all queries
+                    query_display = " | ".join(search_queries[:3])
+                    yield f"data: {json.dumps({'type': 'searching', 'step': round_num, 'query': query_display})}\n\n"
 
-                    # Execute retrieval
-                    round_chunks = await ragflow_client.retrieve(
-                        dataset_ids, search_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
-                    )
+                    # Execute concurrent retrieval for all queries
+                    import asyncio
 
-                    # Deduplicate into all_chunks
+                    async def _retrieve_one(q: str) -> list[dict]:
+                        return await ragflow_client.retrieve(
+                            dataset_ids, q, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
+                        )
+
+                    retrieval_results = await asyncio.gather(*[_retrieve_one(q) for q in search_queries[:3]])
+
+                    # Merge and deduplicate
+                    round_total = 0
                     new_count = 0
-                    for chunk in round_chunks:
-                        chunk_id = chunk.get("id", chunk.get("chunk_id", ""))
-                        if chunk_id not in all_chunks:
-                            all_chunks[chunk_id] = chunk
-                            new_count += 1
+                    for result_chunks in retrieval_results:
+                        round_total += len(result_chunks)
+                        for chunk in result_chunks:
+                            chunk_id = chunk.get("id", chunk.get("chunk_id", ""))
+                            if chunk_id not in all_chunks:
+                                all_chunks[chunk_id] = chunk
+                                new_count += 1
 
-                    # Build observation summary for LLM
+                    # Build observation summary from all results merged
+                    all_round = []
+                    for result_chunks in retrieval_results:
+                        all_round.extend(result_chunks)
+                    # Sort by similarity, take top excerpts
+                    all_round.sort(key=lambda c: c.get("similarity", 0), reverse=True)
                     obs_parts = []
-                    for i, c in enumerate(round_chunks[:5], 1):
+                    for idx, c in enumerate(all_round[:8], 1):
                         text = c.get("content_with_weight", c.get("content", ""))[:200]
                         doc = c.get("document_keyword", c.get("docnm_kwd", "unknown"))
-                        obs_parts.append(f"  [{i}] ({doc}): {text}")
-                    observation = f"Found {len(round_chunks)} results ({new_count} new). Top excerpts:\n" + "\n".join(obs_parts)
+                        obs_parts.append(f"  [{idx}] ({doc}): {text}")
+                    observation = f"Found {round_total} results from {len(search_queries)} queries ({new_count} new unique). Top excerpts:\n" + "\n".join(obs_parts)
 
                     # Stream observation to user
-                    yield f"data: {json.dumps({'type': 'observation', 'step': round_num, 'found': len(round_chunks), 'new': new_count})}\n\n"
+                    yield f"data: {json.dumps({'type': 'observation', 'step': round_num, 'found': round_total, 'new': new_count})}\n\n"
 
                     react_steps.append({
                         "round": round_num, "thought": thought,
-                        "search": search_query, "found": len(round_chunks), "new": new_count,
+                        "searches": search_queries[:3], "found": round_total, "new": new_count,
                     })
-                    logger.info("ReAct round %d: search=[%s], found=%d, new=%d, total=%d",
-                                round_num, search_query, len(round_chunks), new_count, len(all_chunks))
+                    logger.info("ReAct round %d: %d queries=%s, found=%d, new=%d, total=%d",
+                                round_num, len(search_queries), search_queries[:3], round_total, new_count, len(all_chunks))
 
                     # Feed observation back to LLM with escalating strategy guidance
                     react_messages.append({"role": "assistant", "content": step_output})
                     if round_num == 1:
                         guidance = (
-                            "Continue searching. Try a COMPLETELY DIFFERENT search angle — "
-                            "different keywords, different aspect of the question. "
-                            "Do NOT give an Answer yet. You must Search at least one more time."
+                            "Look at the excerpts above. Based on what you found, think about what OTHER data in these documents "
+                            "could help answer the question. What clues did you see? What related information should you search for next? "
+                            "Do NOT give an Answer yet. Output Thought + 3 new Search queries based on what you learned."
                         )
                     elif round_num == 2:
                         guidance = (
-                            "If you still haven't found a direct answer, search for INDIRECT evidence. "
-                            "Think: what observable data would change if the answer were X? "
-                            "Search for that data. You may give an Answer if you have enough evidence to reason from."
+                            "Based on all evidence so far, if you still don't have a direct answer, think about INDIRECT evidence. "
+                            "What patterns, numbers, lists, or records in these documents could you compare across time periods to infer the answer? "
+                            "Output Thought + 3 Search queries targeting that indirect evidence, or Answer if you can reason from what you have."
                         )
                     else:
                         guidance = "Provide your Answer based on all evidence gathered so far."
