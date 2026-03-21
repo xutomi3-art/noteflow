@@ -6,7 +6,7 @@ import { api } from '@/services/api';
 interface FieldGroup {
   title: string;
   description: string;
-  fields: { key: string; label: string; secret?: boolean; placeholder?: string }[];
+  fields: { key: string; label: string; secret?: boolean; placeholder?: string; toggle?: boolean }[];
 }
 
 const GROUPS: FieldGroup[] = [
