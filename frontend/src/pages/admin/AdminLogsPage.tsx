@@ -3,18 +3,10 @@ import { RefreshCw, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown } from 'luci
 import { useAdminStore } from '@/stores/admin-store';
 import type { ChatLogItem } from '@/types/admin';
 
-function timeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = Math.max(0, now - then);
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function formatTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function formatDuration(value: number | null): string {
@@ -299,7 +291,7 @@ function LogRow({
           {log.id?.slice(0, 8)}
         </td>
         <td className="px-2 py-2.5 text-gray-500 whitespace-nowrap text-xs">
-          {timeAgo(log.created_at)}
+          {formatTime(log.created_at)}
         </td>
         <td className="px-3 py-2.5">
           <span className="text-gray-700 truncate max-w-[140px] block text-xs">
