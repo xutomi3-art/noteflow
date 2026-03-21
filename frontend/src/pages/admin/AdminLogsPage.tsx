@@ -145,7 +145,7 @@ export default function AdminLogsPage() {
   const totalPages = Math.max(1, Math.ceil(logsTotal / 50));
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-7xl">
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-2xl font-semibold text-gray-900">Request Logs</h2>
@@ -201,18 +201,18 @@ export default function AdminLogsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100 bg-gray-50/50">
-                <th className="px-4 py-3 font-medium w-8"></th>
-                <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">Time</th>
-                <th className="px-4 py-3 font-medium">User</th>
-                <th className="px-4 py-3 font-medium">Notebook</th>
-                <th className="px-4 py-3 font-medium">Message</th>
-                <th className="px-4 py-3 font-medium text-right">Total</th>
-                <th className="px-4 py-3 font-medium text-right">RAGFlow</th>
-                <th className="px-4 py-3 font-medium text-right">LLM</th>
-                <th className="px-4 py-3 font-medium text-right">1st Token</th>
-                <th className="px-4 py-3 font-medium text-center">Feedback</th>
-                <th className="px-4 py-3 font-medium text-center">Status</th>
+                <th className="px-2 py-3 font-medium w-8"></th>
+                <th className="px-2 py-3 font-medium">ID</th>
+                <th className="px-2 py-3 font-medium">Time</th>
+                <th className="px-3 py-3 font-medium">User</th>
+                <th className="px-3 py-3 font-medium">Notebook</th>
+                <th className="px-3 py-3 font-medium">Message</th>
+                <th className="px-2 py-3 font-medium text-right">Total</th>
+                <th className="px-2 py-3 font-medium text-right">RAGFlow</th>
+                <th className="px-2 py-3 font-medium text-right">LLM</th>
+                <th className="px-2 py-3 font-medium text-right">1st Token</th>
+                <th className="px-2 py-3 font-medium text-center">Feedback</th>
+                <th className="px-2 py-3 font-medium text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -292,43 +292,43 @@ function LogRow({
         className="hover:bg-gray-50/50 cursor-pointer transition-colors"
         onClick={onToggle}
       >
-        <td className="px-4 py-2.5 text-gray-400">
+        <td className="px-2 py-2.5 text-gray-400">
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </td>
-        <td className="px-4 py-2.5 text-gray-400 font-mono text-[10px]">
+        <td className="px-2 py-2.5 text-gray-400 font-mono text-[10px]">
           {log.id?.slice(0, 8)}
         </td>
-        <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-xs">
+        <td className="px-2 py-2.5 text-gray-500 whitespace-nowrap text-xs">
           {timeAgo(log.created_at)}
         </td>
-        <td className="px-4 py-2.5">
+        <td className="px-3 py-2.5">
           <span className="text-gray-700 truncate max-w-[140px] block text-xs">
             {log.user_email}
           </span>
         </td>
-        <td className="px-4 py-2.5">
+        <td className="px-3 py-2.5">
           <span className="text-gray-700 truncate max-w-[120px] block text-xs">
             {log.notebook_name}
           </span>
         </td>
-        <td className="px-4 py-2.5">
+        <td className="px-3 py-2.5">
           <span className="text-gray-600 truncate max-w-[200px] block text-xs">
             {log.message_preview}
           </span>
         </td>
-        <td className={`px-4 py-2.5 text-right font-mono text-xs font-medium ${durationColor(log.total_duration)}`}>
+        <td className={`px-2 py-2.5 text-right font-mono text-xs font-medium ${durationColor(log.total_duration)}`}>
           {formatDuration(log.total_duration)}
         </td>
-        <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-500">
+        <td className="px-2 py-2.5 text-right font-mono text-xs text-gray-500">
           {formatDuration(log.ragflow_duration)}
         </td>
-        <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-500">
+        <td className="px-2 py-2.5 text-right font-mono text-xs text-gray-500">
           {formatDuration(log.llm_duration)}
         </td>
-        <td className="px-4 py-2.5 text-right font-mono text-xs text-gray-500">
+        <td className="px-2 py-2.5 text-right font-mono text-xs text-gray-500">
           {formatDuration(log.llm_first_token)}
         </td>
-        <td className="px-4 py-2.5 text-center">
+        <td className="px-2 py-2.5 text-center">
           {log.feedback === 'up' ? (
             <ThumbsUp size={14} className="inline text-green-600" />
           ) : log.feedback === 'down' ? (
@@ -337,7 +337,7 @@ function LogRow({
             <span className="text-gray-300">-</span>
           )}
         </td>
-        <td className="px-4 py-2.5 text-center">
+        <td className="px-2 py-2.5 text-center">
           <span
             className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
               log.status === 'ok'
