@@ -135,9 +135,9 @@ async def process_document(
                     "ASR transcription complete: %s (%d chars)", filename, len(content)
                 )
 
-            # Step 2c: Route images to Qwen-VL pipeline
+            # Step 2c: Route images to vision LLM pipeline
             elif file_type in IMAGE_EXTENSIONS:
-                logger.info("Processing image via Qwen-VL: %s", filename)
+                logger.info("Processing image via vision LLM: %s", filename)
                 content = await qwen_client.analyze_image(file_path, filename)
                 # Save extracted text as .md alongside the image
                 md_path = file_path.rsplit(".", 1)[0] + ".md"

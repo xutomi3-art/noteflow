@@ -9,7 +9,7 @@ const SERVICE_LABELS: Record<string, string> = {
   redis: 'Redis',
   mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
-  qwen: 'LLM',
+  llm: 'LLM',
 };
 
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
@@ -19,7 +19,7 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   redis: 'Cache & session store',
   mineru: 'Document parsing service',
   docmee: 'AI PPT generation service',
-  qwen: 'Chat, Embedding & Vision API',
+  llm: 'Chat, Embedding & Vision API',
 };
 
 interface ConfigField {
@@ -59,8 +59,8 @@ const MICROSOFT_OAUTH_FIELDS: ConfigField[] = [
 
 const LLM_FIELDS: ConfigField[] = [
   { key: 'qwen_api_key', label: 'API Key', placeholder: 'sk-...', secret: true },
-  { key: 'llm_base_url', label: 'Base URL', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
-  { key: 'llm_model', label: 'Model', placeholder: 'qwen3.5-plus' },
+  { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. https://api.openai.com/v1' },
+  { key: 'llm_model', label: 'Model', placeholder: 'e.g. gpt-4o, qwen3.5-plus, GLM-5' },
   { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: '65536' },
 ];
 

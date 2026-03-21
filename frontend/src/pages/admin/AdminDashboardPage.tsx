@@ -10,7 +10,7 @@ const SERVICE_LABELS: Record<string, string> = {
   mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
   deepseek: 'DeepSeek',
-  qwen: 'LLM',
+  llm: 'LLM',
 };
 
 function formatBytes(bytes: number): string {

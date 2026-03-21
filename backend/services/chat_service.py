@@ -144,7 +144,7 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     """Rewrite a conversational query into concise keywords for better RAG retrieval.
 
     Only rewrites if the query is conversational (>5 words). Uses a fast LLM call
-    with Qwen-Turbo to minimize latency.
+    with a fast LLM to minimize latency.
     """
     try:
         rewrite_messages = [
@@ -462,7 +462,7 @@ async def stream_chat(
 
             truncated_excel: set[str] = set()
             if matched_excel:
-                # Dynamic budget: generous with Qwen3.5-Plus 1M context
+                # Dynamic budget: generous with large context window
                 n = len(matched_excel)
                 if n == 1:
                     max_excel_chars = 200000   # ~100K tokens — full large table

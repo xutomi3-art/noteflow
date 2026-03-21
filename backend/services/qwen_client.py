@@ -12,10 +12,10 @@ IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "bmp"}
 
 
 class QwenClient:
-    """Client for Qwen LLM via DashScope OpenAI-compatible API.
+    """OpenAI-compatible LLM client for chat, vision, and embedding.
 
-    Uses Qwen3.5-Plus for chat/generation/vision (unified model).
-    Uses text-embedding-v3 for embedding.
+    Supports any OpenAI-compatible provider (Qwen, GLM, DeepSeek, GPT, etc.).
+    Model and endpoint configured via LLM_MODEL / LLM_BASE_URL settings.
     """
 
     def __init__(self) -> None:
