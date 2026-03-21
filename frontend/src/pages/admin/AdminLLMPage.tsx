@@ -23,17 +23,23 @@ const GROUPS: FieldGroup[] = [
   },
   {
     title: 'RAGFlow',
-    description: 'Self-hosted RAG retrieval engine',
+    description: 'RAGFlow connection and retrieval parameters',
     fields: [
       { key: 'ragflow_api_key', label: 'API Key', secret: true },
       { key: 'ragflow_base_url', label: 'Base URL' },
       { key: 'rag_top_k', label: 'Top-K Chunks', placeholder: 'default: 8' },
       { key: 'rag_similarity_threshold', label: 'Similarity Threshold', placeholder: 'default: 0.0 (0.0–1.0, lower = more results)' },
       { key: 'rag_vector_weight', label: 'Vector Weight', placeholder: 'default: 0.7 (0.0–1.0, higher = more semantic)' },
-      { key: 'rag_rewrite_model', label: 'Query Rewrite Model', placeholder: 'default: qwen-turbo (fast, for keyword rewriting)' },
+      { key: 'rag_rerank_id', label: 'Rerank Model', placeholder: 'default: gte-rerank (passed to RAGFlow retrieval API)' },
+    ],
+  },
+  {
+    title: 'Query Processing',
+    description: 'Noteflow query rewrite and deep thinking — uses the main LLM, not RAGFlow',
+    fields: [
+      { key: 'rag_rewrite_model', label: 'Query Rewrite Model', placeholder: 'empty = use main model (converts questions to keywords)' },
       { key: 'rag_decompose_model', label: 'Deep Think Model', placeholder: 'empty = use main model (for CoT query decomposition)' },
       { key: 'rag_think_rounds', label: 'Deep Think Rounds', placeholder: 'default: 5 (max ReAct search rounds)' },
-      { key: 'rag_rerank_id', label: 'Rerank Model (Retrieval API)', placeholder: 'default: gte-rerank (used in RAGFlow retrieval calls)' },
     ],
   },
 ];
