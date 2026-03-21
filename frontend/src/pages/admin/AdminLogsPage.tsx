@@ -34,6 +34,14 @@ function ExpandedRow({ log }: { log: ChatLogItem }) {
     <tr>
       <td colSpan={12} className="px-4 py-3 bg-gray-50/80">
         <div className="space-y-3">
+          {/* Full message */}
+          <div className="text-xs">
+            <span className="text-gray-400 font-medium">Message:</span>
+            <div className="mt-1 p-2 bg-white rounded border border-gray-200 text-gray-700 whitespace-pre-wrap">
+              {log.message_full || log.message_preview}
+            </div>
+          </div>
+
           {/* Metrics grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-xs">
             <div>

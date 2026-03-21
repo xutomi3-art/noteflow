@@ -45,6 +45,7 @@ export interface ChatLogItem {
   user_name: string;
   notebook_name: string;
   message_preview: string;
+  message_full: string | null;
   response_preview: string | null;
   response_full: string | null;
   feedback: string | null;

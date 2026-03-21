@@ -15,6 +15,7 @@ class ChatLog(Base):
     notebook_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"))
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     message_preview: Mapped[str] = mapped_column(String(200), nullable=False)
+    message_full: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timing (seconds)
     total_duration: Mapped[float] = mapped_column(Float, nullable=True)

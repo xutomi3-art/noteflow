@@ -233,6 +233,7 @@ async def get_logs(
             "user_name": row[2],
             "notebook_name": row[3],
             "message_preview": log.message_preview,
+            "message_full": log.message_full,
             "response_preview": log.response_preview,
             "response_full": log.response_full,
             "feedback": log.feedback,
