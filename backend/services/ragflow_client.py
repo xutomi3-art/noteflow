@@ -236,6 +236,30 @@ class RAGFlowClient:
             logger.error("RAGFlow run_raptor failed: %s", e)
             return None
 
+    async def get_raptor_status(self, dataset_id: str) -> str | None:
+        """Check Raptor task status. Returns 'done', 'running', 'failed', or None."""
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
+                resp = await client.get(
+                    f"{self.base_url}/api/v1/datasets/{dataset_id}/trace_raptor",
+                    headers=self._headers,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") == 0:
+                    task_data = data.get("data", {})
+                    progress = task_data.get("progress", 0)
+                    if progress == 1:
+                        return "done"
+                    elif progress == -1:
+                        return "failed"
+                    else:
+                        return "running"
+                return None
+        except Exception as e:
+            logger.error("RAGFlow get_raptor_status failed: %s", e)
+            return None
+
     async def delete_document(self, dataset_id: str, document_id: str) -> bool:
         """Delete a document from RAGFlow."""
         try:

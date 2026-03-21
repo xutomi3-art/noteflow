@@ -11,6 +11,7 @@ interface SourceState {
   activeSourceContent: string | null;
   isLoadingContent: boolean;
   highlightExcerpt: string | null;
+  raptorStatus: "idle" | "running" | "done" | "failed";
 
   fetchSources: (notebookId: string) => Promise<void>;
   uploadSource: (notebookId: string, file: File) => Promise<Source>;
@@ -34,6 +35,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   activeSourceContent: null,
   isLoadingContent: false,
   highlightExcerpt: null,
+  raptorStatus: "idle",
 
   fetchSources: async (notebookId: string) => {
     set({ isLoading: true });
@@ -103,6 +105,15 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     let refetchTimer: ReturnType<typeof setTimeout> | null = null;
 
     const unsub = api.subscribeToSourceStatus(notebookId, (event) => {
+      if (event.type === "raptor_status") {
+        const status = event.status as "idle" | "running" | "done" | "failed";
+        set({ raptorStatus: status });
+        // Auto-clear "done" after 5 seconds
+        if (status === "done") {
+          setTimeout(() => set({ raptorStatus: "idle" }), 5000);
+        }
+        return;
+      }
       if (event.type === "source_status") {
         const { sources, isLoading } = get();
         const known = sources.some((s) => s.id === event.source_id);
@@ -181,6 +192,6 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   cleanup: () => {
     const { unsubscribe } = get();
     if (unsubscribe) unsubscribe();
-    set({ sources: [], selectedIds: new Set(), unsubscribe: null, activeSourceId: null, activeSourceContent: null, isLoadingContent: false, highlightExcerpt: null });
+    set({ sources: [], selectedIds: new Set(), unsubscribe: null, activeSourceId: null, activeSourceContent: null, isLoadingContent: false, highlightExcerpt: null, raptorStatus: "idle" });
   },
 }));

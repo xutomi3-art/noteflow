@@ -50,13 +50,50 @@ async def _maybe_trigger_raptor(notebook_id: uuid.UUID) -> None:
                 return
 
             logger.info("All %d sources ready in notebook %s, triggering Raptor...", len(sources), notebook_id)
+            await event_bus.publish(str(notebook_id), {
+                "type": "raptor_status", "status": "running",
+            })
             task_id = await ragflow_client.run_raptor(dataset_id)
             if task_id:
                 logger.info("Raptor task started: %s", task_id)
+                # Poll for Raptor completion in background
+                asyncio.create_task(_poll_raptor(str(notebook_id), dataset_id))
             else:
                 logger.warning("Raptor not triggered for dataset %s (may already be running)", dataset_id)
+                await event_bus.publish(str(notebook_id), {
+                    "type": "raptor_status", "status": "idle",
+                })
     except Exception as e:
         logger.error("_maybe_trigger_raptor failed: %s", e)
+
+
+async def _poll_raptor(notebook_id: str, dataset_id: str) -> None:
+    """Poll RAGFlow for Raptor task completion and notify frontend."""
+    for _ in range(120):  # 120 * 30s = 1 hour max
+        await asyncio.sleep(30)
+        try:
+            status = await ragflow_client.get_raptor_status(dataset_id)
+            if status is None:
+                continue
+            if status in ("done", "completed"):
+                logger.info("Raptor completed for dataset %s", dataset_id)
+                await event_bus.publish(notebook_id, {
+                    "type": "raptor_status", "status": "done",
+                })
+                return
+            if status in ("failed", "error"):
+                logger.warning("Raptor failed for dataset %s", dataset_id)
+                await event_bus.publish(notebook_id, {
+                    "type": "raptor_status", "status": "failed",
+                })
+                return
+        except Exception as e:
+            logger.warning("Raptor poll error: %s", e)
+
+    # Timeout
+    await event_bus.publish(notebook_id, {
+        "type": "raptor_status", "status": "done",
+    })
 
 
 async def _retry_ragflow_upload(
