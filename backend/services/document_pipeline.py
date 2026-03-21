@@ -5,6 +5,7 @@ import uuid
 
 from sqlalchemy import select
 
+from backend.core.config import settings
 from backend.core.database import async_session
 from backend.models.notebook import Notebook
 from backend.services.event_bus import event_bus
@@ -47,6 +48,10 @@ async def _maybe_trigger_raptor(notebook_id: uuid.UUID) -> None:
 
             dataset_id = next((s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id), None)
             if not dataset_id:
+                return
+
+            if not settings.RAPTOR_ENABLED:
+                logger.info("Raptor disabled, skipping for notebook %s", notebook_id)
                 return
 
             logger.info("All %d sources ready in notebook %s, triggering Raptor...", len(sources), notebook_id)

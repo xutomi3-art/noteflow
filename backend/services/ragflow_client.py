@@ -36,7 +36,7 @@ class RAGFlowClient:
                         "chunk_method": "naive",
                         "parser_config": {
                             "chunk_token_num": 512,
-                            "raptor": {"use_raptor": True},
+                            "raptor": {"use_raptor": settings.RAPTOR_ENABLED},
                         },
                     },
                 )

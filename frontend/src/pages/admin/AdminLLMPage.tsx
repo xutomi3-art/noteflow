@@ -31,6 +31,7 @@ const GROUPS: FieldGroup[] = [
       { key: 'rag_similarity_threshold', label: 'Similarity Threshold', placeholder: 'default: 0.0 (0.0–1.0, lower = more results)' },
       { key: 'rag_vector_weight', label: 'Vector Weight', placeholder: 'default: 0.7 (0.0–1.0, higher = more semantic)' },
       { key: 'rag_rerank_id', label: 'Rerank Model', placeholder: 'default: gte-rerank (passed to RAGFlow retrieval API)' },
+      { key: 'raptor_enabled', label: 'Raptor Clustering', toggle: true, placeholder: 'Cross-document hierarchical summarization (uses LLM tokens, slower indexing)' },
     ],
   },
   {
@@ -199,25 +200,46 @@ export default function AdminLLMPage() {
           <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{group.title}</h3>
           <p className="text-xs text-gray-400 mb-4">{group.description}</p>
           <div className="space-y-4">
-            {group.fields.map(({ key, label, secret, placeholder }) => (
+            {group.fields.map(({ key, label, secret, placeholder, toggle }: { key: string; label: string; secret?: boolean; placeholder?: string; toggle?: boolean }) => (
               <div key={key}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-gray-700">{label}</label>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    getSource(key) === 'db'
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {getSource(key) === 'db' ? 'DB override' : 'env default'}
-                  </span>
-                </div>
-                <input
-                  type={secret ? 'password' : 'text'}
-                  value={form[key] ?? ''}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                  placeholder={placeholder || label}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
-                />
+                {toggle ? (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">{label}</label>
+                      {placeholder && <p className="text-[11px] text-gray-400 mt-0.5">{placeholder}</p>}
+                    </div>
+                    <button
+                      onClick={() => setForm({ ...form, [key]: (form[key] ?? 'false').toLowerCase() === 'true' ? 'false' : 'true' })}
+                      className={`relative w-10 h-5 rounded-full transition-colors ${
+                        (form[key] ?? 'false').toLowerCase() === 'true' ? 'bg-[#5b8c15]' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                        (form[key] ?? 'false').toLowerCase() === 'true' ? 'translate-x-5' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-sm font-medium text-gray-700">{label}</label>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        getSource(key) === 'db'
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {getSource(key) === 'db' ? 'DB override' : 'env default'}
+                      </span>
+                    </div>
+                    <input
+                      type={secret ? 'password' : 'text'}
+                      value={form[key] ?? ''}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                      placeholder={placeholder || label}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+                    />
+                  </>
+                )}
               </div>
             ))}
           </div>

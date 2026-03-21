@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 CONFIGURABLE_KEYS = {
     "llm_base_url", "llm_model", "llm_max_output_tokens", "llm_context_window", "rag_top_k", "rag_similarity_threshold", "rag_vector_weight", "rag_rewrite_model", "rag_decompose_model", "rag_think_rounds", "rag_rerank_id",
     "qwen_api_key",
-    "ragflow_api_key", "ragflow_base_url",
+    "ragflow_api_key", "ragflow_base_url", "raptor_enabled",
     "docmee_api_key",
     "max_file_size_mb",
     "web_scraper_remove_selector",
@@ -47,6 +47,7 @@ _ENV_MAP = {
     "qwen_api_key": "QWEN_API_KEY",
     "ragflow_api_key": "RAGFLOW_API_KEY",
     "ragflow_base_url": "RAGFLOW_BASE_URL",
+    "raptor_enabled": "RAPTOR_ENABLED",
     "docmee_api_key": "DOCMEE_API_KEY",
     "max_file_size_mb": "MAX_FILE_SIZE_MB",
     "web_scraper_remove_selector": "WEB_SCRAPER_REMOVE_SELECTOR",
@@ -118,7 +119,9 @@ async def set_setting(db: AsyncSession, key: str, value: str, user_id: uuid.UUID
     attr = _ENV_MAP.get(key)
     if attr:
         current = getattr(settings, attr, None)
-        if isinstance(current, int):
+        if isinstance(current, bool):
+            setattr(settings, attr, value.lower() in ("true", "1", "yes"))
+        elif isinstance(current, int):
             setattr(settings, attr, int(value))
         elif isinstance(current, float):
             setattr(settings, attr, float(value))
@@ -140,7 +143,9 @@ async def load_db_settings() -> None:
             attr = _ENV_MAP.get(row.key)
             if attr:
                 current = getattr(settings, attr, None)
-                if isinstance(current, int):
+                if isinstance(current, bool):
+                    setattr(settings, attr, row.value.lower() in ("true", "1", "yes"))
+                elif isinstance(current, int):
                     setattr(settings, attr, int(row.value))
                 elif isinstance(current, float):
                     setattr(settings, attr, float(row.value))

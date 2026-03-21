@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # RAGFlow
     RAGFLOW_BASE_URL: str = "http://ragflow:9380"
     RAGFLOW_API_KEY: str = ""
+    RAPTOR_ENABLED: bool = False
 
     # MinerU
     MINERU_BASE_URL: str = "http://cloud.jototech.cn:17860"
