@@ -68,9 +68,14 @@ async def lifespan(app: FastAPI):
     from backend.services.health_monitor import start_monitor
     monitor_task = asyncio.create_task(start_monitor())
 
+    # Start background log cleanup
+    from backend.services.log_cleanup import start_log_cleanup
+    log_cleanup_task = asyncio.create_task(start_log_cleanup())
+
     yield
 
     monitor_task.cancel()
+    log_cleanup_task.cancel()
 
 
 app = FastAPI(title="Noteflow API", version="0.1.0", lifespan=lifespan)

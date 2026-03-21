@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, ThumbsUp, ThumbsDown, Save } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 import type { ChatLogItem } from '@/types/admin';
 
@@ -103,13 +103,29 @@ function ExpandedRow({ log }: { log: ChatLogItem }) {
 }
 
 export default function AdminLogsPage() {
-  const { logs, logsTotal, logsPage, logsStatus, fetchLogs, isLoading } = useAdminStore();
+  const { logs, logsTotal, logsPage, logsStatus, fetchLogs, isLoading, settings, fetchSettings, saveSettings } = useAdminStore();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [retentionDays, setRetentionDays] = useState('');
+  const [retentionSaved, setRetentionSaved] = useState(false);
 
   useEffect(() => {
     fetchLogs();
-  }, [fetchLogs]);
+    fetchSettings();
+  }, [fetchLogs, fetchSettings]);
+
+  useEffect(() => {
+    const s = settings.find((s) => s.key === 'log_retention_days');
+    if (s) setRetentionDays(s.value);
+  }, [settings]);
+
+  const handleSaveRetention = async () => {
+    const days = parseInt(retentionDays);
+    if (!days || days < 1) return;
+    await saveSettings({ log_retention_days: String(days) });
+    setRetentionSaved(true);
+    setTimeout(() => setRetentionSaved(false), 2000);
+  };
 
   // Auto-refresh every 10 seconds
   useEffect(() => {
@@ -139,11 +155,33 @@ export default function AdminLogsPage() {
   return (
     <div className="max-w-7xl">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-gray-900">Request Logs</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Monitor chat request performance and diagnose issues
-        </p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">Request Logs</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Monitor chat request performance and diagnose issues
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Retention</span>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={retentionDays}
+            onChange={(e) => setRetentionDays(e.target.value)}
+            className="w-16 px-2 py-1 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+          />
+          <span className="text-xs text-gray-500">days</span>
+          <button
+            onClick={handleSaveRetention}
+            className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-colors"
+            title="Save retention setting"
+          >
+            <Save size={14} />
+          </button>
+          {retentionSaved && <span className="text-xs text-green-600">Saved</span>}
+        </div>
       </div>
 
       {/* Toolbar */}

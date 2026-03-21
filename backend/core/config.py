@@ -70,6 +70,7 @@ class Settings(BaseSettings):
 
     # Admin
     ADMIN_EMAIL: str = ""
+    LOG_RETENTION_DAYS: int = 14
 
     # Health Alert
     ALERT_EMAIL: str = ""

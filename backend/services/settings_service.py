@@ -19,6 +19,7 @@ CONFIGURABLE_KEYS = {
     "alibaba_tts_appkey", "alibaba_tts_token",
     "google_client_id", "google_client_secret", "google_redirect_uri", "google_proxy",
     "microsoft_client_id", "microsoft_client_secret", "microsoft_tenant_id", "microsoft_redirect_uri",
+    "log_retention_days",
     "alert_email", "alert_check_interval_minutes",
     "resource_cpu_threshold", "resource_memory_threshold", "resource_disk_threshold",
     "resource_container_cpu_threshold", "resource_container_memory_threshold",
@@ -61,6 +62,7 @@ _ENV_MAP = {
     "microsoft_client_secret": "MICROSOFT_CLIENT_SECRET",
     "microsoft_tenant_id": "MICROSOFT_TENANT_ID",
     "microsoft_redirect_uri": "MICROSOFT_REDIRECT_URI",
+    "log_retention_days": "LOG_RETENTION_DAYS",
     "alert_email": "ALERT_EMAIL",
     "alert_check_interval_minutes": "ALERT_CHECK_INTERVAL_MINUTES",
 }
