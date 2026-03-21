@@ -418,35 +418,22 @@ async def stream_chat(
                     # Feed observation back to LLM with escalating strategy guidance
                     react_messages.append({"role": "assistant", "content": step_output})
                     max_rounds = REACT_MAX_ROUNDS
-                    if round_num == 1:
+                    if round_num <= 2:
                         guidance = (
-                            "First, write Notes: summarizing what facts you learned from these excerpts and what is still MISSING. "
-                            "Then based on your notes, output Thought + 3 new Search queries targeting what's missing. "
+                            "Update your Notes: what facts did you learn? What is still MISSING to answer the question? "
+                            "Based on your notes, output Thought + 3 Search queries targeting what's missing. "
                             "Do NOT give an Answer yet."
-                        )
-                    elif round_num == 2:
-                        guidance = (
-                            "Update your Notes: with new facts learned. What do you know now? What's still missing? "
-                            "Try DIFFERENT types of documents or data that might contain the missing information. "
-                            "Do NOT give an Answer yet. Output Notes + Thought + 3 Search queries."
-                        )
-                    elif round_num == 3:
-                        guidance = (
-                            "Review your Notes carefully. If you still lack a direct answer, search for INDIRECT evidence. "
-                            "What data in these documents could you compare across different time periods or versions to INFER the answer? "
-                            "Update your Notes, then output Thought + 3 Search queries, or Answer if you can reason from your accumulated evidence."
                         )
                     elif round_num < max_rounds:
                         guidance = (
-                            "Update your Notes. Based on everything you've accumulated, try searching for specific details "
-                            "mentioned in your notes — names, dates, numbers — that could fill the remaining gaps. "
-                            "Output Notes + Thought + 3 Search queries, or Answer with Notes if you can reason from your evidence."
+                            "Update your Notes with new findings. Review what you know and what's still missing. "
+                            "If you can reason to the answer from your accumulated evidence, provide your Answer. "
+                            "Otherwise, output Thought + 3 Search queries for what's still missing."
                         )
                     else:
                         guidance = (
-                            "Final round. Write your complete Notes summarizing ALL evidence gathered. "
-                            "Then provide your Answer, reasoning from your accumulated notes. "
-                            "If the answer requires inference, show your reasoning chain."
+                            "Final round. Write your complete Notes summarizing ALL evidence. "
+                            "Provide your Answer by reasoning from your notes. Show your reasoning chain."
                         )
                     react_messages.append({"role": "user", "content": f"Observation: {observation}\n\n{guidance}"})
 
