@@ -19,6 +19,32 @@ logger = logging.getLogger(__name__)
 # Limit concurrent RAGFlow polling tasks to avoid exhausting the DB connection pool
 _poll_semaphore = asyncio.Semaphore(5)
 
+MAX_RETRIES = 3
+RETRY_DELAYS = [60, 120, 240]  # seconds — exponential backoff
+
+
+async def _retry_ragflow_upload(
+    dataset_id: str,
+    old_doc_id: str | None,
+    filename: str,
+    content: bytes | None,
+    file_path: str | None,
+    md_filename: str | None,
+) -> str | None:
+    """Delete failed doc from RAGFlow and re-upload. Returns new doc_id or None."""
+    # Delete the old failed document
+    if old_doc_id:
+        await ragflow_client.delete_document(dataset_id, old_doc_id)
+        logger.info("Deleted failed RAGFlow doc %s for retry", old_doc_id)
+
+    # Re-upload
+    if content is not None and md_filename:
+        return await ragflow_client.upload_document(dataset_id, md_filename, content)
+    elif file_path:
+        with open(file_path, "rb") as f:
+            return await ragflow_client.upload_document(dataset_id, filename, f.read())
+    return None
+
 
 def _save_parsed_content(file_path: str, content: str) -> str:
     """Save parsed markdown content alongside the source file."""
@@ -211,42 +237,77 @@ async def process_document(
                 ragflow_doc_id=doc_id,
             )
 
-            # Trigger RAGFlow parsing/chunking/embedding
-            success = await ragflow_client.parse_document(dataset_id, doc_id)
-            if not success:
-                raise Exception("Failed to trigger RAGFlow parsing")
+            # Prepare upload args for potential retries
+            upload_content = content.encode("utf-8") if content is not None else None
+            upload_md_filename = os.path.splitext(filename)[0] + ".md" if content is not None else None
 
-            # Poll for completion (initial wait up to 15 minutes)
-            completed = False
-            for _ in range(180):
-                await asyncio.sleep(5)
-                doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
-                if doc_status is None:
-                    continue
-                run = doc_status.get("run", "UNSTART")
-                chunks = doc_status.get("chunk_count", 0)
-                # RAGFlow v0.17 bug: run stays "RUNNING" after completion.
-                # Use chunk_count > 0 as the real completion signal.
-                if run in ("DONE", "SUCCEEDED") or chunks > 0:
-                    logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
-                    completed = True
+            # Trigger RAGFlow parsing/chunking/embedding with retry on failure
+            retry_count = 0
+            while True:
+                success = await ragflow_client.parse_document(dataset_id, doc_id)
+                if not success:
+                    raise Exception("Failed to trigger RAGFlow parsing")
+
+                # Poll for completion (initial wait up to 15 minutes)
+                completed = False
+                failed_status = None
+                for _ in range(180):
+                    await asyncio.sleep(5)
+                    doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
+                    if doc_status is None:
+                        continue
+                    run = doc_status.get("run", "UNSTART")
+                    chunks = doc_status.get("chunk_count", 0)
+                    if run in ("DONE", "SUCCEEDED") or chunks > 0:
+                        logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
+                        completed = True
+                        break
+                    if run in ("FAIL", "FAILED", "CANCEL"):
+                        failed_status = run
+                        break
+
+                if completed:
+                    await update_source_status(db, sid, "ready")
+                    await _notify(notebook_id, source_id, "ready")
+                    logger.info("Document processing complete: %s", filename)
                     break
-                if run in ("FAIL", "FAILED", "CANCEL"):
-                    raise Exception(
-                        f"RAGFlow parsing failed with status: {run}"
+                elif failed_status:
+                    # RAGFlow failed — retry with backoff if under limit
+                    if retry_count < MAX_RETRIES:
+                        delay = RETRY_DELAYS[retry_count]
+                        retry_count += 1
+                        logger.warning(
+                            "RAGFlow FAIL for %s (retry %d/%d), waiting %ds before retry",
+                            filename, retry_count, MAX_RETRIES, delay,
+                        )
+                        await update_source_status(
+                            db, sid, "vectorizing", retry_count=retry_count,
+                            error_message=f"Retrying ({retry_count}/{MAX_RETRIES})...",
+                        )
+                        await asyncio.sleep(delay)
+                        # Delete failed doc and re-upload
+                        new_doc_id = await _retry_ragflow_upload(
+                            dataset_id, doc_id, filename,
+                            upload_content, file_path, upload_md_filename,
+                        )
+                        if new_doc_id is None:
+                            raise Exception(f"Failed to re-upload after retry {retry_count}")
+                        doc_id = new_doc_id
+                        await update_source_status(
+                            db, sid, "vectorizing", ragflow_doc_id=doc_id,
+                        )
+                        continue  # retry the while loop
+                    else:
+                        raise Exception(
+                            f"RAGFlow parsing failed with status: {failed_status} (after {MAX_RETRIES} retries)"
+                        )
+                else:
+                    # Still processing after 15min — background poll
+                    logger.info(
+                        "RAGFlow still processing %s after 15min, continuing background poll", filename
                     )
-
-            if completed:
-                # Step 5: Mark as ready
-                await update_source_status(db, sid, "ready")
-                await _notify(notebook_id, source_id, "ready")
-                logger.info("Document processing complete: %s", filename)
-            else:
-                # Large file still processing — continue polling in background
-                logger.info(
-                    "RAGFlow still processing %s after 15min, continuing background poll", filename
-                )
-                asyncio.create_task(_background_poll(sid, dataset_id, doc_id, notebook_id, source_id, filename))
+                    asyncio.create_task(_background_poll(sid, dataset_id, doc_id, notebook_id, source_id, filename))
+                    break
 
         except Exception as e:
             logger.error("Document pipeline failed for %s: %s", filename, e)

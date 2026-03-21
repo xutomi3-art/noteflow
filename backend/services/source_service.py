@@ -53,6 +53,7 @@ async def update_source_status(
     ragflow_dataset_id: str | None = None,
     ragflow_doc_id: str | None = None,
     duckdb_path: str | None = None,
+    retry_count: int | None = None,
 ) -> Source | None:
     source = await get_source(db, source_id)
     if source is None:
@@ -66,6 +67,8 @@ async def update_source_status(
         source.ragflow_doc_id = ragflow_doc_id
     if duckdb_path is not None:
         source.duckdb_path = duckdb_path
+    if retry_count is not None:
+        source.retry_count = retry_count
     await db.commit()
     await db.refresh(source)
     return source

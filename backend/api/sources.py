@@ -257,6 +257,47 @@ async def delete_source(
     return {'data': {'message': 'Source deleted'}}
 
 
+@router.post('/{source_id}/retry')
+async def retry_source(
+    notebook_id: str,
+    source_id: str,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Retry processing a failed source."""
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'upload'):
+        raise HTTPException(status_code=403, detail='No permission')
+
+    source = await source_service.get_source(db, uuid.UUID(source_id))
+    if source is None or str(source.notebook_id) != notebook_id:
+        raise HTTPException(status_code=404, detail='Source not found')
+
+    if source.status != 'failed':
+        raise HTTPException(status_code=400, detail='Only failed sources can be retried')
+
+    if not source.storage_url or not os.path.exists(source.storage_url):
+        raise HTTPException(status_code=400, detail='Source file no longer exists on server')
+
+    # Reset source for reprocessing
+    await source_service.update_source_status(
+        db, uuid.UUID(source_id), "uploading",
+        error_message=None, retry_count=0,
+        ragflow_dataset_id=None, ragflow_doc_id=None,
+    )
+
+    background_tasks.add_task(
+        process_document,
+        source_id=source_id,
+        notebook_id=notebook_id,
+        file_path=source.storage_url,
+        filename=source.filename,
+        file_type=source.file_type,
+    )
+
+    return {'data': {'message': 'Retry initiated'}}
+
+
 @router.get('/{source_id}/file')
 async def get_source_file(
     notebook_id: str,
