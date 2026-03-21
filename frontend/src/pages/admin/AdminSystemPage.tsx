@@ -9,7 +9,7 @@ const SERVICE_LABELS: Record<string, string> = {
   redis: 'Redis',
   mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
-  qwen: 'Qwen3.5-Plus',
+  qwen: 'LLM',
 };
 
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
@@ -19,7 +19,7 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   redis: 'Cache & session store',
   mineru: 'Document parsing service',
   docmee: 'AI PPT generation service',
-  qwen: 'Chat LLM, Embedding & Vision API',
+  qwen: 'Chat, Embedding & Vision API',
 };
 
 interface ConfigField {
@@ -330,10 +330,10 @@ export default function AdminSystemPage() {
         </div>
       </div>
 
-      {/* LLM (Qwen3.5-Plus) */}
+      {/* LLM */}
       <ConfigSection
-        title="LLM (Qwen3.5-Plus)"
-        description="Unified Qwen API for chat, embedding, and vision"
+        title="LLM"
+        description="OpenAI-compatible API for chat, embedding, and vision"
         fields={LLM_FIELDS}
         settings={settings}
         saveSettings={handleSaveConfig}
