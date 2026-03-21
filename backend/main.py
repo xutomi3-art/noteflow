@@ -45,6 +45,10 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     await bootstrap_admin()
 
+    # Load DB settings into memory (admin panel values override env defaults)
+    from backend.services.settings_service import load_db_settings
+    await load_db_settings()
+
     # Recover sources stuck in processing states after restart
     from backend.services.document_pipeline import recover_stuck_sources
     try:

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.models.system_setting import SystemSetting
+
+logger = logging.getLogger(__name__)
 
 # Keys that can be configured via admin panel
 CONFIGURABLE_KEYS = {
@@ -110,6 +113,43 @@ async def set_setting(db: AsyncSession, key: str, value: str, user_id: uuid.UUID
         ))
 
     await db.commit()
+
+    # Hot-reload: update the in-memory settings object
+    attr = _ENV_MAP.get(key)
+    if attr:
+        current = getattr(settings, attr, None)
+        if isinstance(current, int):
+            setattr(settings, attr, int(value))
+        elif isinstance(current, float):
+            setattr(settings, attr, float(value))
+        else:
+            setattr(settings, attr, value)
+
+    # Reinitialize qwen_client if LLM credentials changed
+    if key in ("qwen_api_key", "llm_base_url", "llm_model"):
+        from backend.services.qwen_client import qwen_client
+        qwen_client.__init__()
+
+
+async def load_db_settings() -> None:
+    """Load all DB settings into the in-memory settings object on startup."""
+    from backend.core.database import async_session as _async_session
+    async with _async_session() as db:
+        result = await db.execute(select(SystemSetting))
+        for row in result.scalars():
+            attr = _ENV_MAP.get(row.key)
+            if attr:
+                current = getattr(settings, attr, None)
+                if isinstance(current, int):
+                    setattr(settings, attr, int(row.value))
+                elif isinstance(current, float):
+                    setattr(settings, attr, float(row.value))
+                else:
+                    setattr(settings, attr, row.value)
+    # Reinitialize qwen_client with DB-loaded settings
+    from backend.services.qwen_client import qwen_client
+    qwen_client.__init__()
+    logger.info("Loaded DB settings into memory and reinitialized LLM client")
 
 
 async def get_all_settings(db: AsyncSession) -> list[dict]:
