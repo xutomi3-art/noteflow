@@ -49,7 +49,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://noteflow:noteflow_secret@postgres:5432/noteflow
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-noteflow-dev-secret-change-in-production}
       - QWEN_API_KEY=${QWEN_API_KEY:-}
-      - RAGFLOW_BASE_URL=http://host.docker.internal:9380
+      - RAGFLOW_BASE_URL=http://ragflow-server:9380
       - RAGFLOW_API_KEY=${RAGFLOW_API_KEY:-}
       - MINERU_BASE_URL=${MINERU_BASE_URL:-http://cloud.jototech.cn:17860}
       - UPLOAD_DIR=/app/uploads
