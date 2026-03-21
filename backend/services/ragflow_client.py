@@ -174,7 +174,7 @@ class RAGFlowClient:
                     "top_k": 80,
                     "size": top_k,
                     "keyword": True,
-                    "rerank_id": "gte-rerank",
+                    "rerank_id": settings.RAG_RERANK_ID,
                 }
                 if document_ids:
                     payload["document_ids"] = document_ids

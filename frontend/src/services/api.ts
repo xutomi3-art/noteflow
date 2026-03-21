@@ -570,6 +570,18 @@ class ApiClient {
     return this.request(`/admin/logs?${searchParams}`);
   }
 
+  // RAGFlow Internal Models
+  async getRagflowModels(): Promise<Record<string, string>> {
+    return this.request("/admin/ragflow-models");
+  }
+
+  async updateRagflowModels(models: Record<string, string>): Promise<Record<string, string>> {
+    return this.request("/admin/ragflow-models", {
+      method: "PUT",
+      body: JSON.stringify(models),
+    });
+  }
+
   // Feedback
   async submitFeedback(type: string, content: string, screenshot?: File): Promise<{ id: string }> {
     const formData = new FormData();

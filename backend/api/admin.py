@@ -318,6 +318,35 @@ async def get_token_usage(
     }
 
 
+@router.get("/ragflow-models")
+async def get_ragflow_models(
+    _admin: User = Depends(get_admin_user),
+):
+    """Get RAGFlow internal model configuration (llm_id, embd_id, rerank_id)."""
+    from backend.services.ragflow_config_service import get_ragflow_models as _get
+    try:
+        return await _get()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to read RAGFlow config: {e}")
+
+
+@router.put("/ragflow-models")
+async def update_ragflow_models(
+    body: dict = Body(...),
+    _admin: User = Depends(get_admin_user),
+):
+    """Update RAGFlow internal model configuration."""
+    from backend.services.ragflow_config_service import update_ragflow_models as _update
+    allowed = {"llm_id", "embd_id", "rerank_id"}
+    filtered = {k: v for k, v in body.items() if k in allowed and isinstance(v, str) and v.strip()}
+    if not filtered:
+        raise HTTPException(status_code=400, detail="No valid fields provided")
+    try:
+        return await _update(**filtered)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to update RAGFlow config: {e}")
+
+
 @router.get("/feedback")
 async def list_feedback(
     status: str | None = Query(None),

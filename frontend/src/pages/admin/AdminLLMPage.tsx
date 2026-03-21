@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
-import { Save, TestTube, Loader2 } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Save, TestTube, Loader2, Database } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 import { api } from '@/services/api';
 
@@ -33,6 +33,7 @@ const GROUPS: FieldGroup[] = [
       { key: 'rag_rewrite_model', label: 'Query Rewrite Model', placeholder: 'default: qwen-turbo (fast, for keyword rewriting)' },
       { key: 'rag_decompose_model', label: 'Deep Think Model', placeholder: 'empty = use main model (for CoT query decomposition)' },
       { key: 'rag_think_rounds', label: 'Deep Think Rounds', placeholder: 'default: 5 (max ReAct search rounds)' },
+      { key: 'rag_rerank_id', label: 'Rerank Model (Retrieval API)', placeholder: 'default: gte-rerank (used in RAGFlow retrieval calls)' },
     ],
   },
 ];
@@ -53,9 +54,32 @@ export default function AdminLLMPage() {
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [saveMessage, setSaveMessage] = useState('');
 
+  // RAGFlow internal models (separate API)
+  const [ragflowModels, setRagflowModels] = useState<Record<string, string>>({});
+  const [ragflowForm, setRagflowForm] = useState<Record<string, string>>({});
+  const [ragflowLoading, setRagflowLoading] = useState(false);
+  const [ragflowSaving, setRagflowSaving] = useState(false);
+  const [ragflowMessage, setRagflowMessage] = useState('');
+  const [ragflowError, setRagflowError] = useState('');
+
+  const fetchRagflowModels = useCallback(async () => {
+    setRagflowLoading(true);
+    setRagflowError('');
+    try {
+      const data = await api.getRagflowModels();
+      setRagflowModels(data);
+      setRagflowForm(data);
+    } catch (e) {
+      setRagflowError(e instanceof Error ? e.message : 'Failed to load RAGFlow models');
+    } finally {
+      setRagflowLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSettings();
-  }, [fetchSettings]);
+    fetchRagflowModels();
+  }, [fetchSettings, fetchRagflowModels]);
 
   useEffect(() => {
     const initial: Record<string, string> = {};
@@ -105,6 +129,31 @@ export default function AdminLLMPage() {
       setTimeout(() => setSaveMessage(''), 3000);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveRagflow = async () => {
+    setRagflowSaving(true);
+    setRagflowMessage('');
+    setRagflowError('');
+    try {
+      const changed: Record<string, string> = {};
+      for (const [key, value] of Object.entries(ragflowForm)) {
+        if (value !== ragflowModels[key]) {
+          changed[key] = value;
+        }
+      }
+      if (Object.keys(changed).length > 0) {
+        const updated = await api.updateRagflowModels(changed);
+        setRagflowModels(updated);
+        setRagflowForm(updated);
+      }
+      setRagflowMessage('RAGFlow models updated');
+      setTimeout(() => setRagflowMessage(''), 3000);
+    } catch (e) {
+      setRagflowError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setRagflowSaving(false);
     }
   };
 
@@ -168,6 +217,60 @@ export default function AdminLLMPage() {
           </div>
         </div>
       ))}
+
+      {/* RAGFlow Internal Models — separate API */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-0.5">
+          <Database size={16} className="text-gray-500" />
+          <h3 className="text-sm font-semibold text-gray-900">RAGFlow Internal Models</h3>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Models used by RAGFlow internally for chunk processing (keyword generation, embedding, reranking).
+          These are stored in RAGFlow&apos;s database, not in Noteflow settings.
+        </p>
+        {ragflowError && (
+          <p className="text-sm text-red-600 mb-3">{ragflowError}</p>
+        )}
+        {ragflowLoading ? (
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Loader2 size={14} className="animate-spin" /> Loading…
+          </div>
+        ) : (
+          <>
+            <div className="space-y-4">
+              {[
+                { key: 'llm_id', label: 'Chunk Processing LLM', placeholder: 'e.g. qwen-plus (for auto_keywords/questions & RAPTOR)' },
+                { key: 'embd_id', label: 'Embedding Model', placeholder: 'e.g. text-embedding-v3' },
+                { key: 'rerank_id', label: 'Rerank Model', placeholder: 'e.g. gte-rerank@Tongyi-Qianwen' },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">{label}</label>
+                  <input
+                    type="text"
+                    value={ragflowForm[key] ?? ''}
+                    onChange={(e) => setRagflowForm({ ...ragflowForm, [key]: e.target.value })}
+                    placeholder={placeholder}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                onClick={handleSaveRagflow}
+                disabled={ragflowSaving}
+                className="flex items-center gap-2 px-3 py-1.5 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
+              >
+                {ragflowSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Save RAGFlow Models
+              </button>
+              {ragflowMessage && (
+                <span className="text-sm text-green-600">{ragflowMessage}</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Token Budget — auto-calculated */}
       <div className="bg-gray-50 rounded-xl border border-gray-100 p-6">
