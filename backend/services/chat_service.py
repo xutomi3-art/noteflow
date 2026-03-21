@@ -182,38 +182,29 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     return message
 
 
-REACT_SYSTEM_PROMPT = """You are a research assistant that finds answers by searching through documents step by step.
+REACT_SYSTEM_PROMPT = """You are a research assistant. You answer questions by searching through documents in multiple rounds.
 
-Use this EXACT format:
+FORMAT — follow exactly:
 
-Thought: [your reasoning about what you need to find]
-Search: [first search query — concise keywords]
-Search: [second search query — different angle]
-Search: [third search query — yet another angle]
+Notes: [running summary: what you KNOW so far, what you still NEED to find]
+Thought: [your plan for this round of searching]
+Search: [query 1 — concise keywords]
+Search: [query 2 — different angle]
+Search: [query 3 — yet another angle]
 
-After receiving search results, you MUST first update your research notes, then continue:
+When you have enough evidence:
 
-Notes: [cumulative summary of ALL facts learned so far, and what is still MISSING to answer the question]
-Thought: [based on your notes, what should you search next?]
-Search: [query 1]
-Search: [query 2]
-Search: [query 3]
+Notes: [complete summary of all findings]
+Thought: [how you connect the evidence to reach your conclusion]
+Answer: [your answer with [1][2] citations]
 
-OR if you have enough evidence:
-
-Notes: [final summary of all evidence]
-Thought: [your reasoning chain connecting the evidence to the answer]
-Answer: [your complete answer with [1][2] citations]
-
-Rules:
-- ALWAYS include Notes: to track what you've learned across rounds. This is critical.
-- Output EXACTLY 3 Search queries per round, each targeting DIFFERENT evidence.
-- If direct search fails, think about what INDIRECT evidence could answer the question.
-- Compare information across different time periods or documents to detect changes.
-- In your Answer, use [1], [2] etc. to cite sources.
-- CRITICAL: Always respond in the SAME LANGUAGE as the user's question.
-- Even with partial evidence, reason from what you found and state your confidence level.
-- Format your Answer using Markdown when appropriate."""
+RULES:
+1. Always output Notes first. Notes accumulate — never discard earlier findings.
+2. Output exactly 3 Search queries per round. Each must seek DIFFERENT information.
+3. If you cannot find the answer directly, reason about what evidence WOULD help and search for that instead.
+4. Respond in the SAME LANGUAGE as the user's question.
+5. In your Answer, cite sources with [1], [2] etc. Use Markdown formatting.
+6. State your confidence level. If uncertain, explain what evidence is missing."""
 
 REACT_MAX_ROUNDS = settings.RAG_THINK_ROUNDS or 5
 
@@ -417,24 +408,12 @@ async def stream_chat(
 
                     # Feed observation back to LLM with escalating strategy guidance
                     react_messages.append({"role": "assistant", "content": step_output})
-                    max_rounds = REACT_MAX_ROUNDS
                     if round_num <= 2:
-                        guidance = (
-                            "Update your Notes: what facts did you learn? What is still MISSING to answer the question? "
-                            "Based on your notes, output Thought + 3 Search queries targeting what's missing. "
-                            "Do NOT give an Answer yet."
-                        )
-                    elif round_num < max_rounds:
-                        guidance = (
-                            "Update your Notes with new findings. Review what you know and what's still missing. "
-                            "If you can reason to the answer from your accumulated evidence, provide your Answer. "
-                            "Otherwise, output Thought + 3 Search queries for what's still missing."
-                        )
+                        guidance = "Update Notes. Search for what's still missing. Do NOT Answer yet."
+                    elif round_num < REACT_MAX_ROUNDS:
+                        guidance = "Update Notes. Answer if you can reason from your evidence, otherwise keep searching."
                     else:
-                        guidance = (
-                            "Final round. Write your complete Notes summarizing ALL evidence. "
-                            "Provide your Answer by reasoning from your notes. Show your reasoning chain."
-                        )
+                        guidance = "Final round. Answer from your accumulated Notes. Show your reasoning."
                     react_messages.append({"role": "user", "content": f"Observation: {observation}\n\n{guidance}"})
 
                 # Collect all unique chunks sorted by similarity, take top-15
