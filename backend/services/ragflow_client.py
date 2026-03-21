@@ -54,23 +54,23 @@ class RAGFlowClient:
             return None
 
     async def _enable_advanced_features(self, client: httpx.AsyncClient, dataset_id: str) -> None:
-        """Enable parent-child chunking, PageIndex, auto-keywords/questions via PUT update."""
+        """Enable parent-child chunking and html4excel via PUT update after creation."""
         try:
             resp = await client.put(
                 f"{self.base_url}/api/v1/datasets/{dataset_id}",
                 headers=self._headers,
                 json={
                     "parser_config": {
-                        "chunk_token_num": 512,
-                        "overlapped_percent": 0.15,
-                        "auto_keywords": 3,
-                        "auto_questions": 3,
-                        "raptor": {"use_raptor": True},
+                        "html4excel": True,
                     },
                 },
             )
             if resp.status_code == 200:
-                logger.info("RAGFlow dataset %s: enabled auto_keywords/questions", dataset_id)
+                data = resp.json()
+                if data.get("code") == 0:
+                    logger.info("RAGFlow dataset %s: enabled html4excel", dataset_id)
+                else:
+                    logger.warning("RAGFlow dataset %s: _enable_advanced_features response: %s", dataset_id, data)
         except Exception as e:
             logger.warning("RAGFlow _enable_advanced_features failed: %s", e)
 

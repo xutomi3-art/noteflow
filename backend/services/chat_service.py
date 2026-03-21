@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import re
 import time
 import uuid
@@ -16,8 +15,6 @@ from backend.models.source import Source
 from backend.core.config import settings
 from backend.services.ragflow_client import ragflow_client
 from backend.services.qwen_client import qwen_client
-from backend.services.query_router import route_query
-from backend.services.excel_service import query_excel, get_table_schema, get_table_sample, excel_to_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -264,7 +261,6 @@ async def stream_chat(
     # Initialize timing variables
     t_start = time.time()
     t_ragflow_start = t_ragflow_end = None
-    t_excel_start = t_excel_end = None
     t_llm_start = t_llm_end = None
     t_first_token = None
     sources_map: dict = {}
@@ -295,17 +291,6 @@ async def stream_chat(
         t_ragflow_start = time.time()
         dataset_ids, document_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
-        # Get Excel sources with duckdb paths (filtered by source_ids if provided)
-        excel_query = select(Source).where(
-            Source.notebook_id == notebook_id,
-            Source.duckdb_path.isnot(None),
-        )
-        if source_ids:
-            excel_query = excel_query.where(Source.id.in_([uuid.UUID(sid) for sid in source_ids]))
-        excel_result = await db.execute(excel_query)
-        excel_sources = list(excel_result.scalars().all())
-        logger.info("Excel sources found: %d, source_ids: %s, deep_thinking: %s", len(excel_sources), source_ids, deep_thinking)
-
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
         retrieval_query = message
@@ -315,9 +300,6 @@ async def stream_chat(
                 retrieval_query = f"{message}\n{rewritten}"
 
         # Step 2b: RAGFlow retrieval — find relevant chunks across all sources
-        excel_context = None
-        sql_answer = None
-
         chunks = []
         react_steps: list[dict] = []  # Track ReAct steps for logging
         if dataset_ids:
@@ -429,182 +411,12 @@ async def stream_chat(
                 )
         t_ragflow_end = time.time()
 
-        # Step 2c: If we have Excel sources, check if RAGFlow found relevant Excel chunks.
-        # If so, send only those matched Excel tables in full to LLM.
-        # For data computation questions, also try SQL on matched tables.
-        t_excel_start = time.time()
-        if excel_sources:
-            # Build a map of Excel ragflow_doc_id → Source
-            excel_by_doc_id: dict[str, "Source"] = {}
-            excel_by_filename: dict[str, "Source"] = {}
-            for src in excel_sources:
-                if src.ragflow_doc_id:
-                    excel_by_doc_id[src.ragflow_doc_id] = src
-                # Also match by filename (RAGFlow chunk contains document_keyword = filename)
-                base = os.path.splitext(src.filename)[0] + ".md"
-                excel_by_filename[base.lower()] = src
-                excel_by_filename[src.filename.lower()] = src
-
-            # Find which Excel files appear in retrieved chunks
-            matched_excel: dict[str, "Source"] = {}  # source_id → Source (deduplicated)
-            for chunk in chunks:
-                doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "")).lower()
-                doc_id = chunk.get("document_id", chunk.get("doc_id", ""))
-                # Match by doc_id (exact)
-                if doc_id in excel_by_doc_id:
-                    src = excel_by_doc_id[doc_id]
-                    matched_excel[str(src.id)] = src
-                # Match by filename (exact match on full name or base name)
-                if doc_name in excel_by_filename:
-                    src = excel_by_filename[doc_name]
-                    matched_excel[str(src.id)] = src
-
-            logger.info("Excel matching: %d Excel sources, %d matched from %d chunks. Matched: %s",
-                        len(excel_sources), len(matched_excel), len(chunks),
-                        [s.filename for s in matched_excel.values()])
-
-            truncated_excel: set[str] = set()
-            if matched_excel:
-                # Dynamic budget: generous with large context window
-                n = len(matched_excel)
-                if n == 1:
-                    max_excel_chars = 200000   # ~100K tokens — full large table
-                elif n == 2:
-                    max_excel_chars = 300000   # 150K each
-                else:
-                    max_excel_chars = min(150000 * n, 600000)
-                logger.info("Excel budget: %d matched tables, %d char limit", n, max_excel_chars)
-
-                # Send matched Excel tables in full to LLM
-                excel_parts = []
-                total_chars = 0
-                for src in matched_excel.values():
-                    if not src.storage_url:
-                        continue
-                    try:
-                        md = excel_to_markdown(src.storage_url)
-                        if total_chars + len(md) <= max_excel_chars:
-                            excel_parts.append(f"Data from file: {src.filename}\n\n{md}")
-                            total_chars += len(md)
-                            logger.info("Including matched Excel: %s (%d chars)", src.filename, len(md))
-                        else:
-                            truncated_excel.add(str(src.id))
-                            logger.info("Skipping Excel %s (%d chars) — budget exceeded, will try SQL", src.filename, len(md))
-                    except Exception as e:
-                        logger.warning("Failed to convert %s: %s", src.filename, e)
-                if excel_parts:
-                    excel_context = "\n\n---\n\n".join(excel_parts)
-                    logger.info("Excel context: %d matched tables, %d total chars", len(excel_parts), total_chars)
-
-            # SQL fallback — only for Excel files that were too large to fit in context
-            # Run in parallel with asyncio.gather for speed
-            if sql_answer is None and truncated_excel:
-                import asyncio
-
-                async def _try_sql(src: "Source") -> str | None:
-                    """Try SQL route for a single Excel source. Returns result or None."""
-                    if str(src.id) not in truncated_excel or not src.duckdb_path:
-                        return None
-                    schema = get_table_schema(src.duckdb_path)
-                    route = await route_query(message, schema)
-                    if route != "sql":
-                        return None
-                    logger.info("SQL route matched for %s", src.filename)
-                    sample = get_table_sample(src.duckdb_path)
-                    sql_gen_prompt = f"""Given this DuckDB table schema:
-{schema}
-
-Sample data (first and last rows):
-{sample}
-
-The data comes from file: {src.filename}
-
-Generate a SQL query to answer: {message}
-
-Rules:
-- The table name is always "data"
-- Return ONLY the SQL query, no explanation, no markdown
-- Use standard SQL compatible with DuckDB
-- IMPORTANT: Use ASCII commas (,) not Chinese commas (，) in SQL
-- IMPORTANT: Always quote column names with double quotes (e.g. "列名")
-- IMPORTANT: Excel merged cells have been forward-filled.
-- IMPORTANT: Exclude summary/total rows where primary identifier is NULL.
-- Use ILIKE for case-insensitive string matching."""
-
-                    sql_query = await qwen_client.generate(
-                        [{"role": "user", "content": sql_gen_prompt}]
-                    )
-                    sql_query = sql_query.strip()
-                    if sql_query.startswith("```"):
-                        sql_query = sql_query.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-                    # Fix common LLM mistakes: Chinese punctuation → ASCII
-                    sql_query = sql_query.replace("，", ",").replace("（", "(").replace("）", ")").replace("'", "'").replace("'", "'")
-                    logger.info("Generated SQL: %s", sql_query)
-                    try:
-                        result = query_excel(src.duckdb_path, sql_query)
-                        logger.info("SQL succeeded on %s", src.filename)
-                        return result
-                    except Exception as e:
-                        logger.warning("SQL failed on %s: %s", src.filename, e)
-                        return None
-
-                results = await asyncio.gather(
-                    *[_try_sql(src) for src in matched_excel.values()],
-                    return_exceptions=True,
-                )
-                for r in results:
-                    if isinstance(r, str) and r:
-                        sql_answer = r
-                        break
-        t_excel_end = time.time()
-
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
         # 3. Build messages for Qwen
-        # Combine all available data sources into a single prompt
-        has_excel = excel_context is not None or sql_answer is not None
         has_rag = bool(context)
 
-        if has_excel and has_rag:
-            # Both Excel and document sources — combine them
-            excel_section = ""
-            if excel_context is not None:
-                excel_section = f"Spreadsheet data:\n{excel_context}"
-            elif sql_answer is not None:
-                excel_section = f"Structured data query result:\n{sql_answer}"
-
-            user_content = f"""{excel_section}
-
-Context from other source documents:
-{context}
-
-Question: {message}
-
-Rules:
-- Answer based on ALL the data above (both spreadsheet and documents).
-- Use [1], [2], etc. to cite specific document sources.
-- For spreadsheet data, be precise with numbers and show calculations if summing.
-- If the data doesn't contain relevant information, say so."""
-        elif excel_context is not None:
-            user_content = f"""The following is the complete content of a spreadsheet file. Read it carefully and answer the question based on this data.
-
-{excel_context}
-
-Question: {message}
-
-Rules:
-- Answer based ONLY on the data above.
-- If the question involves a category/item that spans multiple rows (merged cells), sum up all related rows.
-- Be precise with numbers. Show your calculation if summing multiple values.
-- If the data doesn't contain relevant information, say so."""
-        elif sql_answer is not None:
-            user_content = f"""Question: {message}
-
-Result from structured data query:
-{sql_answer}
-
-Provide a clear, concise answer based on these query results."""
-        elif context and web_search:
+        if context and web_search:
             user_content = f"""Context from source documents:
 {context}
 
@@ -654,11 +466,9 @@ The uploaded documents do not contain information relevant to this question. Ple
         logger.info("Chat history: %d messages, %d chars", len(history_messages), history_chars)
 
         # Dynamic context budget based on configured context window.
-        # Reserve 25% for normal queries, 80% for Excel-heavy queries.
         # Convert tokens to chars (~2 chars per token).
         context_window = settings.LLM_CONTEXT_WINDOW
-        has_excel_data = excel_context is not None or sql_answer is not None
-        MAX_TOTAL_CHARS = int(context_window * 1.6) if has_excel_data else int(context_window * 0.5)
+        MAX_TOTAL_CHARS = int(context_window * 0.5)
         max_user_chars = MAX_TOTAL_CHARS - len(SYSTEM_PROMPT) - history_chars
         if len(user_content) > max_user_chars:
             logger.warning("User content too long (%d chars), truncating to %d (history=%d)", len(user_content), max_user_chars, history_chars)
@@ -763,13 +573,13 @@ Follow these rules strictly:
                 message_id=assistant_msg.id,
                 total_duration=round(time.time() - t_start, 2),
                 ragflow_duration=round(t_ragflow_end - t_ragflow_start, 2) if t_ragflow_end else None,
-                excel_duration=round(t_excel_end - t_excel_start, 2) if t_excel_end else None,
+                excel_duration=None,
                 llm_duration=round(t_llm_end - t_llm_start, 2) if t_llm_end else None,
                 llm_first_token=round(t_first_token - t_llm_start, 2) if t_first_token else None,
                 source_count=len(sources_map),
                 chunk_count=len(chunks),
                 thinking_mode=deep_thinking,
-                has_excel=bool(excel_sources),
+                has_excel=False,
                 llm_model=settings.LLM_MODEL,
                 token_count=len(full_response),  # approximate by char count
                 status="ok",

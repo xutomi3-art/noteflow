@@ -8,7 +8,6 @@ from sqlalchemy import select
 from backend.core.database import async_session
 from backend.models.notebook import Notebook
 from backend.services.event_bus import event_bus
-from backend.services.excel_service import ingest_excel, excel_to_markdown
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
 from backend.services.asr_service import asr_service, AUDIO_EXTENSIONS
@@ -108,19 +107,12 @@ async def process_document(
             await update_source_status(db, sid, "parsing")
             await _notify(notebook_id, source_id, "parsing")
 
-            # Step 2: Excel/CSV — dual track: DuckDB (SQL) + RAGFlow (semantic)
+            # Step 2: Excel/CSV — upload directly to RAGFlow (native Excel support)
             if file_type in ("xlsx", "xls", "csv"):
-                # Track 1: DuckDB for structured SQL queries
-                duckdb_path = await ingest_excel(sid, file_path)
-                await update_source_status(db, sid, "vectorizing", duckdb_path=duckdb_path)
-                await _notify(notebook_id, source_id, "vectorizing")
-                logger.info("Excel DuckDB ingestion complete: %s", filename)
-
-                # Track 2: Convert to markdown for RAGFlow semantic search
-                content = excel_to_markdown(file_path)
-                logger.info("Excel to markdown: %s (%d chars)", filename, len(content))
-                _save_parsed_content(file_path, content)
-                # Fall through to RAGFlow upload below
+                # RAGFlow handles Excel parsing, chunking and vectorization natively
+                # with html4excel enabled for better table structure preservation
+                logger.info("Excel/CSV will be processed by RAGFlow: %s", filename)
+                content = None  # Signal to upload original file to RAGFlow
 
             # Step 2b: Route audio to ASR pipeline
             elif file_type in AUDIO_EXTENSIONS:
