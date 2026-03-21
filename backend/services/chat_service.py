@@ -329,10 +329,9 @@ async def stream_chat(
                     logger.info("ReAct round %d raw output: %s", round_num, step_output[:300])
                     thought, search_query, answer = _parse_react_output(step_output)
 
-                    # First round MUST search — don't let LLM skip retrieval
-                    if round_num == 1 and answer and not search_query:
-                        logger.info("ReAct round 1: LLM tried to answer without searching, forcing search from thought")
-                        # Use the thought as a search query instead
+                    # Force search in early rounds — don't let LLM skip retrieval
+                    if round_num < REACT_MAX_ROUNDS and answer and not search_query:
+                        logger.info("ReAct round %d: LLM tried to answer early, forcing search from thought", round_num)
                         search_query = thought[:100] if thought else message
                         answer = None
 
@@ -340,7 +339,7 @@ async def stream_chat(
                     if thought:
                         yield f"data: {json.dumps({'type': 'thinking', 'step': round_num, 'thought': thought})}\n\n"
 
-                    if answer and round_num > 1:
+                    if answer and round_num >= REACT_MAX_ROUNDS:
                         # LLM decided it has enough info — but we'll regenerate with full context later
                         react_answer = answer
                         react_steps.append({"round": round_num, "thought": thought, "action": "answer"})
@@ -386,9 +385,23 @@ async def stream_chat(
                     logger.info("ReAct round %d: search=[%s], found=%d, new=%d, total=%d",
                                 round_num, search_query, len(round_chunks), new_count, len(all_chunks))
 
-                    # Feed observation back to LLM for next round
+                    # Feed observation back to LLM with escalating strategy guidance
                     react_messages.append({"role": "assistant", "content": step_output})
-                    react_messages.append({"role": "user", "content": f"Observation: {observation}\n\nContinue with another Thought and Search, or provide your Answer if you have enough information."})
+                    if round_num == 1:
+                        guidance = (
+                            "Continue searching. Try a COMPLETELY DIFFERENT search angle — "
+                            "different keywords, different aspect of the question. "
+                            "Do NOT give an Answer yet. You must Search at least one more time."
+                        )
+                    elif round_num == 2:
+                        guidance = (
+                            "If you still haven't found a direct answer, search for INDIRECT evidence. "
+                            "Think: what observable data would change if the answer were X? "
+                            "Search for that data. You may give an Answer if you have enough evidence to reason from."
+                        )
+                    else:
+                        guidance = "Provide your Answer based on all evidence gathered so far."
+                    react_messages.append({"role": "user", "content": f"Observation: {observation}\n\n{guidance}"})
 
                 # Collect all unique chunks sorted by similarity, take top-15
                 chunks = sorted(all_chunks.values(), key=lambda c: c.get("similarity", 0), reverse=True)[:15]
