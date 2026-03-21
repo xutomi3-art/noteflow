@@ -215,6 +215,27 @@ class RAGFlowClient:
             logger.error("RAGFlow list_chunks failed: %s", e)
             return []
 
+    async def run_raptor(self, dataset_id: str) -> str | None:
+        """Trigger Raptor clustering on a dataset. Returns task_id or None."""
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
+                resp = await client.post(
+                    f"{self.base_url}/api/v1/datasets/{dataset_id}/run_raptor",
+                    headers=self._headers,
+                    json={},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") == 0:
+                    task_id = data.get("data", {}).get("raptor_task_id")
+                    logger.info("RAGFlow Raptor triggered for dataset %s, task_id=%s", dataset_id, task_id)
+                    return task_id
+                logger.warning("RAGFlow run_raptor response: %s", data)
+                return None
+        except Exception as e:
+            logger.error("RAGFlow run_raptor failed: %s", e)
+            return None
+
     async def delete_document(self, dataset_id: str, document_id: str) -> bool:
         """Delete a document from RAGFlow."""
         try:

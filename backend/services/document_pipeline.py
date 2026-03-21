@@ -23,6 +23,38 @@ MAX_RETRIES = 3
 RETRY_DELAYS = [60, 120, 240]  # seconds — exponential backoff
 
 
+async def _maybe_trigger_raptor(notebook_id: uuid.UUID) -> None:
+    """Check if all sources in a notebook are ready, and trigger Raptor if so."""
+    from backend.models.source import Source
+
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(Source).where(Source.notebook_id == notebook_id)
+            )
+            sources = list(result.scalars().all())
+            if not sources:
+                return
+
+            all_ready = all(s.status == "ready" for s in sources)
+            if not all_ready:
+                return
+
+            # Get the dataset_id from any source
+            dataset_id = next((s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id), None)
+            if not dataset_id:
+                return
+
+            logger.info("All %d sources ready in notebook %s, triggering Raptor...", len(sources), notebook_id)
+            task_id = await ragflow_client.run_raptor(dataset_id)
+            if task_id:
+                logger.info("Raptor task started: %s", task_id)
+            else:
+                logger.warning("Failed to trigger Raptor for dataset %s", dataset_id)
+    except Exception as e:
+        logger.error("_maybe_trigger_raptor failed: %s", e)
+
+
 async def _retry_ragflow_upload(
     dataset_id: str,
     old_doc_id: str | None,
@@ -209,6 +241,7 @@ async def process_document(
                 )
                 await update_source_status(db, sid, "ready")
                 await _notify(notebook_id, source_id, "ready")
+                await _maybe_trigger_raptor(nid)
                 return
 
             # Upload to RAGFlow
@@ -270,6 +303,7 @@ async def process_document(
                     await update_source_status(db, sid, "ready")
                     await _notify(notebook_id, source_id, "ready")
                     logger.info("Document processing complete: %s", filename)
+                    await _maybe_trigger_raptor(nid)
                     break
                 elif failed_status:
                     # RAGFlow failed — retry with backoff if under limit
@@ -344,6 +378,7 @@ async def _background_poll(
                         await update_source_status(db, sid, "ready")
                     await _notify(notebook_id, source_id, "ready")
                     logger.info("Background poll: %s ready (chunks=%d)", filename, chunks)
+                    await _maybe_trigger_raptor(uuid.UUID(notebook_id))
                     return
                 if run in ("FAIL", "FAILED", "CANCEL"):
                     async with async_session() as db:
@@ -406,6 +441,7 @@ async def recover_stuck_sources() -> None:
                 if run in ("DONE", "SUCCEEDED") or chunks > 0:
                     await update_source_status(db, source.id, "ready")
                     logger.info("Recovered %s → ready (run=%s, chunks=%d)", source.filename, run, chunks)
+                    await _maybe_trigger_raptor(source.notebook_id)
                 elif run in ("FAIL", "FAILED", "CANCEL"):
                     await update_source_status(
                         db, source.id, "failed", error_message=f"RAGFlow status: {run}"
@@ -438,6 +474,7 @@ async def _poll_and_update(source: "Source", db: "AsyncSession") -> None:
                     async with async_session() as fresh_db:
                         await update_source_status(fresh_db, source.id, "ready")
                     logger.info("Poll recovered %s → ready", source.filename)
+                    await _maybe_trigger_raptor(source.notebook_id)
                     return
                 if run in ("FAIL", "FAILED", "CANCEL"):
                     async with async_session() as fresh_db:
