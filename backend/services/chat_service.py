@@ -309,7 +309,7 @@ async def stream_chat(
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
         retrieval_query = message
-        if dataset_ids and len(message.split()) > 5:
+        if dataset_ids and len(message.split()) > 3:
             rewritten = await _rewrite_query_for_retrieval(message)
             if rewritten != message:
                 retrieval_query = f"{message}\n{rewritten}"
