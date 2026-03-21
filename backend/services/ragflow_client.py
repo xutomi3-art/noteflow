@@ -36,7 +36,6 @@ class RAGFlowClient:
                         "chunk_method": "naive",
                         "parser_config": {
                             "chunk_token_num": 512,
-                            "overlapped_percent": 0.15,
                             "raptor": {"use_raptor": True},
                         },
                     },
