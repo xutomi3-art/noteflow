@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete
 
 from backend.core.config import settings
-from backend.core.database import AsyncSessionLocal
+from backend.core.database import async_session
 from backend.models.chat_log import ChatLog
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ async def _cleanup_old_logs() -> int:
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
 
-    async with AsyncSessionLocal() as db:
+    async with async_session() as db:
         result = await db.execute(
             delete(ChatLog).where(ChatLog.created_at < cutoff)
         )
