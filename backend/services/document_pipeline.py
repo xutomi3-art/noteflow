@@ -221,7 +221,8 @@ async def process_document(
             if not success:
                 raise Exception("Failed to trigger RAGFlow parsing")
 
-            # Poll for completion (max 15 minutes — large files need more time)
+            # Poll for completion (initial wait up to 15 minutes)
+            completed = False
             for _ in range(180):
                 await asyncio.sleep(5)
                 doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
@@ -233,20 +234,24 @@ async def process_document(
                 # Use chunk_count > 0 as the real completion signal.
                 if run in ("DONE", "SUCCEEDED") or chunks > 0:
                     logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
+                    completed = True
                     break
                 if run in ("FAIL", "FAILED", "CANCEL"):
                     raise Exception(
                         f"RAGFlow parsing failed with status: {run}"
                     )
-            else:
-                logger.warning(
-                    "RAGFlow parsing timed out for %s, marking as ready", filename
-                )
 
-            # Step 5: Mark as ready
-            await update_source_status(db, sid, "ready")
-            await _notify(notebook_id, source_id, "ready")
-            logger.info("Document processing complete: %s", filename)
+            if completed:
+                # Step 5: Mark as ready
+                await update_source_status(db, sid, "ready")
+                await _notify(notebook_id, source_id, "ready")
+                logger.info("Document processing complete: %s", filename)
+            else:
+                # Large file still processing — continue polling in background
+                logger.info(
+                    "RAGFlow still processing %s after 15min, continuing background poll", filename
+                )
+                asyncio.create_task(_background_poll(sid, dataset_id, doc_id, notebook_id, source_id, filename))
 
         except Exception as e:
             logger.error("Document pipeline failed for %s: %s", filename, e)
@@ -255,6 +260,48 @@ async def process_document(
                     err_db, sid, "failed", error_message=str(e)
                 )
             await _notify(notebook_id, source_id, "failed", error=str(e))
+
+
+async def _background_poll(
+    sid: uuid.UUID,
+    dataset_id: str,
+    doc_id: str,
+    notebook_id: str,
+    source_id: str,
+    filename: str,
+) -> None:
+    """Continue polling RAGFlow for large files that exceed the initial 15-min wait.
+
+    Polls every 30s for up to 2 hours.
+    """
+    for _ in range(240):  # 240 * 30s = 2 hours
+        await asyncio.sleep(30)
+        try:
+            doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
+            if doc_status is None:
+                continue
+            run = doc_status.get("run", "UNSTART")
+            chunks = doc_status.get("chunk_count", 0)
+            if run in ("DONE", "SUCCEEDED") or chunks > 0:
+                async with async_session() as db:
+                    await update_source_status(db, sid, "ready")
+                await _notify(notebook_id, source_id, "ready")
+                logger.info("Background poll: %s ready (chunks=%d)", filename, chunks)
+                return
+            if run in ("FAIL", "FAILED", "CANCEL"):
+                async with async_session() as db:
+                    await update_source_status(db, sid, "failed", error_message=f"RAGFlow: {run}")
+                await _notify(notebook_id, source_id, "failed", error=f"RAGFlow: {run}")
+                logger.error("Background poll: %s failed (run=%s)", filename, run)
+                return
+        except Exception as e:
+            logger.warning("Background poll error for %s: %s", filename, e)
+
+    # 2 hours exceeded — mark as failed
+    async with async_session() as db:
+        await update_source_status(db, sid, "failed", error_message="RAGFlow processing timed out (2h)")
+    await _notify(notebook_id, source_id, "failed", error="Processing timed out")
+    logger.error("Background poll timed out for %s after 2 hours", filename)
 
 
 async def recover_stuck_sources() -> None:
