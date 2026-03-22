@@ -289,7 +289,7 @@ class ApiClient {
       let buffer = "";
       let lastTokenTime = Date.now();
       let receivedFirstToken = false;
-      const STREAM_TIMEOUT_MS = 90_000; // 90s without any token → timeout
+      const STREAM_TIMEOUT_MS = 180_000; // 180s without any token → timeout
 
       while (true) {
         // Race between read and timeout
