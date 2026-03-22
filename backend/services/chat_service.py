@@ -44,7 +44,7 @@ def _extract_page_from_content(text: str) -> int | None:
     """
     matches = _PAGE_MARKER_RE.findall(text)
     if matches:
-        return int(matches[-1])
+        return int(matches[0])  # first marker = page where this chunk starts
     return None
 
 
