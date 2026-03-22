@@ -48,7 +48,6 @@ const GROUPS: FieldGroup[] = [
     title: 'Query Processing',
     description: 'Noteflow query rewrite and deep thinking — uses the main LLM, not RAGFlow',
     fields: [
-      { key: 'rag_rewrite_model', label: 'Query Rewrite Model', placeholder: 'empty = use main model (converts questions to keywords)' },
       { key: 'rag_decompose_model', label: 'Deep Think Model', placeholder: 'empty = use main model (for CoT query decomposition)' },
       { key: 'rag_think_rounds', label: 'Deep Think Rounds', placeholder: 'default: 5 (max ReAct search rounds)' },
     ],
