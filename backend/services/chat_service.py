@@ -501,9 +501,10 @@ The uploaded documents do not contain information relevant to this question. Ple
         logger.info("Chat history: %d messages, %d chars", len(history_messages), history_chars)
 
         # Dynamic context budget based on configured context window.
-        # Convert tokens to chars (~2 chars per token).
+        # Convert tokens to chars (~2 chars per token), capped at 30K to avoid
+        # excessively slow LLM responses even when model supports large context.
         context_window = settings.LLM_CONTEXT_WINDOW
-        MAX_TOTAL_CHARS = int(context_window * 0.5)
+        MAX_TOTAL_CHARS = min(int(context_window * 0.5), 30000)
         max_user_chars = MAX_TOTAL_CHARS - len(SYSTEM_PROMPT) - history_chars
         if len(user_content) > max_user_chars:
             logger.warning("User content too long (%d chars), truncating to %d (history=%d)", len(user_content), max_user_chars, history_chars)
