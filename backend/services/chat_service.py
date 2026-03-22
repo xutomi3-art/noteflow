@@ -33,10 +33,53 @@ Follow these rules strictly:
 8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
 
 
+def _extract_page_from_positions(positions: list) -> int | None:
+    """Extract page number from RAGFlow positions field.
+
+    positions format: [[page, x1, y1, x2, y2], ...] or [{"page": N, ...}]
+    Returns page number (1-based) or None if not available.
+    """
+    if not positions:
+        return None
+    pos = positions[0]
+    if isinstance(pos, list) and len(pos) >= 5:
+        return pos[0]
+    if isinstance(pos, dict) and "page" in pos:
+        return pos["page"]
+    return None
+
+
 def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, list[dict]]:
     """Build context string and citation metadata from retrieved chunks."""
     if not chunks:
         return "", []
+
+    # Pre-compute page numbers for all chunks, then fill gaps for table chunks
+    # RAGFlow doesn't provide positions for table-type chunks, so we infer
+    # from neighboring chunks of the same document.
+    chunk_pages: list[int | None] = []
+    for chunk in chunks:
+        chunk_pages.append(_extract_page_from_positions(chunk.get("positions", [])))
+
+    # Fill missing pages from same-document neighbors
+    for i, page in enumerate(chunk_pages):
+        if page is not None:
+            continue
+        doc_id = chunks[i].get("document_id", "")
+        if not doc_id:
+            continue
+        # Find nearest chunk from same document that has a page
+        nearest_page = None
+        min_dist = float("inf")
+        for j, other_page in enumerate(chunk_pages):
+            if other_page is not None and chunks[j].get("document_id") == doc_id:
+                dist = abs(i - j)
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_page = other_page
+        if nearest_page is not None:
+            chunk_pages[i] = nearest_page
+            logger.debug("Inferred page %d for table chunk %d from neighbor", nearest_page, i)
 
     context_parts: list[str] = []
     citations: list[dict] = []
@@ -45,15 +88,11 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
         text = chunk.get("content_with_weight", chunk.get("content", ""))
         doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "unknown"))
 
-        # Try to extract page/location info from chunk metadata
+        # Build location from pre-computed page
         location: dict = {}
-        positions = chunk.get("positions", [])
-        if positions and len(positions) > 0:
-            pos = positions[0]
-            if isinstance(pos, list) and len(pos) >= 5:
-                location["page"] = pos[0]
-            elif isinstance(pos, dict):
-                location = {k: v for k, v in pos.items() if k in ("page", "slide", "paragraph")}
+        page = chunk_pages[i - 1]
+        if page is not None:
+            location["page"] = page
 
         # Find source_id from sources_map
         # Compare stems (without extension) to handle RAGFlow renaming:

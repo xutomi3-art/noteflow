@@ -87,3 +87,31 @@ class TestBuildContextPrompt:
         sources_map = {"s1": {"filename": "report_20250228v9.pdf", "file_type": "pdf"}}
         _, citations = _build_context_prompt(chunks, sources_map)
         assert citations[0]["source_id"] == "s1"
+
+    def test_table_chunk_infers_page_from_neighbor(self):
+        """Table chunks with empty positions should infer page from same-doc neighbors."""
+        doc_id = "doc123"
+        chunks = [
+            {"content_with_weight": "Text on page 4", "document_keyword": "doc.md",
+             "document_id": doc_id, "positions": [[4, 0, 0, 0, 0]]},
+            {"content_with_weight": "<table>CapEx data</table>", "document_keyword": "doc.md",
+             "document_id": doc_id, "positions": []},
+            {"content_with_weight": "Text on page 3", "document_keyword": "doc.md",
+             "document_id": doc_id, "positions": [[3, 0, 0, 0, 0]]},
+        ]
+        sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
+        _, citations = _build_context_prompt(chunks, sources_map)
+        # Table chunk (index 1) should infer page from nearest neighbor (chunk 0, page 4)
+        assert citations[0]["location"]["page"] == 4
+        assert citations[1]["location"]["page"] == 4  # inferred from neighbor
+        assert citations[2]["location"]["page"] == 3
+
+    def test_table_chunk_no_document_id_stays_empty(self):
+        """Table chunks without document_id can't infer pages."""
+        chunks = [
+            {"content_with_weight": "<table>data</table>", "document_keyword": "doc.md",
+             "positions": []},
+        ]
+        sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
+        _, citations = _build_context_prompt(chunks, sources_map)
+        assert citations[0]["location"] == {}
