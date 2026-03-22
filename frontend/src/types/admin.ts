@@ -34,7 +34,7 @@ export interface SystemSettingItem {
 }
 
 export interface ServiceHealth {
-  status: 'ok' | 'error';
+  status: 'ok' | 'warning' | 'error';
   latency_ms: number;
   message?: string;
 }
