@@ -41,6 +41,9 @@ class QwenClient:
             model_lower = self.model.lower()
             if "deepseek" not in model_lower:
                 extra["enable_thinking"] = False
+            # Unlock full context window (Qwen defaults to ~129K without this)
+            if "qwen" in model_lower:
+                extra["max_input_tokens"] = settings.LLM_CONTEXT_WINDOW
             kwargs: dict = dict(
                 model=self.model,
                 messages=messages,  # type: ignore[arg-type]
@@ -80,6 +83,8 @@ class QwenClient:
             gen_extra: dict = {}
             if "deepseek" not in gen_model.lower():
                 gen_extra["enable_thinking"] = False
+            if "qwen" in gen_model.lower():
+                gen_extra["max_input_tokens"] = settings.LLM_CONTEXT_WINDOW
             gen_kwargs: dict = dict(
                 model=gen_model,
                 messages=messages,  # type: ignore[arg-type]
