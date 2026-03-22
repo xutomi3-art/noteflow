@@ -372,7 +372,7 @@ async def process_document(
             # Upload to RAGFlow
             if content is not None:
                 # Upload parsed content as .txt (book chunk method requires txt/pdf/doc/docx)
-                md_filename = os.path.splitext(filename)[0] + ".txt"
+                md_filename = os.path.splitext(filename)[0] + ".md"
                 doc_id = await ragflow_client.upload_document(
                     dataset_id, md_filename, content.encode("utf-8")
                 )
@@ -397,7 +397,7 @@ async def process_document(
 
             # Prepare upload args for potential retries
             upload_content = content.encode("utf-8") if content is not None else None
-            upload_md_filename = os.path.splitext(filename)[0] + ".txt" if content is not None else None
+            upload_md_filename = os.path.splitext(filename)[0] + ".md" if content is not None else None
 
             # Trigger RAGFlow parsing/chunking/embedding with retry on failure
             retry_count = 0
