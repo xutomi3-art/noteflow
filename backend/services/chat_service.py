@@ -179,10 +179,16 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a text analyzer. "
-                "Extract the most important keywords/phrases from the given text. "
-                "Keywords MUST be in the same language as the text. "
-                "Output keywords ONLY, delimited by commas."
+                "You are a search query optimizer for document retrieval. "
+                "Given a user question, generate search keywords that maximize recall:\n"
+                "1. Extract core keywords from the question\n"
+                "2. For any dates, output ALL format variations: "
+                "YYYY/MM/DD, DD/MM/YYYY, MM/DD/YYYY, Month DD YYYY (e.g. October 28 2022), "
+                "and abbreviated (e.g. Oct 28 2022)\n"
+                "3. Add synonyms for key actions "
+                "(e.g. attend → present, attendance; founded → established, inception)\n"
+                "4. Keywords MUST be in the same language as the question\n"
+                "Output keywords ONLY, comma-delimited. No explanations."
             )},
             {"role": "user", "content": message},
         ]
@@ -191,7 +197,7 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
             rewrite_messages,
             model=rewrite_model,
             temperature=0.0,
-            max_tokens=80,
+            max_tokens=150,
         )
         rewritten = rewritten.strip().strip('"').strip("'")
         if rewritten and not rewritten.startswith("[Error"):
