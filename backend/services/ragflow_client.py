@@ -54,7 +54,7 @@ class RAGFlowClient:
             return None
 
     async def _enable_advanced_features(self, client: httpx.AsyncClient, dataset_id: str) -> None:
-        """Enable parent-child chunking and html4excel via PUT update after creation."""
+        """Enable html4excel and chunk overlap via API + direct DB update."""
         try:
             resp = await client.put(
                 f"{self.base_url}/api/v1/datasets/{dataset_id}",
@@ -73,6 +73,25 @@ class RAGFlowClient:
                     logger.warning("RAGFlow dataset %s: _enable_advanced_features response: %s", dataset_id, data)
         except Exception as e:
             logger.warning("RAGFlow _enable_advanced_features failed: %s", e)
+
+        # Set overlapped_percent directly in RAGFlow MySQL (API doesn't expose this param)
+        try:
+            import aiomysql
+            conn = await aiomysql.connect(
+                host="ragflow-mysql", port=3306,
+                user="root", password="infini_rag_flow",
+                db="rag_flow",
+            )
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "UPDATE knowledgebase SET parser_config = JSON_SET(parser_config, '$.overlapped_percent', 15) WHERE id = %s",
+                    (dataset_id,),
+                )
+                await conn.commit()
+            conn.close()
+            logger.info("RAGFlow dataset %s: set overlapped_percent=15 via MySQL", dataset_id)
+        except Exception as e:
+            logger.warning("RAGFlow dataset %s: failed to set overlapped_percent: %s", dataset_id, e)
 
     async def upload_document(
         self, dataset_id: str, filename: str, content: bytes
