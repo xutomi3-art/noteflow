@@ -171,30 +171,20 @@ async def _get_source_dataset_ids(
 
 
 async def _rewrite_query_for_retrieval(message: str) -> str:
-    """Rewrite a conversational query into concise keywords for better RAG retrieval.
+    """Extract keywords from query for better RAG retrieval.
 
-    Only rewrites if the query is conversational (>5 words). Uses a fast LLM call
-    with a fast LLM to minimize latency.
+    Follows RAGFlow's keyword extraction approach: extract important
+    keywords/phrases and append them to the original query.
     """
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a bilingual search query optimizer. Given a user question, output optimized search keywords.\n\n"
-                "Rules:\n"
-                "1. Extract the core intent as 3-6 concise keywords.\n"
-                "2. Add synonyms and alternative expressions to improve recall.\n"
-                "3. Output keywords in BOTH English AND Chinese for cross-language retrieval.\n"
-                "4. Keep named entities (names, dates, organizations) intact in their original language.\n"
-                "5. Output ONLY the keywords on one line, separated by spaces. No explanation.\n\n"
-                "Examples:\n"
-                "Q: When was SAS International School founded?\n"
-                "A: SAS founded establishment year history 创立 建校 成立时间 历史\n\n"
-                "Q: 项目风险管理的步骤有哪些？\n"
-                "A: 项目风险管理 步骤 流程 方法 project risk management steps process\n\n"
-                "Q: What are the key differences between agile and waterfall?\n"
-                "A: agile waterfall differences comparison methodology 敏捷 瀑布 区别 对比 方法论"
+                "You are a text analyzer. "
+                "Extract the most important keywords/phrases from the given text. "
+                "Keywords MUST be in the same language as the text. "
+                "Output keywords ONLY, delimited by commas."
             )},
-            {"role": "user", "content": f"Q: {message}\nA:"},
+            {"role": "user", "content": message},
         ]
         rewrite_model = settings.RAG_REWRITE_MODEL or None  # None = use default
         rewritten = await qwen_client.generate(
