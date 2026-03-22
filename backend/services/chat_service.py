@@ -33,70 +33,41 @@ Follow these rules strictly:
 8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
 
 
-def _match_chunk_to_pdf_page(chunk_text: str, pdf_page_texts: list[str]) -> int | None:
-    """Match a chunk's content to the best-matching PDF page by text overlap.
+_PAGE_MARKER_RE = re.compile(r"<!--\s*page:(\d+)\s*-->")
 
-    Uses a simple keyword overlap approach: extract meaningful words from the
-    chunk and find which PDF page shares the most words.
-    Returns 1-based page number, or None if no good match.
+
+def _extract_page_from_content(text: str) -> int | None:
+    """Extract PDF page number from <!-- page:N --> markers in chunk content.
+
+    These markers are injected during document parsing by _inject_pdf_page_markers.
+    Returns the last page marker found (closest to the actual content), or None.
     """
-    # Strip HTML tags and extract words (4+ chars to skip noise)
-    clean = re.sub(r"<[^>]+>", " ", chunk_text)
-    clean = re.sub(r"[^\w\s]", " ", clean)
-    chunk_words = {w.lower() for w in clean.split() if len(w) >= 4}
-    if not chunk_words:
-        return None
-
-    best_page = None
-    best_overlap = 0
-    for page_idx, page_text in enumerate(pdf_page_texts):
-        page_clean = re.sub(r"[^\w\s]", " ", page_text)
-        page_words = {w.lower() for w in page_clean.split() if len(w) >= 4}
-        overlap = len(chunk_words & page_words)
-        if overlap > best_overlap:
-            best_overlap = overlap
-            best_page = page_idx + 1  # 1-based
-
-    # Require at least 2 word overlap to be meaningful
-    if best_overlap >= 2:
-        return best_page
+    matches = _PAGE_MARKER_RE.findall(text)
+    if matches:
+        return int(matches[-1])
     return None
 
 
-def _get_pdf_page_texts(file_path: str) -> list[str]:
-    """Extract text from each page of a PDF file using PyMuPDF.
+def _extract_page_from_positions(positions: list) -> int | None:
+    """Extract page number from RAGFlow positions field (fallback).
 
-    Returns list of page texts (index 0 = page 1).
+    Note: RAGFlow positions use markdown virtual pages, not PDF page numbers.
+    Prefer _extract_page_from_content() which uses injected page markers.
     """
-    try:
-        import fitz
-        doc = fitz.open(file_path)
-        texts = [page.get_text() for page in doc]
-        doc.close()
-        return texts
-    except Exception as e:
-        logger.debug("Could not extract PDF page texts from %s: %s", file_path, e)
-        return []
-
-
-# Cache PDF page texts per source to avoid re-reading during a single request
-_pdf_page_cache: dict[str, list[str]] = {}
+    if not positions:
+        return None
+    pos = positions[0]
+    if isinstance(pos, list) and len(pos) >= 5:
+        return pos[0]
+    if isinstance(pos, dict) and "page" in pos:
+        return pos["page"]
+    return None
 
 
 def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, list[dict]]:
     """Build context string and citation metadata from retrieved chunks."""
     if not chunks:
         return "", []
-
-    # Build PDF page text lookup for PDF sources (for accurate page matching)
-    # sources_map values have "filename", "file_type", and optionally "file_path"
-    pdf_texts_by_source: dict[str, list[str]] = {}
-    for sid, sinfo in sources_map.items():
-        if sinfo.get("file_type") == "pdf" and sinfo.get("file_path"):
-            cache_key = sinfo["file_path"]
-            if cache_key not in _pdf_page_cache:
-                _pdf_page_cache[cache_key] = _get_pdf_page_texts(cache_key)
-            pdf_texts_by_source[sid] = _pdf_page_cache[cache_key]
 
     context_parts: list[str] = []
     citations: list[dict] = []
@@ -106,6 +77,13 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
         doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "unknown"))
 
         location: dict = {}
+        # Try to get accurate PDF page from injected <!-- page:N --> markers
+        page = _extract_page_from_content(text)
+        # Fallback to RAGFlow positions (less accurate for PDFs)
+        if page is None:
+            page = _extract_page_from_positions(chunk.get("positions", []))
+        if page is not None:
+            location["page"] = page
 
         # Find source_id from sources_map
         # Compare stems (without extension) to handle RAGFlow renaming:
@@ -149,12 +127,6 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
             logger.warning("Citation mapping failed: doc_name='%s', sources_map keys=%s",
                           doc_name, {s: info["filename"] for s, info in sources_map.items()})
 
-        # Match chunk content to actual PDF page using text overlap
-        if source_id and source_id in pdf_texts_by_source:
-            matched_page = _match_chunk_to_pdf_page(text, pdf_texts_by_source[source_id])
-            if matched_page is not None:
-                location["page"] = matched_page
-
         context_parts.append(f"[{i}] (Source: {doc_name})\n{text}\n")
         citations.append({
             "index": i,
@@ -191,11 +163,7 @@ async def _get_source_dataset_ids(
     dataset_ids = list(set(s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id))
     document_ids = [s.ragflow_doc_id for s in sources if s.ragflow_doc_id]
     sources_map = {
-        str(s.id): {
-            "filename": s.filename,
-            "file_type": s.file_type,
-            "file_path": s.storage_url,  # local file path for PDF page extraction
-        }
+        str(s.id): {"filename": s.filename, "file_type": s.file_type}
         for s in sources
     }
 

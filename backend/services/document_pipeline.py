@@ -124,6 +124,88 @@ async def _retry_ragflow_upload(
     return None
 
 
+def _inject_pdf_page_markers(markdown: str, pdf_path: str) -> str:
+    """Inject <!-- page:N --> markers into markdown based on PDF page text anchors.
+
+    Uses PyMuPDF to extract unique text anchors from each PDF page, then finds
+    where each page's content starts in the markdown and inserts page markers.
+    This allows downstream RAGFlow chunks to carry accurate PDF page numbers.
+    """
+    try:
+        import fitz
+        import re
+    except ImportError:
+        logger.warning("PyMuPDF not installed, skipping page marker injection")
+        return markdown
+
+    try:
+        doc = fitz.open(pdf_path)
+        if len(doc) <= 1:
+            doc.close()
+            return f"<!-- page:1 -->\n{markdown}"
+
+        # Extract unique text anchors from each page (first meaningful line)
+        page_anchors: list[tuple[int, str]] = []  # (page_num_1based, anchor_text)
+        for page_idx in range(len(doc)):
+            page_text = doc[page_idx].get_text()
+            # Find the first meaningful line (4+ word chars, not just numbers/spaces)
+            for line in page_text.split("\n"):
+                clean = line.strip()
+                words = [w for w in clean.split() if len(w) >= 3]
+                if len(words) >= 2:
+                    page_anchors.append((page_idx + 1, clean))
+                    break
+        doc.close()
+
+        if not page_anchors:
+            return markdown
+
+        # Find each anchor's position in the markdown and insert page markers
+        # Process from last to first to preserve earlier positions
+        insertions: list[tuple[int, int]] = []  # (position_in_markdown, page_num)
+        md_lower = markdown.lower()
+        for page_num, anchor in page_anchors:
+            # Normalize anchor for fuzzy matching
+            anchor_words = [w.lower() for w in anchor.split() if len(w) >= 3][:5]
+            if not anchor_words:
+                continue
+            # Search for the first occurrence of anchor words sequence in markdown
+            # Use a sliding window approach
+            pattern = r".*?".join(re.escape(w) for w in anchor_words)
+            match = re.search(pattern, md_lower)
+            if match:
+                # Find the start of the line containing this match
+                line_start = markdown.rfind("\n", 0, match.start())
+                pos = line_start + 1 if line_start >= 0 else 0
+                insertions.append((pos, page_num))
+
+        # Deduplicate and sort by position (ascending)
+        seen_pages: set[int] = set()
+        unique_insertions: list[tuple[int, int]] = []
+        for pos, page_num in sorted(insertions):
+            if page_num not in seen_pages:
+                seen_pages.add(page_num)
+                unique_insertions.append((pos, page_num))
+
+        # Insert markers from last to first
+        result = markdown
+        for pos, page_num in reversed(unique_insertions):
+            marker = f"<!-- page:{page_num} -->\n"
+            result = result[:pos] + marker + result[pos:]
+
+        # Ensure page 1 marker exists at the very start
+        if 1 not in seen_pages:
+            result = "<!-- page:1 -->\n" + result
+
+        injected_count = len(unique_insertions) + (1 if 1 not in seen_pages else 0)
+        logger.info("Injected %d page markers into markdown (%d PDF pages)", injected_count, len(page_anchors))
+        return result
+
+    except Exception as e:
+        logger.warning("Failed to inject page markers: %s", e)
+        return markdown
+
+
 def _save_parsed_content(file_path: str, content: str) -> str:
     """Save parsed markdown content alongside the source file."""
     md_path = os.path.splitext(file_path)[0] + "_parsed.md"
@@ -335,7 +417,8 @@ async def process_document(
                 parse_name = os.path.splitext(filename)[0] + ".pdf" if parse_path != file_path else filename
                 parsed = await mineru_client.parse_document(parse_path, parse_name)
                 if parsed:
-                    content = parsed
+                    # Inject PDF page markers into markdown for accurate citation page numbers
+                    content = _inject_pdf_page_markers(parsed, parse_path)
                     # Extract and analyze images from PDF with Vision LLM (if enabled)
                     image_texts = []
                     if settings.VISION_ENABLED:
@@ -581,11 +664,17 @@ async def recover_stuck_sources() -> None:
 
 
 async def _poll_and_update(source: "Source", db: "AsyncSession") -> None:
-    """Poll RAGFlow for a stuck source until done or timeout."""
+    """Poll RAGFlow for a stuck source until done or timeout.
+
+    Uses same timeout as _background_poll (2 hours) to handle large files.
+    """
     from backend.models.source import Source
 
-    for _ in range(20):  # 20 * 30s = 10 minutes
-        await asyncio.sleep(30)
+    source_id = str(source.id)
+    notebook_id = str(source.notebook_id)
+
+    for _ in range(120):  # 120 * 60s = 2 hours (matches _background_poll)
+        await asyncio.sleep(60)
         async with _poll_semaphore:
             try:
                 doc_status = await ragflow_client.get_document_status(
@@ -598,7 +687,8 @@ async def _poll_and_update(source: "Source", db: "AsyncSession") -> None:
                 if run in ("DONE", "SUCCEEDED") or chunks > 0:
                     async with async_session() as fresh_db:
                         await update_source_status(fresh_db, source.id, "ready")
-                    logger.info("Poll recovered %s → ready", source.filename)
+                    await _notify(notebook_id, source_id, "ready")
+                    logger.info("Poll recovered %s → ready (chunks=%d)", source.filename, chunks)
                     await _maybe_trigger_raptor(source.notebook_id)
                     return
                 if run in ("FAIL", "FAILED", "CANCEL"):
@@ -606,6 +696,7 @@ async def _poll_and_update(source: "Source", db: "AsyncSession") -> None:
                         await update_source_status(
                             fresh_db, source.id, "failed", error_message=f"RAGFlow: {run}"
                         )
+                    await _notify(notebook_id, source_id, "failed", error=f"RAGFlow: {run}")
                     return
             except Exception:
                 pass
@@ -614,6 +705,7 @@ async def _poll_and_update(source: "Source", db: "AsyncSession") -> None:
     async with _poll_semaphore:
         async with async_session() as fresh_db:
             await update_source_status(
-                fresh_db, source.id, "failed", error_message="Recovery poll timed out"
+                fresh_db, source.id, "failed", error_message="Recovery poll timed out (2h)"
             )
-    logger.warning("Recovery poll timed out for %s", source.filename)
+    await _notify(notebook_id, source_id, "failed", error="Processing timed out")
+    logger.warning("Recovery poll timed out for %s after 2 hours", source.filename)

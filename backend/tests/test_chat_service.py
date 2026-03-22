@@ -1,7 +1,11 @@
 """Unit tests for chat_service — context building and citation mapping logic."""
 from __future__ import annotations
 
-from backend.services.chat_service import _build_context_prompt, _match_chunk_to_pdf_page
+from backend.services.chat_service import (
+    _build_context_prompt,
+    _extract_page_from_content,
+    _extract_page_from_positions,
+)
 
 
 class TestBuildContextPrompt:
@@ -81,38 +85,57 @@ class TestBuildContextPrompt:
         _, citations = _build_context_prompt(chunks, sources_map)
         assert citations[0]["source_id"] == "s1"
 
-    def test_non_pdf_source_no_page(self):
-        """Non-PDF sources should have empty location."""
-        chunks = [{"content_with_weight": "Some text", "document_keyword": "doc.md"}]
+    def test_page_from_injected_marker(self):
+        """Chunks with <!-- page:N --> markers should extract correct page."""
+        chunks = [{"content_with_weight": "<!-- page:7 -->\nFacilities CapEx table data", "document_keyword": "doc.md"}]
+        sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
+        _, citations = _build_context_prompt(chunks, sources_map)
+        assert citations[0]["location"]["page"] == 7
+
+    def test_page_from_positions_fallback(self):
+        """Without page markers, falls back to RAGFlow positions."""
+        chunks = [{"content_with_weight": "Some content", "document_keyword": "doc.md",
+                    "positions": [[3, 100, 200, 300, 400]]}]
+        sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
+        _, citations = _build_context_prompt(chunks, sources_map)
+        assert citations[0]["location"]["page"] == 3
+
+    def test_no_page_info_empty_location(self):
+        """Chunks without markers or positions have empty location."""
+        chunks = [{"content_with_weight": "No page info", "document_keyword": "doc.md"}]
         sources_map = {"s1": {"filename": "doc.txt", "file_type": "txt"}}
         _, citations = _build_context_prompt(chunks, sources_map)
         assert citations[0]["location"] == {}
 
-    def test_pdf_without_file_path_no_page(self):
-        """PDF source without file_path should have empty location."""
-        chunks = [{"content_with_weight": "Some text", "document_keyword": "doc.md"}]
-        sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
-        _, citations = _build_context_prompt(chunks, sources_map)
-        assert citations[0]["location"] == {}
+
+class TestExtractPageFromContent:
+    def test_standard_marker(self):
+        assert _extract_page_from_content("<!-- page:5 -->\nSome content") == 5
+
+    def test_marker_with_spaces(self):
+        assert _extract_page_from_content("<!--  page:12  -->\nContent") == 12
+
+    def test_multiple_markers_uses_last(self):
+        text = "<!-- page:3 -->\nFirst part\n<!-- page:4 -->\nSecond part"
+        assert _extract_page_from_content(text) == 4
+
+    def test_no_marker(self):
+        assert _extract_page_from_content("Plain text without markers") is None
+
+    def test_marker_in_html_table(self):
+        text = "<!-- page:6 -->\n<table><tr><td>Data</td></tr></table>"
+        assert _extract_page_from_content(text) == 6
 
 
-class TestMatchChunkToPdfPage:
-    def test_exact_match(self):
-        pages = ["Page one content here", "Budget report details here", "Third page text"]
-        assert _match_chunk_to_pdf_page("Budget report details", pages) == 2
+class TestExtractPageFromPositions:
+    def test_list_format(self):
+        assert _extract_page_from_positions([[3, 100, 200, 300, 400]]) == 3
 
-    def test_no_meaningful_words(self):
-        pages = ["Some page text"]
-        assert _match_chunk_to_pdf_page("a b c", pages) is None
+    def test_dict_format(self):
+        assert _extract_page_from_positions([{"page": 5}]) == 5
 
-    def test_minimum_overlap_threshold(self):
-        pages = ["The quick brown fox", "Another page entirely"]
-        # Only 1 word overlap ("quick") — below threshold of 2
-        assert _match_chunk_to_pdf_page("quick", pages) is None
+    def test_empty(self):
+        assert _extract_page_from_positions([]) is None
 
-    def test_html_tags_stripped(self):
-        pages = ["Capital Expenditure Projects yearly budget overview"]
-        result = _match_chunk_to_pdf_page(
-            "<table><tr><td>Capital Expenditure Projects</td></tr></table>", pages
-        )
-        assert result == 1
+    def test_none(self):
+        assert _extract_page_from_positions(None) is None
