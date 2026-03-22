@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "qwen3.5-plus"
     LLM_MAX_OUTPUT_TOKENS: int = 16384
     LLM_CONTEXT_WINDOW: int = 1000000  # qwen3.5-plus supports 1M context
-    RAG_TOP_K: int = 8
+    RAG_TOP_K: int = 30
     RAG_SIMILARITY_THRESHOLD: float = 0.0
     RAG_VECTOR_WEIGHT: float = 0.7
     RAG_REWRITE_MODEL: str = ""  # empty = use main LLM_MODEL
