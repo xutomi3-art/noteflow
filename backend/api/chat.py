@@ -85,6 +85,7 @@ async def clear_history(
 class FeedbackRequest(BaseModel):
     message_id: str
     vote: str  # "up", "down", or "none"
+    comment: str | None = None  # user-provided correct answer
 
 
 @router.post('/feedback')
@@ -108,5 +109,7 @@ async def submit_feedback(
     log = result.scalar_one_or_none()
     if log:
         log.feedback = feedback_value
+        if req.comment is not None:
+            log.feedback_comment = req.comment
         await db.commit()
     return {'data': {'ok': True}}

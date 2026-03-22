@@ -8,6 +8,7 @@ engine = create_async_engine(
     echo=False,
     pool_size=20,
     max_overflow=30,
+    pool_timeout=60,
     pool_recycle=1800,
     pool_pre_ping=True,
 )
