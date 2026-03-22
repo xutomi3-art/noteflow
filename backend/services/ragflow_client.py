@@ -205,7 +205,21 @@ class RAGFlowClient:
                 resp.raise_for_status()
                 data = resp.json()
                 if data.get("code") == 0:
-                    return data.get("data", {}).get("chunks", [])
+                    chunks = data.get("data", {}).get("chunks", [])
+                    # RAGFlow's enable_children may return far more chunks than
+                    # requested `size` (parent chunks are appended). Apply our
+                    # own similarity filter and size limit to keep prompts tight.
+                    threshold = settings.RAG_SIMILARITY_THRESHOLD
+                    if threshold > 0 and chunks:
+                        before = len(chunks)
+                        chunks = [c for c in chunks if c.get("similarity", 0) >= threshold]
+                        if len(chunks) < before:
+                            logger.info("Similarity filter: %d → %d chunks (threshold=%.2f)",
+                                        before, len(chunks), threshold)
+                    if len(chunks) > top_k:
+                        logger.info("Trimming chunks from %d to %d (top_k limit)", len(chunks), top_k)
+                        chunks = chunks[:top_k]
+                    return chunks
                 logger.error("RAGFlow retrieve error: %s", data)
                 return []
         except Exception as e:
