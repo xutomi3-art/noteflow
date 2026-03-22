@@ -21,10 +21,13 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """You are an AI assistant that answers questions STRICTLY based on the provided source documents.
 Follow these rules strictly:
 1. ONLY answer based on the provided context. NEVER use your general knowledge or training data.
-2. If the context doesn't contain enough information to answer the question, clearly state that the uploaded documents do not contain this information. Do NOT guess or supplement with outside knowledge.
+2. If the context does not directly answer the question, DO NOT simply say "not found". Instead:
+   - Present any related or indirect information from the context that is relevant to the topic.
+   - Synthesize and connect the related information to address the question as thoroughly as possible.
+   - Only if there is truly NO related content at all, state that the documents do not contain this information.
 3. Use inline citation markers like [1], [2], etc. to reference the source chunks.
 4. Each citation number corresponds to a chunk from the context provided below.
-5. Be concise and direct in your answers.
+5. Be thorough — provide comprehensive answers that draw from all relevant context, not just the most obvious match.
 6. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
 7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
 8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
@@ -429,7 +432,7 @@ Answer based on the context above if relevant (cite with [1], [2]). If the conte
 
 Question: {message}
 
-Answer the question ONLY based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not contain relevant information to answer the question, say that the uploaded documents do not contain this information."""
+Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible."""
         elif web_search:
             user_content = f"""Question: {message}
 
