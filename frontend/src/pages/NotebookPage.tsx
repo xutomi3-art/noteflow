@@ -1171,7 +1171,7 @@ export default function NotebookPage() {
 
       // For PDF files, open PDF modal viewer; for others, open source content in left panel
       const source = sources.find((s) => s.id === sourceId);
-      const isPdf = source?.file_type === "pdf" || citation.fileType === "pdf" || citation.filename?.toLowerCase().endsWith(".pdf");
+      const isPdf = source?.file_type === "pdf" || citation.file_type === "pdf" || citation.filename?.toLowerCase().endsWith(".pdf");
       if (isPdf && id) {
         const page = citation.location?.page ?? 1;
         openPdf(sourceId, source?.filename || citation.filename || "Document", page);
