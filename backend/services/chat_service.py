@@ -33,20 +33,54 @@ Follow these rules strictly:
 8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
 
 
-def _extract_page_from_positions(positions: list) -> int | None:
-    """Extract page number from RAGFlow positions field.
+def _match_chunk_to_pdf_page(chunk_text: str, pdf_page_texts: list[str]) -> int | None:
+    """Match a chunk's content to the best-matching PDF page by text overlap.
 
-    positions format: [[page, x1, y1, x2, y2], ...] or [{"page": N, ...}]
-    Returns page number (1-based) or None if not available.
+    Uses a simple keyword overlap approach: extract meaningful words from the
+    chunk and find which PDF page shares the most words.
+    Returns 1-based page number, or None if no good match.
     """
-    if not positions:
+    # Strip HTML tags and extract words (4+ chars to skip noise)
+    clean = re.sub(r"<[^>]+>", " ", chunk_text)
+    clean = re.sub(r"[^\w\s]", " ", clean)
+    chunk_words = {w.lower() for w in clean.split() if len(w) >= 4}
+    if not chunk_words:
         return None
-    pos = positions[0]
-    if isinstance(pos, list) and len(pos) >= 5:
-        return pos[0]
-    if isinstance(pos, dict) and "page" in pos:
-        return pos["page"]
+
+    best_page = None
+    best_overlap = 0
+    for page_idx, page_text in enumerate(pdf_page_texts):
+        page_clean = re.sub(r"[^\w\s]", " ", page_text)
+        page_words = {w.lower() for w in page_clean.split() if len(w) >= 4}
+        overlap = len(chunk_words & page_words)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_page = page_idx + 1  # 1-based
+
+    # Require at least 2 word overlap to be meaningful
+    if best_overlap >= 2:
+        return best_page
     return None
+
+
+def _get_pdf_page_texts(file_path: str) -> list[str]:
+    """Extract text from each page of a PDF file using PyMuPDF.
+
+    Returns list of page texts (index 0 = page 1).
+    """
+    try:
+        import fitz
+        doc = fitz.open(file_path)
+        texts = [page.get_text() for page in doc]
+        doc.close()
+        return texts
+    except Exception as e:
+        logger.debug("Could not extract PDF page texts from %s: %s", file_path, e)
+        return []
+
+
+# Cache PDF page texts per source to avoid re-reading during a single request
+_pdf_page_cache: dict[str, list[str]] = {}
 
 
 def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, list[dict]]:
@@ -54,32 +88,15 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
     if not chunks:
         return "", []
 
-    # Pre-compute page numbers for all chunks, then fill gaps for table chunks
-    # RAGFlow doesn't provide positions for table-type chunks, so we infer
-    # from neighboring chunks of the same document.
-    chunk_pages: list[int | None] = []
-    for chunk in chunks:
-        chunk_pages.append(_extract_page_from_positions(chunk.get("positions", [])))
-
-    # Fill missing pages from same-document neighbors
-    for i, page in enumerate(chunk_pages):
-        if page is not None:
-            continue
-        doc_id = chunks[i].get("document_id", "")
-        if not doc_id:
-            continue
-        # Find nearest chunk from same document that has a page
-        nearest_page = None
-        min_dist = float("inf")
-        for j, other_page in enumerate(chunk_pages):
-            if other_page is not None and chunks[j].get("document_id") == doc_id:
-                dist = abs(i - j)
-                if dist < min_dist:
-                    min_dist = dist
-                    nearest_page = other_page
-        if nearest_page is not None:
-            chunk_pages[i] = nearest_page
-            logger.debug("Inferred page %d for table chunk %d from neighbor", nearest_page, i)
+    # Build PDF page text lookup for PDF sources (for accurate page matching)
+    # sources_map values have "filename", "file_type", and optionally "file_path"
+    pdf_texts_by_source: dict[str, list[str]] = {}
+    for sid, sinfo in sources_map.items():
+        if sinfo.get("file_type") == "pdf" and sinfo.get("file_path"):
+            cache_key = sinfo["file_path"]
+            if cache_key not in _pdf_page_cache:
+                _pdf_page_cache[cache_key] = _get_pdf_page_texts(cache_key)
+            pdf_texts_by_source[sid] = _pdf_page_cache[cache_key]
 
     context_parts: list[str] = []
     citations: list[dict] = []
@@ -88,11 +105,7 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
         text = chunk.get("content_with_weight", chunk.get("content", ""))
         doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "unknown"))
 
-        # Build location from pre-computed page
         location: dict = {}
-        page = chunk_pages[i - 1]
-        if page is not None:
-            location["page"] = page
 
         # Find source_id from sources_map
         # Compare stems (without extension) to handle RAGFlow renaming:
@@ -136,6 +149,12 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
             logger.warning("Citation mapping failed: doc_name='%s', sources_map keys=%s",
                           doc_name, {s: info["filename"] for s, info in sources_map.items()})
 
+        # Match chunk content to actual PDF page using text overlap
+        if source_id and source_id in pdf_texts_by_source:
+            matched_page = _match_chunk_to_pdf_page(text, pdf_texts_by_source[source_id])
+            if matched_page is not None:
+                location["page"] = matched_page
+
         context_parts.append(f"[{i}] (Source: {doc_name})\n{text}\n")
         citations.append({
             "index": i,
@@ -172,7 +191,11 @@ async def _get_source_dataset_ids(
     dataset_ids = list(set(s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id))
     document_ids = [s.ragflow_doc_id for s in sources if s.ragflow_doc_id]
     sources_map = {
-        str(s.id): {"filename": s.filename, "file_type": s.file_type}
+        str(s.id): {
+            "filename": s.filename,
+            "file_type": s.file_type,
+            "file_path": s.storage_url,  # local file path for PDF page extraction
+        }
         for s in sources
     }
 

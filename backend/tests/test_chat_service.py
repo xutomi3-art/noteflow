@@ -1,7 +1,7 @@
 """Unit tests for chat_service — context building and citation mapping logic."""
 from __future__ import annotations
 
-from backend.services.chat_service import _build_context_prompt
+from backend.services.chat_service import _build_context_prompt, _match_chunk_to_pdf_page
 
 
 class TestBuildContextPrompt:
@@ -69,13 +69,6 @@ class TestBuildContextPrompt:
         _, citations = _build_context_prompt(chunks, sources_map)
         assert len(citations[0]["excerpt"]) == 300
 
-    def test_page_location_from_positions(self):
-        chunks = [{"content_with_weight": "Page content", "document_keyword": "doc.pdf",
-                    "positions": [[3, 100, 200, 300, 400]]}]
-        sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
-        _, citations = _build_context_prompt(chunks, sources_map)
-        assert citations[0]["location"]["page"] == 3
-
     def test_fallback_content_field(self):
         chunks = [{"content": "Fallback content text", "document_keyword": "doc.txt"}]
         sources_map = {"s1": {"filename": "doc.txt", "file_type": "txt"}}
@@ -88,30 +81,38 @@ class TestBuildContextPrompt:
         _, citations = _build_context_prompt(chunks, sources_map)
         assert citations[0]["source_id"] == "s1"
 
-    def test_table_chunk_infers_page_from_neighbor(self):
-        """Table chunks with empty positions should infer page from same-doc neighbors."""
-        doc_id = "doc123"
-        chunks = [
-            {"content_with_weight": "Text on page 4", "document_keyword": "doc.md",
-             "document_id": doc_id, "positions": [[4, 0, 0, 0, 0]]},
-            {"content_with_weight": "<table>CapEx data</table>", "document_keyword": "doc.md",
-             "document_id": doc_id, "positions": []},
-            {"content_with_weight": "Text on page 3", "document_keyword": "doc.md",
-             "document_id": doc_id, "positions": [[3, 0, 0, 0, 0]]},
-        ]
-        sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
+    def test_non_pdf_source_no_page(self):
+        """Non-PDF sources should have empty location."""
+        chunks = [{"content_with_weight": "Some text", "document_keyword": "doc.md"}]
+        sources_map = {"s1": {"filename": "doc.txt", "file_type": "txt"}}
         _, citations = _build_context_prompt(chunks, sources_map)
-        # Table chunk (index 1) should infer page from nearest neighbor (chunk 0, page 4)
-        assert citations[0]["location"]["page"] == 4
-        assert citations[1]["location"]["page"] == 4  # inferred from neighbor
-        assert citations[2]["location"]["page"] == 3
+        assert citations[0]["location"] == {}
 
-    def test_table_chunk_no_document_id_stays_empty(self):
-        """Table chunks without document_id can't infer pages."""
-        chunks = [
-            {"content_with_weight": "<table>data</table>", "document_keyword": "doc.md",
-             "positions": []},
-        ]
+    def test_pdf_without_file_path_no_page(self):
+        """PDF source without file_path should have empty location."""
+        chunks = [{"content_with_weight": "Some text", "document_keyword": "doc.md"}]
         sources_map = {"s1": {"filename": "doc.pdf", "file_type": "pdf"}}
         _, citations = _build_context_prompt(chunks, sources_map)
         assert citations[0]["location"] == {}
+
+
+class TestMatchChunkToPdfPage:
+    def test_exact_match(self):
+        pages = ["Page one content here", "Budget report details here", "Third page text"]
+        assert _match_chunk_to_pdf_page("Budget report details", pages) == 2
+
+    def test_no_meaningful_words(self):
+        pages = ["Some page text"]
+        assert _match_chunk_to_pdf_page("a b c", pages) is None
+
+    def test_minimum_overlap_threshold(self):
+        pages = ["The quick brown fox", "Another page entirely"]
+        # Only 1 word overlap ("quick") — below threshold of 2
+        assert _match_chunk_to_pdf_page("quick", pages) is None
+
+    def test_html_tags_stripped(self):
+        pages = ["Capital Expenditure Projects yearly budget overview"]
+        result = _match_chunk_to_pdf_page(
+            "<table><tr><td>Capital Expenditure Projects</td></tr></table>", pages
+        )
+        assert result == 1
