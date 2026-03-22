@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     # LLM API (OpenAI-compatible endpoint)
     LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     LLM_MODEL: str = "qwen3.5-plus"
-    LLM_MAX_OUTPUT_TOKENS: int = 8192
-    LLM_CONTEXT_WINDOW: int = 256000  # model context window in tokens
+    LLM_MAX_OUTPUT_TOKENS: int = 16384
+    LLM_CONTEXT_WINDOW: int = 1000000  # qwen3.5-plus supports 1M context
     RAG_TOP_K: int = 8
     RAG_SIMILARITY_THRESHOLD: float = 0.0
     RAG_VECTOR_WEIGHT: float = 0.7
