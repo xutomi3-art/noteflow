@@ -334,10 +334,10 @@ class ApiClient {
     await this.request(`/notebooks/${notebookId}/chat/history`, { method: "DELETE" });
   }
 
-  async submitChatFeedback(notebookId: string, messageId: string, vote: string): Promise<void> {
+  async submitChatFeedback(notebookId: string, messageId: string, vote: string, comment?: string): Promise<void> {
     await this.request(`/notebooks/${notebookId}/chat/feedback`, {
       method: "POST",
-      body: JSON.stringify({ message_id: messageId, vote }),
+      body: JSON.stringify({ message_id: messageId, vote, comment }),
     });
   }
 

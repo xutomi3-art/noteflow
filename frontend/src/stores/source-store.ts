@@ -64,13 +64,21 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   },
 
   deleteSource: async (notebookId: string, sourceId: string) => {
-    await api.deleteSource(notebookId, sourceId);
+    // Optimistic delete: remove from UI immediately, then clean up server-side
+    const prev = get().sources;
+    const prevSelected = get().selectedIds;
     set((state) => ({
       sources: state.sources.filter((s) => s.id !== sourceId),
       selectedIds: new Set(
         [...state.selectedIds].filter((id) => id !== sourceId),
       ),
     }));
+    try {
+      await api.deleteSource(notebookId, sourceId);
+    } catch {
+      // Rollback on failure
+      set({ sources: prev, selectedIds: prevSelected });
+    }
   },
 
   toggleSelect: (sourceId: string) => {

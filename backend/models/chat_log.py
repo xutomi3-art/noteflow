@@ -38,6 +38,7 @@ class ChatLog(Base):
 
     # User feedback (thumbs up/down)
     feedback: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "up", "down", or null
+    feedback_comment: Mapped[str | None] = mapped_column(Text, nullable=True)  # user-provided correct answer
     message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)  # links to chat_messages.id
 
     # Status

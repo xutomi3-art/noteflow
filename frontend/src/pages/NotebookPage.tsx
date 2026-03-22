@@ -297,6 +297,8 @@ export default function NotebookPage() {
   const [overviewSaved, setOverviewSaved] = useState(false);
   const [copiedMessageIds, setCopiedMessageIds] = useState<Set<string>>(new Set());
   const [messageFeedback, setMessageFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
+  const [feedbackMsgId, setFeedbackMsgId] = useState<string | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -968,10 +970,24 @@ export default function NotebookPage() {
       ...prev,
       [msgId]: newVote,
     }));
-    if (id) {
-      api.submitChatFeedback(id, msgId, newVote || "none").catch(() => {});
+    if (newVote === 'down') {
+      setFeedbackMsgId(msgId);
+      setFeedbackComment("");
+    } else {
+      setFeedbackMsgId(null);
+      setFeedbackComment("");
+      if (id) {
+        api.submitChatFeedback(id, msgId, newVote || "none").catch(() => {});
+      }
     }
   }, [id, messageFeedback]);
+
+  const handleSubmitFeedbackComment = useCallback(() => {
+    if (!id || !feedbackMsgId) return;
+    api.submitChatFeedback(id, feedbackMsgId, "down", feedbackComment || undefined).catch(() => {});
+    setFeedbackMsgId(null);
+    setFeedbackComment("");
+  }, [id, feedbackMsgId, feedbackComment]);
 
   const handleCopyToClipboard = useCallback((text: string) => {
     if (navigator.clipboard) {
@@ -1817,6 +1833,33 @@ export default function NotebookPage() {
                               <ThumbsDown className="w-3.5 h-3.5" />
                             </button>
                           </div>
+                          {feedbackMsgId === msg.id && (
+                            <div className="mt-2 p-3 bg-red-50/50 rounded-xl border border-red-100">
+                              <p className="text-xs text-slate-500 mb-1.5">What would be the correct answer?</p>
+                              <textarea
+                                value={feedbackComment}
+                                onChange={(e) => setFeedbackComment(e.target.value)}
+                                placeholder="Enter the expected answer (optional)..."
+                                className="w-full text-sm border border-slate-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-red-300 focus:border-red-300"
+                                rows={3}
+                                autoFocus
+                              />
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button
+                                  onClick={() => { setFeedbackMsgId(null); setFeedbackComment(""); }}
+                                  className="text-xs px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleSubmitFeedbackComment}
+                                  className="text-xs px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                                >
+                                  Submit
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
