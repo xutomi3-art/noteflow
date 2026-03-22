@@ -36,7 +36,10 @@ class Settings(BaseSettings):
     RAPTOR_ENABLED: bool = False
 
     # Vision LLM (for extracting text from chart images in PDFs)
+    # Uses separate config since main LLM may be on a different provider
     LLM_VISION_MODEL: str = "glm-4.5v"
+    LLM_VISION_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
+    LLM_VISION_API_KEY: str = ""
 
     # MinerU
     MINERU_BASE_URL: str = "http://cloud.jototech.cn:17860"

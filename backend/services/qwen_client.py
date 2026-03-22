@@ -123,11 +123,13 @@ class QwenClient:
                 "If no text is found, describe the image content in Chinese."
             )
 
-            # Use httpx directly instead of OpenAI SDK to avoid model name compatibility issues
+            # Use dedicated vision API config (may differ from main LLM provider)
+            vision_base = settings.LLM_VISION_BASE_URL or settings.LLM_BASE_URL
+            vision_key = settings.LLM_VISION_API_KEY or settings.QWEN_API_KEY
             async with _httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
-                    f"{settings.LLM_BASE_URL}/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"},
+                    f"{vision_base}/chat/completions",
+                    headers={"Authorization": f"Bearer {vision_key}"},
                     json={
                         "model": vision_model,
                         "messages": [{
