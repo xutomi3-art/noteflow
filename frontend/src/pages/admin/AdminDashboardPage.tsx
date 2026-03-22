@@ -171,7 +171,9 @@ export default function AdminDashboardPage() {
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
               Object.values(health).every(h => h.status === 'ok')
                 ? 'bg-green-50 text-green-700'
-                : 'bg-red-50 text-red-700'
+                : Object.values(health).some(h => h.status === 'warning')
+                  ? 'bg-amber-50 text-amber-700'
+                  : 'bg-red-50 text-red-700'
             }`}>
               {Object.values(health).filter(h => h.status === 'ok').length}/{Object.keys(health).length} healthy
             </span>

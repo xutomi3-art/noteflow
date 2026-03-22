@@ -205,13 +205,42 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     else:
         services["docmee"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
 
-    # LLM API — used for chat, embedding, and vision
+    # LLM API — connectivity check + recent request success rate
     if settings.QWEN_API_KEY:
         base = settings.LLM_BASE_URL.rstrip("/")
-        services["llm"] = await _check_http(
+        llm_health = await _check_http(
             f"{base}/models",
             headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"},
         )
+        # Check recent chat success rate from chat_logs (last 30 minutes)
+        if db:
+            try:
+                from sqlalchemy import text
+                row = await db.execute(text(
+                    "SELECT "
+                    "COUNT(*) AS total, "
+                    "COUNT(*) FILTER (WHERE status = 'ok') AS ok, "
+                    "COUNT(*) FILTER (WHERE status != 'ok' OR error_message IS NOT NULL) AS errors, "
+                    "ROUND(AVG(total_duration)::numeric, 1) AS avg_duration "
+                    "FROM chat_logs WHERE created_at > NOW() - INTERVAL '30 minutes'"
+                ))
+                stats = row.fetchone()
+                total = stats[0] if stats else 0
+                ok_count = stats[1] if stats else 0
+                error_count = stats[2] if stats else 0
+                avg_dur = float(stats[3]) if stats and stats[3] else 0
+
+                if total > 0:
+                    rate = round(ok_count * 100 / total)
+                    msg = llm_health.get("message") or ""
+                    llm_health["message"] = f"{rate}% success ({ok_count}/{total} last 30min, avg {avg_dur}s)"
+                    if error_count > 0 and rate < 80:
+                        llm_health["status"] = "warning"
+                    elif error_count > 0 and rate < 50:
+                        llm_health["status"] = "error"
+            except Exception as e:
+                logger.warning("Failed to check LLM success rate: %s", e)
+        services["llm"] = llm_health
     else:
         services["llm"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
 

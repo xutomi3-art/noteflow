@@ -262,7 +262,7 @@ export default function AdminSystemPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                      !h ? 'bg-gray-300' : h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'
+                      !h ? 'bg-gray-300' : h.status === 'ok' ? 'bg-green-500' : h.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
                     }`}
                   />
                   <div className="min-w-0">
@@ -277,11 +277,11 @@ export default function AdminSystemPage() {
                 <div className="text-right flex-shrink-0 ml-4">
                   {h ? (
                     <>
-                      <div className={`text-xs font-medium ${h.status === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
-                        {h.status === 'ok' ? 'Healthy' : 'Error'}
+                      <div className={`text-xs font-medium ${h.status === 'ok' ? 'text-green-600' : h.status === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
+                        {h.status === 'ok' ? 'Healthy' : h.status === 'warning' ? 'Warning' : 'Error'}
                       </div>
                       <div className="text-[10px] text-gray-400">
-                        {h.status === 'ok' ? `${h.latency_ms}ms` : (h.message || 'Unreachable')}
+                        {h.message || (h.status === 'ok' ? `${h.latency_ms}ms` : 'Unreachable')}
                       </div>
                     </>
                   ) : (
