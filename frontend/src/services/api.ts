@@ -287,9 +287,29 @@ class ApiClient {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let lastTokenTime = Date.now();
+      let receivedFirstToken = false;
+      const STREAM_TIMEOUT_MS = 90_000; // 90s without any token → timeout
 
       while (true) {
-        const { done, value } = await reader.read();
+        // Race between read and timeout
+        const timeoutPromise = new Promise<{ timeout: true }>((resolve) =>
+          setTimeout(() => resolve({ timeout: true }), STREAM_TIMEOUT_MS)
+        );
+        const readPromise = reader.read().then((r) => ({ ...r, timeout: false as const }));
+        const result = await Promise.race([readPromise, timeoutPromise]);
+
+        if ("timeout" in result && result.timeout) {
+          // Check if we've been stuck without tokens
+          if (Date.now() - lastTokenTime > STREAM_TIMEOUT_MS) {
+            onError("Response timed out. The AI service may be temporarily slow — please try again.");
+            controller.abort();
+            return;
+          }
+          continue;
+        }
+
+        const { done, value } = result as ReadableStreamReadResult<Uint8Array>;
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -301,6 +321,8 @@ class ApiClient {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.type === "token") {
+                lastTokenTime = Date.now();
+                receivedFirstToken = true;
                 onToken(data.content);
               } else if (data.type === "done") {
                 onDone({ id: data.id, citations: data.citations || [] });
@@ -308,9 +330,12 @@ class ApiClient {
                 onError(data.message);
                 return;
               } else if (data.type === "thinking" || data.type === "searching" || data.type === "observation") {
+                lastTokenTime = Date.now();
                 onToken(`__REACT__${JSON.stringify(data)}__REACT__`);
               }
             } catch { /* ignore parse errors */ }
+          } else if (line.startsWith(": keepalive")) {
+            // Keepalive keeps the connection alive but doesn't reset token timeout
           }
         }
       }
