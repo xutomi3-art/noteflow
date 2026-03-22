@@ -291,7 +291,6 @@ async def stream_chat(
         yield ": keepalive\n\n"
 
         # Retrieve from RAGFlow
-        t_ragflow_start = time.time()
         dataset_ids, document_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
@@ -303,6 +302,7 @@ async def stream_chat(
                 retrieval_query = f"{message}\n{rewritten}"
 
         # Step 2b: RAGFlow retrieval — find relevant chunks across all sources
+        t_ragflow_start = time.time()
         chunks = []
         react_steps: list[dict] = []  # Track ReAct steps for logging
         if dataset_ids:
