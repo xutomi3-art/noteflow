@@ -28,6 +28,7 @@ Follow these rules strictly:
 3. Use inline citation markers like [1], [2], etc. to reference the source chunks.
 4. Each citation number corresponds to a chunk from the context provided below.
 5. Be thorough — provide comprehensive answers that draw from all relevant context, not just the most obvious match.
+   When the question asks about a specific date, carefully scan ALL chunks for that exact date (in any format: YYYY/MM/DD, DD/MM/YYYY, Month DD YYYY, etc.) and prioritize chunks containing that date.
 6. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
 7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
 8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
