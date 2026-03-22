@@ -33,7 +33,7 @@ class RAGFlowClient:
                     headers=self._headers,
                     json={
                         "name": name,
-                        "chunk_method": "book",
+                        "chunk_method": "naive",
                         "parser_config": {
                             "chunk_token_num": 512,
                             "raptor": {"use_raptor": settings.RAPTOR_ENABLED},
