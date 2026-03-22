@@ -190,7 +190,7 @@ class RAGFlowClient:
                     "dataset_ids": dataset_ids,
                     "similarity_threshold": settings.RAG_SIMILARITY_THRESHOLD,
                     "vector_similarity_weight": settings.RAG_VECTOR_WEIGHT,
-                    "top_k": 80,
+                    "top_k": 60,
                     "size": top_k,
                     "keyword": True,
                     "rerank_id": settings.RAG_RERANK_ID,
