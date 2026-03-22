@@ -296,10 +296,12 @@ async def stream_chat(
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
         retrieval_query = message
+        t_rewrite_start = time.time()
         if dataset_ids and len(message.split()) > 3:
             rewritten = await _rewrite_query_for_retrieval(message)
             if rewritten != message:
                 retrieval_query = f"{message}\n{rewritten}"
+        t_rewrite_duration = time.time() - t_rewrite_start
 
         # Step 2b: RAGFlow retrieval — find relevant chunks across all sources
         t_ragflow_start = time.time()
@@ -577,7 +579,7 @@ Follow these rules strictly:
                 total_duration=round(time.time() - t_start, 2),
                 ragflow_duration=round(t_ragflow_end - t_ragflow_start, 2) if t_ragflow_end else None,
                 excel_duration=None,
-                llm_duration=round(t_llm_end - t_llm_start, 2) if t_llm_end else None,
+                llm_duration=round((t_llm_end - t_llm_start) + t_rewrite_duration, 2) if t_llm_end else None,
                 llm_first_token=round(t_first_token - t_llm_start, 2) if t_first_token else None,
                 source_count=len(sources_map),
                 chunk_count=len(chunks),
