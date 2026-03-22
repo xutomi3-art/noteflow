@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 CONFIGURABLE_KEYS = {
     "llm_base_url", "llm_model", "llm_max_output_tokens", "llm_context_window", "rag_top_k", "rag_similarity_threshold", "rag_vector_weight", "rag_rewrite_model", "rag_decompose_model", "rag_think_rounds", "rag_rerank_id",
     "qwen_api_key",
-    "ragflow_api_key", "ragflow_base_url", "raptor_enabled",
+    "ragflow_api_key", "ragflow_base_url", "raptor_enabled", "query_rewrite_enabled",
     "llm_vision_model", "llm_vision_base_url", "llm_vision_api_key", "vision_enabled",
     "docmee_api_key",
     "max_file_size_mb",
@@ -49,6 +49,7 @@ _ENV_MAP = {
     "ragflow_api_key": "RAGFLOW_API_KEY",
     "ragflow_base_url": "RAGFLOW_BASE_URL",
     "raptor_enabled": "RAPTOR_ENABLED",
+    "query_rewrite_enabled": "QUERY_REWRITE_ENABLED",
     "llm_vision_model": "LLM_VISION_MODEL",
     "llm_vision_base_url": "LLM_VISION_BASE_URL",
     "llm_vision_api_key": "LLM_VISION_API_KEY",

@@ -297,7 +297,7 @@ async def stream_chat(
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
         retrieval_query = message
         t_rewrite_start = time.time()
-        if dataset_ids and len(message.split()) > 3:
+        if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message.split()) > 3:
             rewritten = await _rewrite_query_for_retrieval(message)
             if rewritten != message:
                 retrieval_query = f"{message}\n{rewritten}"
