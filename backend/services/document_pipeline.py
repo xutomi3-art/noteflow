@@ -153,6 +153,78 @@ def _convert_to_pdf(file_path: str) -> str | None:
     return None
 
 
+async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
+    """Extract images from PDF and analyze with Vision LLM.
+
+    Returns list of markdown sections with image analysis results.
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.warning("PyMuPDF not installed, skipping PDF image extraction")
+        return []
+
+    descriptions: list[str] = []
+    try:
+        doc = fitz.open(pdf_path)
+        image_count = 0
+
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            images = page.get_images(full=True)
+
+            for img_idx, img in enumerate(images):
+                xref = img[0]
+                try:
+                    base_image = doc.extract_image(xref)
+                except Exception:
+                    continue
+
+                image_bytes = base_image["image"]
+                # Skip small images (logos, icons, decorations)
+                if len(image_bytes) < 10000:
+                    continue
+
+                image_count += 1
+                ext = base_image.get("ext", "png")
+                temp_path = f"/tmp/pdf_img_{page_num}_{img_idx}.{ext}"
+
+                try:
+                    with open(temp_path, "wb") as f:
+                        f.write(image_bytes)
+
+                    import time as _time
+                    t_start = _time.time()
+                    desc = await qwen_client.analyze_image(
+                        temp_path,
+                        f"page{page_num + 1}_img{img_idx + 1}.{ext}",
+                    )
+                    elapsed = round(_time.time() - t_start, 1)
+
+                    if desc and len(desc.strip()) > 20 and "analysis failed" not in desc:
+                        descriptions.append(
+                            f"### Image from Page {page_num + 1}\n{desc}"
+                        )
+                        logger.info(
+                            "PDF image p%d img%d analyzed: %d chars (%.1fs)",
+                            page_num + 1, img_idx + 1, len(desc), elapsed,
+                        )
+                    else:
+                        logger.info("PDF image p%d img%d skipped (empty/failed)", page_num + 1, img_idx + 1)
+                except Exception as e:
+                    logger.warning("Failed to analyze PDF image p%d img%d: %s", page_num + 1, img_idx + 1, e)
+                finally:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+
+        doc.close()
+        logger.info("PDF image extraction complete: %d images found, %d analyzed", image_count, len(descriptions))
+    except Exception as e:
+        logger.error("PDF image extraction failed: %s", e)
+
+    return descriptions
+
+
 async def _notify(
     notebook_id: str, source_id: str, status: str, error: str | None = None
 ) -> None:
@@ -264,6 +336,11 @@ async def process_document(
                 parsed = await mineru_client.parse_document(parse_path, parse_name)
                 if parsed:
                     content = parsed
+                    # Extract and analyze images from PDF with Vision LLM
+                    image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                    if image_texts:
+                        content += "\n\n" + "\n\n".join(image_texts)
+                        logger.info("Added %d image descriptions to %s", len(image_texts), filename)
                     _save_parsed_content(file_path, content)
                     logger.info("MinerU parsed %s: %d chars", filename, len(content))
                 else:

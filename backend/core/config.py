@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     RAGFLOW_API_KEY: str = ""
     RAPTOR_ENABLED: bool = False
 
+    # Vision LLM (for extracting text from chart images in PDFs)
+    LLM_VISION_MODEL: str = "glm-4.5v"
+
     # MinerU
     MINERU_BASE_URL: str = "http://cloud.jototech.cn:17860"
 

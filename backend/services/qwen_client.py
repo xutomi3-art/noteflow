@@ -101,7 +101,7 @@ class QwenClient:
             return f"[Error: AI generation failed - {e}]"
 
     async def analyze_image(self, image_path: str, filename: str) -> str:
-        """Use Qwen3.5-Plus to extract text description from an image."""
+        """Use Vision LLM to extract text and chart data from an image."""
         try:
             with open(image_path, "rb") as f:
                 image_data = base64.b64encode(f.read()).decode("utf-8")
@@ -124,6 +124,7 @@ class QwenClient:
                                 "Please analyze this image thoroughly. Extract ALL text content visible in the image. "
                                 "Then describe any diagrams, charts, tables, photos, or visual elements in detail. "
                                 "If this is a document scan or screenshot, reproduce the text as accurately as possible. "
+                                "If this is a chart or graph, list every label, data point, and value shown. "
                                 "If this is a photo, describe what is shown in detail. "
                                 "Output in the same language as the text in the image (if any). "
                                 "If no text is found, describe the image content in Chinese."
@@ -133,13 +134,17 @@ class QwenClient:
                 }
             ]
 
+            # Use dedicated vision model (e.g. glm-4.5v) instead of the text-only chat model
+            vision_model = settings.LLM_VISION_MODEL or self.model
+            extra: dict = {"enable_thinking": False}
             response = await self.client.chat.completions.create(
-                model=self.model,
+                model=vision_model,
                 messages=messages,  # type: ignore[arg-type]
                 max_tokens=4096,
+                extra_body=extra,
             )
             content = response.choices[0].message.content or ""
-            logger.info("Vision analyzed image %s: %d chars", filename, len(content))
+            logger.info("Vision analyzed image %s with %s: %d chars", filename, vision_model, len(content))
             return content
         except Exception as e:
             logger.error("Vision image analysis failed for %s: %s", filename, e)
