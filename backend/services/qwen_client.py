@@ -102,6 +102,8 @@ class QwenClient:
 
     async def analyze_image(self, image_path: str, filename: str) -> str:
         """Use Vision LLM to extract text and chart data from an image."""
+        import httpx as _httpx
+
         try:
             with open(image_path, "rb") as f:
                 image_data = base64.b64encode(f.read()).decode("utf-8")
@@ -110,42 +112,43 @@ class QwenClient:
             mime_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp", "gif": "gif", "bmp": "bmp"}
             mime_type = f"image/{mime_map.get(ext, 'png')}"
 
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{mime_type};base64,{image_data}"},
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "Please analyze this image thoroughly. Extract ALL text content visible in the image. "
-                                "Then describe any diagrams, charts, tables, photos, or visual elements in detail. "
-                                "If this is a document scan or screenshot, reproduce the text as accurately as possible. "
-                                "If this is a chart or graph, list every label, data point, and value shown. "
-                                "If this is a photo, describe what is shown in detail. "
-                                "Output in the same language as the text in the image (if any). "
-                                "If no text is found, describe the image content in Chinese."
-                            ),
-                        },
-                    ],
-                }
-            ]
-
-            # Use dedicated vision model (e.g. glm-4.5v) instead of the text-only chat model
             vision_model = settings.LLM_VISION_MODEL or self.model
-            extra: dict = {"enable_thinking": False}
-            response = await self.client.chat.completions.create(
-                model=vision_model,
-                messages=messages,  # type: ignore[arg-type]
-                max_tokens=4096,
-                extra_body=extra,
+            prompt = (
+                "Please analyze this image thoroughly. Extract ALL text content visible in the image. "
+                "Then describe any diagrams, charts, tables, photos, or visual elements in detail. "
+                "If this is a document scan or screenshot, reproduce the text as accurately as possible. "
+                "If this is a chart or graph, list every label, data point, and value shown. "
+                "If this is a photo, describe what is shown in detail. "
+                "Output in the same language as the text in the image (if any). "
+                "If no text is found, describe the image content in Chinese."
             )
-            content = response.choices[0].message.content or ""
-            logger.info("Vision analyzed image %s with %s: %d chars", filename, vision_model, len(content))
-            return content
+
+            # Use httpx directly instead of OpenAI SDK to avoid model name compatibility issues
+            async with _httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    f"{settings.LLM_BASE_URL}/chat/completions",
+                    headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"},
+                    json={
+                        "model": vision_model,
+                        "messages": [{
+                            "role": "user",
+                            "content": [
+                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{image_data}"}},
+                                {"type": "text", "text": prompt},
+                            ],
+                        }],
+                        "max_tokens": 4096,
+                    },
+                )
+                data = resp.json()
+                if "choices" in data:
+                    content = data["choices"][0]["message"].get("content", "")
+                    logger.info("Vision analyzed image %s with %s: %d chars", filename, vision_model, len(content))
+                    return content
+                else:
+                    error_msg = data.get("error", {}).get("message", str(data))
+                    logger.error("Vision API error for %s: %s", filename, error_msg)
+                    return f"[Image: {filename} — analysis failed: {error_msg}]"
         except Exception as e:
             logger.error("Vision image analysis failed for %s: %s", filename, e)
             return f"[Image: {filename} — analysis failed: {e}]"
