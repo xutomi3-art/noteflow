@@ -361,6 +361,7 @@ export default function NotebookPage() {
     isGenerating,
     notes,
     pdfViewer,
+    openPdf,
     generateContent,
     clearContent,
     fetchNotes,
@@ -1168,13 +1169,18 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
-      // Open source content in left panel with excerpt highlight
-      if (id) {
+      // For PDF files, open PDF modal viewer; for others, open source content in left panel
+      const source = sources.find((s) => s.id === sourceId);
+      const isPdf = source?.file_type === "pdf" || citation.fileType === "pdf" || citation.filename?.toLowerCase().endsWith(".pdf");
+      if (isPdf && id) {
+        const page = citation.location?.page ?? 1;
+        openPdf(sourceId, source?.filename || citation.filename || "Document", page);
+      } else if (id) {
         setActiveSource(id, sourceId, citation.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
-    [messages, id, sources, setActiveSource],
+    [messages, id, sources, setActiveSource, openPdf],
   );
 
   if (notFound) {
