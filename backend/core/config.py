@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # Vision LLM (for extracting text from chart images in PDFs)
     # Uses separate config since main LLM may be on a different provider
+    VISION_ENABLED: bool = True
     LLM_VISION_MODEL: str = "glm-4.5v"
     LLM_VISION_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
     LLM_VISION_API_KEY: str = ""

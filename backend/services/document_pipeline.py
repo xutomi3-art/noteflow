@@ -336,8 +336,10 @@ async def process_document(
                 parsed = await mineru_client.parse_document(parse_path, parse_name)
                 if parsed:
                     content = parsed
-                    # Extract and analyze images from PDF with Vision LLM
-                    image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                    # Extract and analyze images from PDF with Vision LLM (if enabled)
+                    image_texts = []
+                    if settings.VISION_ENABLED:
+                        image_texts = await _extract_and_analyze_pdf_images(parse_path)
                     if image_texts:
                         content += "\n\n" + "\n\n".join(image_texts)
                         logger.info("Added %d image descriptions to %s", len(image_texts), filename)

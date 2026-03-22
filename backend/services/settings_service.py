@@ -15,6 +15,7 @@ CONFIGURABLE_KEYS = {
     "llm_base_url", "llm_model", "llm_max_output_tokens", "llm_context_window", "rag_top_k", "rag_similarity_threshold", "rag_vector_weight", "rag_rewrite_model", "rag_decompose_model", "rag_think_rounds", "rag_rerank_id",
     "qwen_api_key",
     "ragflow_api_key", "ragflow_base_url", "raptor_enabled",
+    "llm_vision_model", "llm_vision_base_url", "llm_vision_api_key", "vision_enabled",
     "docmee_api_key",
     "max_file_size_mb",
     "web_scraper_remove_selector",
@@ -29,7 +30,7 @@ CONFIGURABLE_KEYS = {
 }
 
 # Keys that contain sensitive values — mask on read
-SENSITIVE_KEYS = {"qwen_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret", "microsoft_client_secret"}
+SENSITIVE_KEYS = {"qwen_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret", "microsoft_client_secret", "llm_vision_api_key"}
 
 # Mapping from setting key to Settings attribute
 _ENV_MAP = {
@@ -48,6 +49,10 @@ _ENV_MAP = {
     "ragflow_api_key": "RAGFLOW_API_KEY",
     "ragflow_base_url": "RAGFLOW_BASE_URL",
     "raptor_enabled": "RAPTOR_ENABLED",
+    "llm_vision_model": "LLM_VISION_MODEL",
+    "llm_vision_base_url": "LLM_VISION_BASE_URL",
+    "llm_vision_api_key": "LLM_VISION_API_KEY",
+    "vision_enabled": "VISION_ENABLED",
     "docmee_api_key": "DOCMEE_API_KEY",
     "max_file_size_mb": "MAX_FILE_SIZE_MB",
     "web_scraper_remove_selector": "WEB_SCRAPER_REMOVE_SELECTOR",
@@ -155,8 +160,14 @@ async def load_db_settings() -> None:
     from backend.services.qwen_client import qwen_client
     qwen_client.__init__()
     logger.info(
-        "Loaded DB settings into memory — LLM_MODEL=%s, LLM_BASE_URL=%s, RAG_TOP_K=%s",
+        "Loaded DB settings — LLM_MODEL=%s, LLM_BASE_URL=%s, RAG_TOP_K=%s, QWEN_API_KEY=%s...",
         settings.LLM_MODEL, settings.LLM_BASE_URL, settings.RAG_TOP_K,
+        settings.QWEN_API_KEY[:15] if settings.QWEN_API_KEY else "empty",
+    )
+    # Verify qwen_client was reinitialized correctly
+    logger.info(
+        "qwen_client reinit — model=%s, base_url=%s",
+        qwen_client.model, str(qwen_client.client.base_url),
     )
 
 

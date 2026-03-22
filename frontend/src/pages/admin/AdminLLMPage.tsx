@@ -35,6 +35,16 @@ const GROUPS: FieldGroup[] = [
     ],
   },
   {
+    title: 'Vision LLM',
+    description: 'Extracts text from charts, diagrams, and images embedded in PDFs during document processing',
+    fields: [
+      { key: 'vision_enabled', label: 'Vision Analysis', toggle: true, placeholder: 'Analyze chart/diagram images in PDFs using Vision LLM (adds processing time)' },
+      { key: 'llm_vision_model', label: 'Vision Model', placeholder: 'default: glm-4.5v' },
+      { key: 'llm_vision_base_url', label: 'Vision API Base URL', placeholder: 'default: https://open.bigmodel.cn/api/paas/v4' },
+      { key: 'llm_vision_api_key', label: 'Vision API Key', secret: true },
+    ],
+  },
+  {
     title: 'Query Processing',
     description: 'Noteflow query rewrite and deep thinking — uses the main LLM, not RAGFlow',
     fields: [
