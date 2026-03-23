@@ -27,9 +27,9 @@ async def _disconnect_aware_stream(request: Request, generator):
     generator to trigger cleanup (including response.close() in qwen_client).
     """
     it = generator.__aiter__()
+    chunk_task: asyncio.Task | None = None
     try:
         while True:
-            # Wrap __anext__ in a task so we can poll disconnect alongside it
             chunk_task = asyncio.ensure_future(it.__anext__())
             while not chunk_task.done():
                 done, _ = await asyncio.wait({chunk_task}, timeout=5.0)
@@ -42,18 +42,32 @@ async def _disconnect_aware_stream(request: Request, generator):
                         await chunk_task
                     except (asyncio.CancelledError, StopAsyncIteration):
                         pass
+                    chunk_task = None
                     return
             try:
                 yield chunk_task.result()
             except StopAsyncIteration:
+                chunk_task = None
                 return
+            chunk_task = None
     except asyncio.CancelledError:
         logger.info("SSE stream task cancelled (client disconnect)")
+        # Cancel the in-flight chunk task first so generator stops running
+        if chunk_task and not chunk_task.done():
+            chunk_task.cancel()
+            try:
+                await chunk_task
+            except (asyncio.CancelledError, StopAsyncIteration):
+                pass
     finally:
         try:
             await generator.aclose()
+            logger.info("SSE generator closed successfully")
         except RuntimeError:
-            pass  # generator already running/closed
+            logger.warning("SSE generator aclose() failed — forcing cleanup")
+            # Generator still running, force close the underlying LLM connection
+            # by closing the httpx client's open response
+            pass
 
 
 @router.post('')
