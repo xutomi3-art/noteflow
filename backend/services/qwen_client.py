@@ -61,15 +61,35 @@ class QwenClient:
                 if extra:
                     kwargs["extra_body"] = extra
                 response = await self.client.chat.completions.create(**kwargs)
+                first_token_timeout = 120  # seconds
+                got_first_token = False
                 try:
-                    async for chunk in response:
+                    it = response.__aiter__()
+                    while True:
+                        timeout = None if got_first_token else first_token_timeout
+                        try:
+                            chunk = await _asyncio.wait_for(it.__anext__(), timeout=timeout)
+                        except StopAsyncIteration:
+                            break
+                        except _asyncio.TimeoutError:
+                            logger.warning("LLM first token timeout (%ds), attempt %d/%d", first_token_timeout, attempt + 1, max_retries)
+                            raise  # caught by outer except to trigger retry
                         if chunk.choices:
                             delta = chunk.choices[0].delta
                             if delta.content:
+                                got_first_token = True
                                 yield delta.content
                 finally:
                     await response.close()
                 return  # success — exit retry loop
+            except _asyncio.TimeoutError:
+                # First token timeout — retry
+                if attempt < max_retries - 1:
+                    logger.warning("Retrying after first-token timeout (attempt %d/%d)", attempt + 1, max_retries)
+                    continue
+                logger.error("LLM first token timeout after %d attempts", max_retries)
+                yield "\n\n[Error: AI response timed out after multiple retries. Please try again.]"
+                return
             except Exception as e:
                 error_str = str(e)
                 # Retry on 429 rate limit (concurrency exhausted)
