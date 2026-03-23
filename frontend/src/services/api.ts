@@ -287,30 +287,31 @@ class ApiClient {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let lastTokenTime = Date.now();
       let receivedFirstToken = false;
       const STREAM_TIMEOUT_MS = 180_000; // 180s without any token → timeout
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      let timedOut = false;
+
+      // Single timeout — fires once if no token arrives within 180s
+      const resetTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          onError("LLM response timed out — the AI service may be slow. Please try again.");
+          controller.abort();
+        }, STREAM_TIMEOUT_MS);
+      };
+      resetTimeout();
 
       while (true) {
-        // Race between read and timeout
-        const timeoutPromise = new Promise<{ timeout: true }>((resolve) =>
-          setTimeout(() => resolve({ timeout: true }), STREAM_TIMEOUT_MS)
-        );
-        const readPromise = reader.read().then((r) => ({ ...r, timeout: false as const }));
-        const result = await Promise.race([readPromise, timeoutPromise]);
-
-        if ("timeout" in result && result.timeout) {
-          // Check if we've been stuck without tokens
-          if (Date.now() - lastTokenTime > STREAM_TIMEOUT_MS) {
-            onError("Response timed out. The AI service may be temporarily slow — please try again.");
-            controller.abort();
-            return;
+        const { done, value } = await reader.read();
+        if (done) {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (!receivedFirstToken && !timedOut) {
+            onError("Connection closed without response — the AI service may be slow. Please try again.");
           }
-          continue;
+          break;
         }
-
-        const { done, value } = result as ReadableStreamReadResult<Uint8Array>;
-        if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -321,21 +322,23 @@ class ApiClient {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.type === "token") {
-                lastTokenTime = Date.now();
+                resetTimeout(); // got a token — reset the 180s timer
                 receivedFirstToken = true;
                 onToken(data.content);
               } else if (data.type === "done") {
+                if (timeoutId) clearTimeout(timeoutId);
                 onDone({ id: data.id, citations: data.citations || [] });
               } else if (data.type === "error") {
+                if (timeoutId) clearTimeout(timeoutId);
                 onError(data.message);
                 return;
               } else if (data.type === "thinking" || data.type === "searching" || data.type === "observation") {
-                lastTokenTime = Date.now();
+                resetTimeout(); // thinking/searching counts as activity
                 onToken(`__REACT__${JSON.stringify(data)}__REACT__`);
               }
             } catch { /* ignore parse errors */ }
           } else if (line.startsWith(": keepalive")) {
-            // Keepalive keeps the connection alive but doesn't reset token timeout
+            // Keepalive keeps SSE alive but does NOT reset token timeout
           }
         }
       }
