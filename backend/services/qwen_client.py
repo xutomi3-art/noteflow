@@ -33,45 +33,57 @@ class QwenClient:
         max_tokens: int | None = None,
         enable_search: bool = False,
     ) -> AsyncGenerator[str, None]:
-        """Stream chat completion tokens."""
-        try:
-            extra: dict = {}
-            # Disable built-in thinking for models that support it (Qwen, GLM)
-            # DeepSeek doesn't support this param
-            model_lower = self.model.lower()
-            if "deepseek" not in model_lower:
-                extra["enable_thinking"] = False
-            # Unlock full context window (Qwen defaults to ~129K without this)
-            if "qwen" in model_lower:
-                extra["max_input_tokens"] = settings.LLM_CONTEXT_WINDOW
-            kwargs: dict = dict(
-                model=self.model,
-                messages=messages,  # type: ignore[arg-type]
-                max_tokens=max_tokens or settings.LLM_MAX_OUTPUT_TOKENS,
-                temperature=temperature,
-                stream=True,
-            )
-            if enable_search:
-                extra["enable_search"] = True
-                extra["search_options"] = {"search_strategy": "agent"}
-            if extra:
-                kwargs["extra_body"] = extra
-            response = await self.client.chat.completions.create(**kwargs)
+        """Stream chat completion tokens with retry on 429."""
+        import asyncio as _asyncio
+
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
-                async for chunk in response:
-                    if chunk.choices:
-                        delta = chunk.choices[0].delta
-                        if delta.content:
-                            yield delta.content
-            finally:
-                await response.close()
-        except Exception as e:
-            error_str = str(e)
-            logger.error("LLM stream_chat failed: %s", e)
-            if "data_inspection_failed" in error_str.lower() or "DataInspectionFailed" in error_str:
-                yield f"\n\n[Error: 内容安全审核误拦截，请尝试换个方式提问或减少勾选的文档。The AI content filter flagged this request — try rephrasing or selecting fewer sources.]"
-            else:
-                yield f"\n\n[Error: AI generation failed - {e}]"
+                extra: dict = {}
+                # Disable built-in thinking for models that support it (Qwen, GLM)
+                # DeepSeek doesn't support this param
+                model_lower = self.model.lower()
+                if "deepseek" not in model_lower:
+                    extra["enable_thinking"] = False
+                # Unlock full context window (Qwen defaults to ~129K without this)
+                if "qwen" in model_lower:
+                    extra["max_input_tokens"] = settings.LLM_CONTEXT_WINDOW
+                kwargs: dict = dict(
+                    model=self.model,
+                    messages=messages,  # type: ignore[arg-type]
+                    max_tokens=max_tokens or settings.LLM_MAX_OUTPUT_TOKENS,
+                    temperature=temperature,
+                    stream=True,
+                )
+                if enable_search:
+                    extra["enable_search"] = True
+                    extra["search_options"] = {"search_strategy": "agent"}
+                if extra:
+                    kwargs["extra_body"] = extra
+                response = await self.client.chat.completions.create(**kwargs)
+                try:
+                    async for chunk in response:
+                        if chunk.choices:
+                            delta = chunk.choices[0].delta
+                            if delta.content:
+                                yield delta.content
+                finally:
+                    await response.close()
+                return  # success — exit retry loop
+            except Exception as e:
+                error_str = str(e)
+                # Retry on 429 rate limit (concurrency exhausted)
+                if "429" in error_str and attempt < max_retries - 1:
+                    wait = 3 * (attempt + 1)  # 3s, 6s
+                    logger.warning("LLM rate limited (429), retrying in %ds (attempt %d/%d)", wait, attempt + 1, max_retries)
+                    await _asyncio.sleep(wait)
+                    continue
+                logger.error("LLM stream_chat failed: %s", e)
+                if "data_inspection_failed" in error_str.lower() or "DataInspectionFailed" in error_str:
+                    yield f"\n\n[Error: 内容安全审核误拦截，请尝试换个方式提问或减少勾选的文档。The AI content filter flagged this request — try rephrasing or selecting fewer sources.]"
+                else:
+                    yield f"\n\n[Error: AI generation failed - {e}]"
+                return
 
     async def generate(
         self,
