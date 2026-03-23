@@ -57,11 +57,14 @@ class QwenClient:
             if extra:
                 kwargs["extra_body"] = extra
             response = await self.client.chat.completions.create(**kwargs)
-            async for chunk in response:
-                if chunk.choices:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        yield delta.content
+            try:
+                async for chunk in response:
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            yield delta.content
+            finally:
+                await response.close()
         except Exception as e:
             error_str = str(e)
             logger.error("LLM stream_chat failed: %s", e)
