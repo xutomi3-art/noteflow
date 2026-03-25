@@ -189,7 +189,9 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
                 "For year-only mentions (e.g. '2024'), keep just the year — do NOT expand to Jan 1.\n"
                 "3. Add synonyms for key actions "
                 "(e.g. attend → present, attendance; founded → established, inception)\n"
-                "4. Keywords MUST be in the same language as the question\n"
+                "4. Output keywords in BOTH the question's language AND the other language "
+                "(Chinese↔English) to enable cross-language retrieval.\n"
+                "   Example: 理事会成员, 任期, 多久, board of trustees, term, duration\n"
                 "Output keywords ONLY, comma-delimited. No explanations."
             )},
             {"role": "user", "content": message},
@@ -325,7 +327,7 @@ async def stream_chat(
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
         retrieval_query = message
         t_rewrite_start = time.time()
-        if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message.split()) > 3:
+        if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message.strip()) > 6:
             rewritten = await _rewrite_query_for_retrieval(message)
             if rewritten != message:
                 retrieval_query = f"{message}\n{rewritten}"
