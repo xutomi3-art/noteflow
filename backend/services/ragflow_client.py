@@ -28,12 +28,13 @@ class RAGFlowClient:
         """Create a dataset in RAGFlow. Returns dataset_id or None on failure.
 
         Parser config matches production environment:
-        - chunk_token_num=512: smaller chunks for precise retrieval
+        - chunk_token_num=1024: balanced chunk size
         - enable_children=true: parent-child chunking for context preservation
         - toc_extraction=true: extract table-of-contents structure
-        - auto_keywords/auto_questions=3: auto-generate for better retrieval
+        - auto_keywords/auto_questions=0: disabled (handled by LLM at query time)
         - layout_recognize=DeepDOC: document layout analysis
         - html4excel=true: preserve table structure for Excel files
+        - overlapped_percent=15: chunk overlap for continuity
         """
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
@@ -44,15 +45,17 @@ class RAGFlowClient:
                         "name": name,
                         "chunk_method": "naive",
                         "parser_config": {
-                            "chunk_token_num": 512,
-                            "delimiter": "\n!?;。？！",
+                            "chunk_token_num": 1024,
+                            "delimiter": "\n\n",
                             "html4excel": True,
-                            "auto_keywords": 3,
-                            "auto_questions": 3,
+                            "auto_keywords": 0,
+                            "auto_questions": 0,
                             "toc_extraction": True,
                             "enable_children": True,
                             "children_delimiter": "\n",
                             "layout_recognize": "DeepDOC",
+                            "overlapped_percent": 15,
+                            "filename_embd_weight": 0.1,
                             "raptor": {"use_raptor": settings.RAPTOR_ENABLED},
                         },
                     },
