@@ -189,10 +189,10 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
                 "For year-only mentions (e.g. '2024'), keep just the year — do NOT expand to Jan 1.\n"
                 "3. Add synonyms for key actions "
                 "(e.g. attend → present, attendance; founded → established, inception)\n"
-                "4. Output keywords in BOTH the question's language AND the other language "
-                "(Chinese↔English) to enable cross-language retrieval.\n"
-                "   Example: 理事会成员, 任期, 多久, board of trustees, term, duration\n"
-                "Output keywords ONLY, comma-delimited. No explanations."
+                "4. Output keywords in BOTH English AND the question's language "
+                "to enable cross-language retrieval. English keywords FIRST.\n"
+                "   Example: board of trustees, term, duration, 理事会成员, 任期, 多久\n"
+                "Output 10-20 keywords ONLY, comma-delimited. No explanations."
             )},
             {"role": "user", "content": message},
         ]
@@ -201,7 +201,7 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
             rewrite_messages,
             model=rewrite_model,
             temperature=0.0,
-            max_tokens=150,
+            max_tokens=200,
         )
         rewritten = rewritten.strip().strip('"').strip("'")
         if rewritten and not rewritten.startswith("[Error"):
