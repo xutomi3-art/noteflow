@@ -28,8 +28,9 @@ async def bootstrap_admin():
     if not settings.ADMIN_EMAIL:
         return
     async with async_session() as db:
+        from sqlalchemy import func
         result = await db.execute(
-            select(User).where(User.email == settings.ADMIN_EMAIL)
+            select(User).where(func.lower(User.email) == settings.ADMIN_EMAIL.lower())
         )
         user = result.scalar_one_or_none()
         if user and not user.is_admin:

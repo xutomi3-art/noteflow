@@ -151,7 +151,7 @@ async def get_members(db: AsyncSession, notebook_id: uuid.UUID) -> list[dict]:
         })
 
     # Add pending invites (email invites not yet accepted)
-    accepted_emails = {m["email"] for m in members}
+    accepted_emails = {m["email"].lower() for m in members}
     result = await db.execute(
         select(InviteLink)
         .where(
@@ -164,9 +164,10 @@ async def get_members(db: AsyncSession, notebook_id: uuid.UUID) -> list[dict]:
     seen_emails: set[str] = set()
     for link in result.scalars().all():
         email = link.email
-        if email in accepted_emails or email in seen_emails:
+        email_lower = email.lower()
+        if email_lower in accepted_emails or email_lower in seen_emails:
             continue
-        seen_emails.add(email)
+        seen_emails.add(email_lower)
         members.append({
             "user_id": f"invite-{link.id}",
             "name": email,

@@ -66,11 +66,13 @@ async def send_email_invite(
     if not is_smtp_configured():
         raise HTTPException(status_code=503, detail="Email service not configured on this server")
 
-    # Auto-add if user already registered
+    # Auto-add if user already registered (case-insensitive email match)
     from backend.models.user import User as UserModel
     from backend.models.notebook_member import NotebookMember
+    from sqlalchemy import func
+    normalized_email = req.email.strip().lower()
     existing_user = (await db.execute(
-        select(UserModel).where(UserModel.email == req.email)
+        select(UserModel).where(func.lower(UserModel.email) == normalized_email)
     )).scalar_one_or_none()
 
     if existing_user:
@@ -99,7 +101,7 @@ async def send_email_invite(
             await db.commit()
 
     # Create invite link (for unregistered users or as backup)
-    link = await sharing_service.create_invite_link(db, nb_uuid, user.id, req.role, email=req.email)
+    link = await sharing_service.create_invite_link(db, nb_uuid, user.id, req.role, email=normalized_email)
     join_url = f"{settings.APP_BASE_URL}/join/{link.token}"
 
     # Get notebook name

@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
@@ -11,13 +11,19 @@ from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
 logger = logging.getLogger(__name__)
 
 
+def _normalize_email(email: str) -> str:
+    """Normalize email to lowercase for case-insensitive matching."""
+    return email.strip().lower()
+
+
 async def register(db: AsyncSession, req: RegisterRequest) -> User:
-    existing = await db.execute(select(User).where(User.email == req.email))
+    normalized_email = _normalize_email(req.email)
+    existing = await db.execute(select(User).where(User.email == normalized_email))
     if existing.scalar_one_or_none():
         raise ValueError("Email already registered")
 
     user = User(
-        email=req.email,
+        email=normalized_email,
         name=req.name,
         password_hash=hash_password(req.password),
     )
@@ -32,7 +38,8 @@ async def register(db: AsyncSession, req: RegisterRequest) -> User:
 
 
 async def login(db: AsyncSession, req: LoginRequest) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == req.email))
+    normalized_email = _normalize_email(req.email)
+    result = await db.execute(select(User).where(User.email == normalized_email))
     user = result.scalar_one_or_none()
     if user and not user.password_hash:
         provider = user.auth_provider.title()
@@ -48,6 +55,7 @@ async def login(db: AsyncSession, req: LoginRequest) -> TokenResponse:
 
 async def find_or_create_google_user(db: AsyncSession, google_id: str, email: str, name: str, avatar: str | None) -> tuple[User, bool]:
     """Find or create a user for Google OAuth sign-in. Returns (user, is_new)."""
+    normalized_email = _normalize_email(email)
     # 1. Lookup by google_id first
     result = await db.execute(select(User).where(User.google_id == google_id))
     user = result.scalar_one_or_none()
@@ -55,7 +63,7 @@ async def find_or_create_google_user(db: AsyncSession, google_id: str, email: st
         return user, False
 
     # 2. Lookup by email — link existing local account to Google
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == normalized_email))
     user = result.scalar_one_or_none()
     if user:
         user.google_id = google_id
@@ -68,7 +76,7 @@ async def find_or_create_google_user(db: AsyncSession, google_id: str, email: st
 
     # 3. Create new Google-only user
     user = User(
-        email=email,
+        email=normalized_email,
         name=name,
         password_hash=None,
         avatar=avatar,
@@ -83,6 +91,7 @@ async def find_or_create_google_user(db: AsyncSession, google_id: str, email: st
 
 async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, email: str, name: str, avatar: str | None) -> tuple[User, bool]:
     """Find or create a user for Microsoft OAuth sign-in. Returns (user, is_new)."""
+    normalized_email = _normalize_email(email)
     # 1. Lookup by microsoft_id first
     result = await db.execute(select(User).where(User.microsoft_id == microsoft_id))
     user = result.scalar_one_or_none()
@@ -90,7 +99,7 @@ async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, ema
         return user, False
 
     # 2. Lookup by email — link existing account to Microsoft
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == normalized_email))
     user = result.scalar_one_or_none()
     if user:
         user.microsoft_id = microsoft_id
@@ -104,7 +113,7 @@ async def find_or_create_microsoft_user(db: AsyncSession, microsoft_id: str, ema
 
     # 3. Create new Microsoft-only user
     user = User(
-        email=email,
+        email=normalized_email,
         name=name,
         password_hash=None,
         avatar=avatar,
@@ -126,7 +135,7 @@ async def _auto_join_pending_invites(db: AsyncSession, user: User) -> None:
     try:
         result = await db.execute(
             select(InviteLink).where(
-                InviteLink.email == user.email,
+                func.lower(InviteLink.email) == user.email.lower(),
                 InviteLink.expires_at > datetime.now(timezone.utc),
             )
         )

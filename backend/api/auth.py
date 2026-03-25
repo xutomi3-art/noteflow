@@ -214,7 +214,9 @@ async def me(user: User = Depends(get_current_user)):
 @router.post("/forgot-password")
 async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     """Send a password reset email. Always returns 200 to avoid user enumeration."""
-    result = await db.execute(select(User).where(User.email == req.email))
+    from sqlalchemy import func
+    normalized_email = req.email.strip().lower()
+    result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     user = result.scalar_one_or_none()
     if user and user.password_hash and is_smtp_configured():
         token = create_password_reset_token(str(user.id), user.password_hash)
