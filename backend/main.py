@@ -18,7 +18,9 @@ from backend.models.notebook_member import NotebookMember  # noqa: F401
 from backend.models.invite_link import InviteLink  # noqa: F401
 from backend.models.system_setting import SystemSetting  # noqa: F401
 from backend.models.feedback import Feedback  # noqa: F401
+from backend.meeting.models import Meeting, MeetingUtterance  # noqa: F401
 from backend.api import auth, notebooks, sources, chat, notes, studio, sharing, overview, admin, asr, feedback
+from backend.meeting import router as meeting_router
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,7 @@ app.include_router(overview.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(asr.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
+app.include_router(meeting_router.router, prefix="/api")
 
 
 @app.get("/api/health")

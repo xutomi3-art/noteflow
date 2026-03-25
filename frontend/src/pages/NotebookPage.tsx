@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Files,
@@ -52,6 +52,8 @@ import PptConfigModal from "@/components/PptConfigModal";
 import type { PptConfig } from "@/components/PptConfigModal";
 import MarkdownContent from "@/components/MarkdownContent";
 import MindMap from "@/components/MindMap";
+import { useMeetingStore } from "@/features/meeting/meeting-store";
+import { MeetingPanel } from "@/features/meeting/MeetingPanel";
 
 /* ─── helpers ─── */
 
@@ -292,6 +294,11 @@ export default function NotebookPage() {
   const [leftWidth, setLeftWidth] = useState(300);
   const [rightWidth, setRightWidth] = useState(340);
   const [isDragging, setIsDragging] = useState(false);
+  const [showMeetingPanel, setShowMeetingPanel] = useState(false);
+  const meetingActive = useMeetingStore((s) => s.activeMeeting !== null);
+
+  // Auto-widen source panel during meeting
+  const effectiveLeftWidth = showMeetingPanel ? Math.max(leftWidth, 420) : leftWidth;
   const [isMobile, setIsMobile] = useState(false);
   const [savedMessageIds, setSavedMessageIds] = useState<Set<string>>(new Set());
   const [overviewSaved, setOverviewSaved] = useState(false);
@@ -1223,7 +1230,7 @@ export default function NotebookPage() {
           >
             <img src="/logo.png" alt="Noteflow" className="w-6 h-6 rounded-md" />
           </button>
-          <span className="px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded -ml-1">Beta</span>
+          <span className="px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded -ml-1">Alpha</span>
           {isEditingName ? (
             <input
               ref={nameInputRef}
@@ -1359,8 +1366,8 @@ export default function NotebookPage() {
       <main className="flex-1 flex overflow-hidden gap-0">
         {/* Left Panel: Sources */}
         <section
-          style={!isMobile && !isLeftCollapsed ? { width: leftWidth } : undefined}
-          className={`bg-white border-r border-slate-200 flex-col overflow-hidden shrink-0 ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
+          style={!isMobile && !isLeftCollapsed ? { width: effectiveLeftWidth } : undefined}
+          className={`bg-white border-r border-slate-200 flex-col overflow-hidden shrink-0 transition-all duration-300 ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Sources</h2>
@@ -1392,7 +1399,10 @@ export default function NotebookPage() {
             </div>
           )}
 
-          {activeSourceId ? (
+          {/* Meeting Panel — shown when meeting is active */}
+          {showMeetingPanel && meetingActive ? (
+            <MeetingPanel onClose={() => setShowMeetingPanel(false)} />
+          ) : activeSourceId ? (
             <div className="flex flex-col flex-1 overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 shrink-0">
                 <button
@@ -1454,6 +1464,25 @@ export default function NotebookPage() {
                   </span>
                 </span>
                 <span className="text-[10px] text-slate-400">Drag, browse, or paste image</span>
+              </button>
+            )}
+
+            {/* New Meeting button */}
+            {notebook?.user_role !== "viewer" && !showMeetingPanel && (
+              <button
+                onClick={async () => {
+                  if (!id) return;
+                  try {
+                    setShowMeetingPanel(true);
+                    await useMeetingStore.getState().startMeeting(id);
+                  } catch {
+                    setShowMeetingPanel(false);
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 mb-4 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors text-[13px] font-medium"
+              >
+                <Mic className="w-4 h-4" />
+                New Meeting
               </button>
             )}
 

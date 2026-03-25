@@ -85,12 +85,18 @@ class RAGFlowClient:
             )
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "UPDATE knowledgebase SET parser_config = JSON_SET(parser_config, '$.overlapped_percent', 15) WHERE id = %s",
-                    (dataset_id,),
+                    "UPDATE knowledgebase SET parser_config = JSON_SET("
+                    "parser_config, "
+                    "'$.overlapped_percent', 15, "
+                    "'$.toc_extraction', CAST('true' AS JSON), "
+                    "'$.enable_children', CAST('true' AS JSON), "
+                    "'$.children_delimiter', %s"
+                    ") WHERE id = %s",
+                    ("\n", dataset_id),
                 )
                 await conn.commit()
             conn.close()
-            logger.info("RAGFlow dataset %s: set overlapped_percent=15 via MySQL", dataset_id)
+            logger.info("RAGFlow dataset %s: set overlapped_percent, toc_extraction, enable_children, children_delimiter via MySQL", dataset_id)
         except Exception as e:
             logger.warning("RAGFlow dataset %s: failed to set overlapped_percent: %s", dataset_id, e)
 
@@ -192,9 +198,9 @@ class RAGFlowClient:
                     "vector_similarity_weight": settings.RAG_VECTOR_WEIGHT,
                     "top_k": 15,
                     "size": top_k,
-                    "keyword": True,
-                    "rerank_id": settings.RAG_RERANK_ID,
                 }
+                if settings.RAG_RERANK_ID:
+                    payload["rerank_id"] = settings.RAG_RERANK_ID
                 if document_ids:
                     payload["document_ids"] = document_ids
                 resp = await client.post(

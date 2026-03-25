@@ -446,6 +446,16 @@ async def stream_chat(
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
+        # Inject live meeting transcript as primary context (if active)
+        from backend.meeting.service import get_live_transcript_for_notebook
+        meeting_transcript = get_live_transcript_for_notebook(str(notebook_id))
+        if meeting_transcript:
+            meeting_section = f"[Live Meeting Transcript]\n{meeting_transcript}"
+            if context:
+                context = f"{meeting_section}\n\n---\n\n[Source Documents]\n{context}"
+            else:
+                context = meeting_section
+
         # 3. Build messages for Qwen
         has_rag = bool(context)
 

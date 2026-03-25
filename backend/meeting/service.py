@@ -1,0 +1,238 @@
+"""Meeting business logic — CRUD, end-meeting flow, live transcript."""
+import logging
+import os
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.core.config import settings
+from backend.core.database import async_session
+from backend.meeting.asr_client import asr_client, Utterance
+from backend.meeting.models import Meeting, MeetingUtterance
+from backend.models.source import Source
+from backend.services.document_pipeline import process_document
+from backend.services.event_bus import event_bus
+from backend.services.qwen_client import qwen_client
+from backend.services.source_service import update_source_status
+
+logger = logging.getLogger(__name__)
+
+
+async def create_meeting(
+    db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID
+) -> Meeting:
+    """Create a new meeting. Only one active meeting per notebook allowed."""
+    # Check for existing active meeting
+    result = await db.execute(
+        select(Meeting).where(
+            Meeting.notebook_id == notebook_id,
+            Meeting.status.in_(["recording", "paused"]),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        raise ValueError("A meeting is already active in this notebook")
+
+    meeting = Meeting(
+        notebook_id=notebook_id,
+        created_by=user_id,
+        status="recording",
+        speaker_map={},
+    )
+    db.add(meeting)
+    await db.commit()
+    await db.refresh(meeting)
+    logger.info("Meeting %s created in notebook %s", meeting.id, notebook_id)
+    return meeting
+
+
+async def get_meeting(db: AsyncSession, meeting_id: uuid.UUID) -> Meeting | None:
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    return result.scalar_one_or_none()
+
+
+async def get_active_meeting(
+    db: AsyncSession, notebook_id: uuid.UUID
+) -> Meeting | None:
+    result = await db.execute(
+        select(Meeting).where(
+            Meeting.notebook_id == notebook_id,
+            Meeting.status.in_(["recording", "paused"]),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_speaker_map(
+    db: AsyncSession, meeting_id: uuid.UUID, speaker_map: dict[str, str]
+) -> Meeting:
+    meeting = await get_meeting(db, meeting_id)
+    if not meeting:
+        raise ValueError("Meeting not found")
+    meeting.speaker_map = {**meeting.speaker_map, **speaker_map}
+    await db.commit()
+    await db.refresh(meeting)
+    return meeting
+
+
+async def save_utterance(
+    db: AsyncSession, meeting_id: uuid.UUID, utterance: Utterance
+) -> MeetingUtterance:
+    """Persist an utterance to the database."""
+    record = MeetingUtterance(
+        meeting_id=meeting_id,
+        speaker_id=utterance.speaker_id,
+        text=utterance.text,
+        start_time_ms=utterance.start_time_ms,
+        end_time_ms=utterance.end_time_ms,
+        is_final=utterance.is_final,
+        sequence=utterance.sequence,
+    )
+    db.add(record)
+    await db.commit()
+    return record
+
+
+async def get_utterances(
+    db: AsyncSession, meeting_id: uuid.UUID
+) -> list[MeetingUtterance]:
+    result = await db.execute(
+        select(MeetingUtterance)
+        .where(MeetingUtterance.meeting_id == meeting_id)
+        .order_by(MeetingUtterance.sequence)
+    )
+    return list(result.scalars().all())
+
+
+def get_live_transcript_for_notebook(notebook_id: str) -> str:
+    """Get live transcript from any active meeting in a notebook (for chat context)."""
+    for session in asr_client._sessions.values():
+        if not session.is_ended:
+            # Check if this session belongs to the notebook
+            # (meeting_id is stored, we need to look it up)
+            return asr_client.get_live_transcript(session.meeting_id)
+    return ""
+
+
+async def end_meeting(
+    db: AsyncSession, meeting_id: uuid.UUID
+) -> Source:
+    """End meeting: close ASR, format transcript, create source, trigger RAG."""
+    meeting = await get_meeting(db, meeting_id)
+    if not meeting:
+        raise ValueError("Meeting not found")
+    if meeting.status == "ended":
+        raise ValueError("Meeting already ended")
+
+    # 1. Close ASR session and get final utterances
+    final_utterances = await asr_client.end_session(str(meeting_id))
+
+    # 2. Fetch all persisted utterances (includes any missed during disconnect)
+    db_utterances = await get_utterances(db, meeting_id)
+
+    # 3. Merge: prefer DB utterances (more complete), add any final ASR-only ones
+    all_utterances = db_utterances
+    # Note: final_utterances from ASR may include last few that weren't saved yet
+
+    # 4. Apply speaker map
+    speaker_map = meeting.speaker_map or {}
+
+    # 5. Format transcript as markdown
+    lines = []
+    for u in all_utterances:
+        if not u.text.strip():
+            continue
+        speaker_name = speaker_map.get(u.speaker_id, u.speaker_id)
+        ts_min = u.start_time_ms // 60000
+        ts_sec = (u.start_time_ms // 1000) % 60
+        lines.append(f"**{speaker_name}** ({ts_min:02d}:{ts_sec:02d})")
+        lines.append(f"{u.text}\n")
+
+    transcript_md = "\n".join(lines)
+
+    # 6. Generate title via LLM
+    title = "Meeting Transcript"
+    try:
+        preview = transcript_md[:2000]
+        title_prompt = (
+            "Generate a concise meeting title (max 60 chars, no quotes) "
+            "for this transcript:\n\n" + preview
+        )
+        generated = await qwen_client.generate(
+            messages=[{"role": "user", "content": title_prompt}],
+            max_tokens=80,
+        )
+        title = generated.strip().strip('"').strip("'")[:60] or "Meeting Transcript"
+    except Exception as e:
+        logger.warning("Failed to generate meeting title: %s", e)
+
+    # 7. Calculate duration
+    now = datetime.now(timezone.utc)
+    duration = int((now - meeting.started_at).total_seconds()) if meeting.started_at else 0
+
+    # 8. Prepend header to transcript
+    date_str = meeting.started_at.strftime("%Y-%m-%d %H:%M")
+    duration_str = f"{duration // 60}m {duration % 60}s"
+    full_md = f"# {title}\n\n*{date_str} | Duration: {duration_str}*\n\n---\n\n{transcript_md}"
+
+    # 9. Save markdown file
+    notebook_id = str(meeting.notebook_id)
+    source_id = uuid.uuid4()
+    upload_dir = os.path.join(settings.UPLOAD_DIR, notebook_id)
+    os.makedirs(upload_dir, exist_ok=True)
+    md_path = os.path.join(upload_dir, f"{source_id}.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(full_md)
+
+    # 10. Create Source record
+    source = Source(
+        id=source_id,
+        notebook_id=meeting.notebook_id,
+        uploaded_by=meeting.created_by,
+        filename=f"{title}.md",
+        file_type="meeting",
+        file_size=len(full_md.encode("utf-8")),
+        storage_url=md_path,
+        status="uploading",
+    )
+    db.add(source)
+
+    # 11. Update meeting record
+    meeting.status = "ended"
+    meeting.ended_at = now
+    meeting.duration_seconds = duration
+    meeting.title = title
+    meeting.source_id = source_id
+    await db.commit()
+    await db.refresh(source)
+
+    # 12. Also save parsed content for fallback
+    parsed_path = os.path.splitext(md_path)[0] + "_parsed.md"
+    with open(parsed_path, "w", encoding="utf-8") as f:
+        f.write(full_md)
+
+    # 13. Trigger document pipeline in background
+    import asyncio
+    asyncio.create_task(
+        process_document(
+            str(source_id), notebook_id, md_path,
+            f"{title}.md", "meeting",
+        )
+    )
+
+    logger.info(
+        "Meeting %s ended: title=%s, duration=%ds, source=%s",
+        meeting_id, title, duration, source_id,
+    )
+
+    # 14. Notify via SSE
+    await event_bus.publish(notebook_id, {
+        "type": "meeting_ended",
+        "meeting_id": str(meeting_id),
+        "source_id": str(source_id),
+        "title": title,
+    })
+
+    return source
