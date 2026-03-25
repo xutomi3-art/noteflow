@@ -204,7 +204,7 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
         )
         rewritten = rewritten.strip().strip('"').strip("'")
         if rewritten and not rewritten.startswith("[Error"):
-            logger.info("Query rewrite: [%s] -> [%s]", message, rewritten)
+            logger.info("Query rewrite: [%s] -> [%r]", message, rewritten)
             return rewritten
     except Exception as e:
         logger.warning("Query rewrite failed, using original: %s", e)
