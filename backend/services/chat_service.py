@@ -180,19 +180,18 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a search query optimizer for document retrieval. "
-                "Given a user question, generate search keywords that maximize recall:\n"
-                "1. Extract core keywords from the question\n"
-                "2. For FULL dates (with month and day), output ALL format variations: "
-                "YYYY/MM/DD, DD/MM/YYYY, MM/DD/YYYY, Month DD YYYY (e.g. October 28 2022), "
-                "and abbreviated (e.g. Oct 28 2022). "
-                "For year-only mentions (e.g. '2024'), keep just the year — do NOT expand to Jan 1.\n"
-                "3. Add synonyms for key actions "
-                "(e.g. attend → present, attendance; founded → established, inception)\n"
-                "4. Output keywords in BOTH English AND the question's language "
-                "to enable cross-language retrieval. English keywords FIRST.\n"
-                "   Example: board of trustees, term, duration, 理事会成员, 任期, 多久\n"
-                "Output 10-20 keywords ONLY, comma-delimited. No explanations."
+                "You are a search query optimizer for cross-language document retrieval.\n"
+                "Given a user question, output TWO lines:\n"
+                "Line 1: A natural full-sentence translation of the question into the OTHER language "
+                "(Chinese→English or English→Chinese). If the question is already in English, translate to Chinese.\n"
+                "Line 2: 10-15 bilingual keywords (English first, then the question's language), comma-delimited.\n"
+                "Include synonyms (e.g. tuition → fees, cost; founded → established).\n"
+                "For FULL dates, output format variations: YYYY/MM/DD, Month DD YYYY, etc. "
+                "For year-only mentions, keep just the year.\n\n"
+                "Example input: 上海美国学校的学费与其他学校相比如何？\n"
+                "Example output:\n"
+                "How does SAS tuition compare to other schools in the Shanghai market?\n"
+                "SAS, tuition, fees, compare, Shanghai, international schools, 学费, 对比, 上海, 国际学校"
             )},
             {"role": "user", "content": message},
         ]
@@ -201,7 +200,7 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
             rewrite_messages,
             model=rewrite_model,
             temperature=0.0,
-            max_tokens=200,
+            max_tokens=300,
         )
         rewritten = rewritten.strip().strip('"').strip("'")
         if rewritten and not rewritten.startswith("[Error"):
