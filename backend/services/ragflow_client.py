@@ -25,7 +25,16 @@ class RAGFlowClient:
         return {"Authorization": f"Bearer {self.api_key}"}
 
     async def create_dataset(self, name: str) -> str | None:
-        """Create a dataset in RAGFlow. Returns dataset_id or None on failure."""
+        """Create a dataset in RAGFlow. Returns dataset_id or None on failure.
+
+        Parser config matches production environment:
+        - chunk_token_num=512: smaller chunks for precise retrieval
+        - enable_children=true: parent-child chunking for context preservation
+        - toc_extraction=true: extract table-of-contents structure
+        - auto_keywords/auto_questions=3: auto-generate for better retrieval
+        - layout_recognize=DeepDOC: document layout analysis
+        - html4excel=true: preserve table structure for Excel files
+        """
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
                 resp = await client.post(
@@ -35,8 +44,15 @@ class RAGFlowClient:
                         "name": name,
                         "chunk_method": "naive",
                         "parser_config": {
-                            "chunk_token_num": 1024,
-                            "delimiter": "\n\n",
+                            "chunk_token_num": 512,
+                            "delimiter": "\n!?;。？！",
+                            "html4excel": True,
+                            "auto_keywords": 3,
+                            "auto_questions": 3,
+                            "toc_extraction": True,
+                            "enable_children": True,
+                            "children_delimiter": "\n",
+                            "layout_recognize": "DeepDOC",
                             "raptor": {"use_raptor": settings.RAPTOR_ENABLED},
                         },
                     },
@@ -45,54 +61,12 @@ class RAGFlowClient:
                 data = resp.json()
                 if data.get("code") == 0:
                     dataset_id = data["data"]["id"]
-                    # Enable features not supported in create API by updating after creation
-                    await self._enable_advanced_features(client, dataset_id)
                     return dataset_id
                 logger.error("RAGFlow create_dataset error: %s", data)
                 return None
         except Exception as e:
             logger.error("RAGFlow create_dataset failed: %s", e)
             return None
-
-    async def _enable_advanced_features(self, client: httpx.AsyncClient, dataset_id: str) -> None:
-        """Enable html4excel and chunk overlap via API + direct DB update."""
-        try:
-            resp = await client.put(
-                f"{self.base_url}/api/v1/datasets/{dataset_id}",
-                headers=self._headers,
-                json={
-                    "parser_config": {
-                        "html4excel": True,
-                    },
-                },
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("code") == 0:
-                    logger.info("RAGFlow dataset %s: enabled html4excel", dataset_id)
-                else:
-                    logger.warning("RAGFlow dataset %s: _enable_advanced_features response: %s", dataset_id, data)
-        except Exception as e:
-            logger.warning("RAGFlow _enable_advanced_features failed: %s", e)
-
-        # Set overlapped_percent directly in RAGFlow MySQL (API doesn't expose this param)
-        try:
-            import aiomysql
-            conn = await aiomysql.connect(
-                host="ragflow-mysql", port=3306,
-                user="root", password="infini_rag_flow",
-                db="rag_flow",
-            )
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "UPDATE knowledgebase SET parser_config = JSON_SET(parser_config, '$.overlapped_percent', 15) WHERE id = %s",
-                    (dataset_id,),
-                )
-                await conn.commit()
-            conn.close()
-            logger.info("RAGFlow dataset %s: set overlapped_percent=15 via MySQL", dataset_id)
-        except Exception as e:
-            logger.warning("RAGFlow dataset %s: failed to set overlapped_percent: %s", dataset_id, e)
 
     async def upload_document(
         self, dataset_id: str, filename: str, content: bytes
