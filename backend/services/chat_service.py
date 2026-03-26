@@ -151,6 +151,12 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
     return context, citations
 
 
+# File types that can be read as full text directly from disk
+_FULLTEXT_FILE_TYPES = {"txt", "md"} | AUDIO_EXTENSIONS
+# Max total chars for all full-text sources combined (~50K chars ≈ 25K tokens)
+_FULLTEXT_MAX_TOTAL_CHARS = 50000
+
+
 async def _get_source_dataset_ids(
     db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None
 ) -> tuple[list[str], list[str], dict, list[Source]]:
@@ -160,7 +166,7 @@ async def _get_source_dataset_ids(
         (dataset_ids, document_ids, sources_map, fulltext_sources) where:
         - document_ids are RAGFlow doc IDs to scope retrieval
         - fulltext_sources are Source objects whose full content should be
-          injected directly (e.g. audio transcripts) instead of using RAG
+          injected directly (txt, md, audio transcripts) instead of using RAG
     """
     query = select(Source).where(
         Source.notebook_id == notebook_id,
@@ -172,9 +178,10 @@ async def _get_source_dataset_ids(
     result = await db.execute(query)
     sources = list(result.scalars().all())
 
-    # Audio transcripts are short enough to inject in full — skip RAG for them
-    fulltext_sources = [s for s in sources if s.file_type in AUDIO_EXTENSIONS]
-    rag_sources = [s for s in sources if s.file_type not in AUDIO_EXTENSIONS]
+    # Small text-readable files (md, txt, audio transcripts) get full-text injection.
+    # Large documents (pdf, docx, pptx, xlsx) always use RAG.
+    fulltext_sources = [s for s in sources if s.file_type in _FULLTEXT_FILE_TYPES]
+    rag_sources = [s for s in sources if s.file_type not in _FULLTEXT_FILE_TYPES]
 
     dataset_ids = list(set(s.ragflow_dataset_id for s in rag_sources if s.ragflow_dataset_id))
     document_ids = [s.ragflow_doc_id for s in rag_sources if s.ragflow_doc_id]
@@ -186,20 +193,26 @@ async def _get_source_dataset_ids(
     return dataset_ids, document_ids, sources_map, fulltext_sources
 
 
-def _read_full_transcript(source: Source) -> str | None:
-    """Read the full transcript file for an audio source.
+def _read_source_fulltext(source: Source) -> str | None:
+    """Read full text content from a source file on disk.
 
-    Audio files are transcribed to .md files at the same path stem.
-    Returns the full text content, or None if not found.
+    For txt/md: read the file directly.
+    For audio: read the .md transcript file (same path stem).
+    Returns the full text, or None if not found.
     """
     if not source.storage_url:
         return None
-    md_path = source.storage_url.rsplit(".", 1)[0] + ".md"
-    if os.path.isfile(md_path):
-        with open(md_path, "r", encoding="utf-8", errors="replace") as f:
-            return f.read()
-    # Fallback: try the original storage_url if it's already text
-    if source.storage_url.endswith((".md", ".txt")) and os.path.isfile(source.storage_url):
+
+    # For audio files, the transcript is saved as .md alongside the audio
+    if source.file_type in AUDIO_EXTENSIONS:
+        md_path = source.storage_url.rsplit(".", 1)[0] + ".md"
+        if os.path.isfile(md_path):
+            with open(md_path, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+        return None
+
+    # For txt/md, read directly
+    if os.path.isfile(source.storage_url):
         with open(source.storage_url, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
     return None
@@ -481,16 +494,23 @@ async def stream_chat(
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
-        # 2c. Inject full-text transcripts (audio/meeting recordings)
-        # These bypass RAG — the entire transcript is included so the AI sees the full meeting
+        # 2c. Inject full-text sources (md, txt, audio transcripts)
+        # These bypass RAG — the entire file is included so the AI sees full content
         fulltext_parts: list[str] = []
+        fulltext_total_chars = 0
         for ft_source in fulltext_sources:
-            transcript = _read_full_transcript(ft_source)
-            if transcript:
+            content = _read_source_fulltext(ft_source)
+            if content:
+                if fulltext_total_chars + len(content) > _FULLTEXT_MAX_TOTAL_CHARS:
+                    logger.warning("Full-text budget exceeded, skipping %s (%d chars)",
+                                   ft_source.filename, len(content))
+                    continue
                 fulltext_parts.append(
-                    f"=== Full Transcript: {ft_source.filename} ===\n{transcript}"
+                    f"=== Full Document: {ft_source.filename} ===\n{content}"
                 )
-                logger.info("Injected full transcript: %s (%d chars)", ft_source.filename, len(transcript))
+                fulltext_total_chars += len(content)
+                logger.info("Injected full text: %s (%d chars, total=%d)",
+                            ft_source.filename, len(content), fulltext_total_chars)
 
         fulltext_context = "\n\n".join(fulltext_parts) if fulltext_parts else ""
 
