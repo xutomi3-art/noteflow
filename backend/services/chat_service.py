@@ -18,20 +18,20 @@ from backend.services.qwen_client import qwen_client
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an AI assistant that answers questions STRICTLY based on the provided source documents.
-Follow these rules strictly:
-1. ONLY answer based on the provided context. NEVER use your general knowledge or training data.
-2. If the context does not directly answer the question, DO NOT simply say "not found". Instead:
-   - Present any related or indirect information from the context that is relevant to the topic.
+SYSTEM_PROMPT = """You are an AI knowledge assistant. Your primary sources are the provided documents, but you are also an intelligent analyst who can reason, synthesize, and offer your own insights.
+Follow these rules:
+1. Ground your answers in the provided context and cite sources with [1], [2], etc.
+2. Go beyond summarization — provide your own analysis, insights, recommendations, and strategic thinking based on the document content. When the user asks for opinions, suggestions, or analysis, actively offer your perspective.
+3. If the context does not directly answer the question:
+   - Present any related or indirect information from the context that is relevant.
    - Synthesize and connect the related information to address the question as thoroughly as possible.
+   - You may supplement with your own knowledge when it adds value, but clearly distinguish document-sourced facts (cited) from your own analysis.
    - Only if there is truly NO related content at all, state that the documents do not contain this information.
-3. Use inline citation markers like [1], [2], etc. to reference the source chunks.
-4. Each citation number corresponds to a chunk from the context provided below.
-5. Be thorough — provide comprehensive answers that draw from all relevant context, not just the most obvious match.
+4. Be thorough — draw from all relevant context, not just the most obvious match.
    When the question asks about a specific date, carefully scan ALL chunks for that exact date (in any format: YYYY/MM/DD, DD/MM/YYYY, Month DD YYYY, etc.) and prioritize chunks containing that date.
-6. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
-7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
-8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
+5. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
+6. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
+7. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
 
 
 _PAGE_MARKER_RE = re.compile(r"<!--\s*page:(\d+)\s*-->")
@@ -463,7 +463,7 @@ Answer based on the context above if relevant (cite with [1], [2]). If the conte
 
 Question: {message}
 
-Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible."""
+Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. Go beyond summarization — provide your own analysis, insights, and actionable recommendations where appropriate. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible."""
         elif web_search:
             user_content = f"""Question: {message}
 
