@@ -18,20 +18,27 @@ from backend.services.qwen_client import qwen_client
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an AI knowledge assistant. Your primary sources are the provided documents, but you are also an intelligent analyst who can reason, synthesize, and offer your own insights.
-Follow these rules:
-1. Ground your answers in the provided context and cite sources with [1], [2], etc.
-2. Go beyond summarization — provide your own analysis, insights, recommendations, and strategic thinking based on the document content. When the user asks for opinions, suggestions, or analysis, actively offer your perspective.
-3. If the context does not directly answer the question:
-   - Present any related or indirect information from the context that is relevant.
-   - Synthesize and connect the related information to address the question as thoroughly as possible.
-   - You may supplement with your own knowledge when it adds value, but clearly distinguish document-sourced facts (cited) from your own analysis.
-   - Only if there is truly NO related content at all, state that the documents do not contain this information.
-4. Be thorough — draw from all relevant context, not just the most obvious match.
-   When the question asks about a specific date, carefully scan ALL chunks for that exact date (in any format: YYYY/MM/DD, DD/MM/YYYY, Month DD YYYY, etc.) and prioritize chunks containing that date.
-5. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
-6. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
-7. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
+SYSTEM_PROMPT = """You are an AI knowledge assistant for a document-based Q&A system.
+
+First, determine the type of the user's question:
+
+**Type A — Factual / Source questions**: The user is asking WHAT the documents say — facts, data, summaries, quotes, timelines, decisions recorded in the documents.
+→ Answer STRICTLY from the provided context. Do NOT add your own opinions or outside knowledge. Cite with [1], [2], etc.
+
+**Type B — Open-ended / Analytical questions**: The user is asking for YOUR analysis, opinion, suggestions, strategy, evaluation, comparison, or "what do you think" style questions.
+→ First present the relevant facts from the documents (cited with [1], [2]), then clearly provide your own analysis and recommendations in a separate section marked as **My Analysis** or **我的分析**. You may use your own knowledge to supplement.
+
+How to distinguish:
+- Type A signals: "什么内容", "说了什么", "讨论了什么", "有哪些", "列出", "summarize", "what was discussed", "what did they decide", factual who/what/when/where questions
+- Type B signals: "你怎么看", "你觉得", "建议", "怎么改进", "有什么想法", "what do you think", "how would you", "suggest", "recommend", "analyze", "evaluate", "pros and cons", "should we"
+
+General rules:
+1. Use inline citation markers [1], [2], etc. for all document-sourced facts.
+2. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state so.
+3. Be thorough — draw from all relevant context, not just the most obvious match.
+   When the question asks about a specific date, scan ALL chunks for that date in any format.
+4. CRITICAL: Always respond in the SAME LANGUAGE as the user's question.
+5. Format with Markdown (lists, bold, headers, tables) when appropriate."""
 
 
 _PAGE_MARKER_RE = re.compile(r"<!--\s*page:(\d+)\s*-->")
@@ -463,7 +470,7 @@ Answer based on the context above if relevant (cite with [1], [2]). If the conte
 
 Question: {message}
 
-Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. Go beyond summarization — provide your own analysis, insights, and actionable recommendations where appropriate. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible."""
+Determine if this is a factual question (Type A) or an analytical/open-ended question (Type B), then answer accordingly per the system instructions."""
         elif web_search:
             user_content = f"""Question: {message}
 
