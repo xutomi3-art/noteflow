@@ -183,6 +183,15 @@ async def _get_source_dataset_ids(
     fulltext_sources = [s for s in sources if s.file_type in _FULLTEXT_FILE_TYPES]
     rag_sources = [s for s in sources if s.file_type not in _FULLTEXT_FILE_TYPES]
 
+    logger.info(
+        "Source routing: %d total, %d fulltext (%s), %d RAG (%s)",
+        len(sources),
+        len(fulltext_sources),
+        [(s.filename, s.file_type) for s in fulltext_sources],
+        len(rag_sources),
+        [(s.filename, s.file_type) for s in rag_sources],
+    )
+
     dataset_ids = list(set(s.ragflow_dataset_id for s in rag_sources if s.ragflow_dataset_id))
     document_ids = [s.ragflow_doc_id for s in rag_sources if s.ragflow_doc_id]
     sources_map = {
