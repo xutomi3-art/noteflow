@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import time
 import uuid
@@ -15,6 +16,7 @@ from backend.models.source import Source
 from backend.core.config import settings
 from backend.services.ragflow_client import ragflow_client
 from backend.services.qwen_client import qwen_client
+from backend.services.asr_service import AUDIO_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -151,12 +153,14 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
 
 async def _get_source_dataset_ids(
     db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None
-) -> tuple[list[str], list[str], dict]:
-    """Get RAGFlow dataset IDs, document IDs, and source info for retrieval.
+) -> tuple[list[str], list[str], dict, list[Source]]:
+    """Get RAGFlow dataset IDs, document IDs, source info, and full-text sources.
 
     Returns:
-        (dataset_ids, document_ids, sources_map) where document_ids are the
-        RAGFlow doc IDs used to scope retrieval to selected sources only.
+        (dataset_ids, document_ids, sources_map, fulltext_sources) where:
+        - document_ids are RAGFlow doc IDs to scope retrieval
+        - fulltext_sources are Source objects whose full content should be
+          injected directly (e.g. audio transcripts) instead of using RAG
     """
     query = select(Source).where(
         Source.notebook_id == notebook_id,
@@ -168,14 +172,37 @@ async def _get_source_dataset_ids(
     result = await db.execute(query)
     sources = list(result.scalars().all())
 
-    dataset_ids = list(set(s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id))
-    document_ids = [s.ragflow_doc_id for s in sources if s.ragflow_doc_id]
+    # Audio transcripts are short enough to inject in full — skip RAG for them
+    fulltext_sources = [s for s in sources if s.file_type in AUDIO_EXTENSIONS]
+    rag_sources = [s for s in sources if s.file_type not in AUDIO_EXTENSIONS]
+
+    dataset_ids = list(set(s.ragflow_dataset_id for s in rag_sources if s.ragflow_dataset_id))
+    document_ids = [s.ragflow_doc_id for s in rag_sources if s.ragflow_doc_id]
     sources_map = {
         str(s.id): {"filename": s.filename, "file_type": s.file_type}
         for s in sources
     }
 
-    return dataset_ids, document_ids, sources_map
+    return dataset_ids, document_ids, sources_map, fulltext_sources
+
+
+def _read_full_transcript(source: Source) -> str | None:
+    """Read the full transcript file for an audio source.
+
+    Audio files are transcribed to .md files at the same path stem.
+    Returns the full text content, or None if not found.
+    """
+    if not source.storage_url:
+        return None
+    md_path = source.storage_url.rsplit(".", 1)[0] + ".md"
+    if os.path.isfile(md_path):
+        with open(md_path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    # Fallback: try the original storage_url if it's already text
+    if source.storage_url.endswith((".md", ".txt")) and os.path.isfile(source.storage_url):
+        with open(source.storage_url, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    return None
 
 
 async def _rewrite_query_for_retrieval(message: str) -> str:
@@ -326,8 +353,8 @@ async def stream_chat(
         # 2. Send heartbeat before slow RAGFlow retrieval
         yield ": keepalive\n\n"
 
-        # Retrieve from RAGFlow
-        dataset_ids, document_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
+        # Retrieve from RAGFlow (audio transcripts returned separately for full-text injection)
+        dataset_ids, document_ids, sources_map, fulltext_sources = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
@@ -454,19 +481,40 @@ async def stream_chat(
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
-        # 3. Build messages for Qwen
-        has_rag = bool(context)
+        # 2c. Inject full-text transcripts (audio/meeting recordings)
+        # These bypass RAG — the entire transcript is included so the AI sees the full meeting
+        fulltext_parts: list[str] = []
+        for ft_source in fulltext_sources:
+            transcript = _read_full_transcript(ft_source)
+            if transcript:
+                fulltext_parts.append(
+                    f"=== Full Transcript: {ft_source.filename} ===\n{transcript}"
+                )
+                logger.info("Injected full transcript: %s (%d chars)", ft_source.filename, len(transcript))
 
-        if context and web_search:
+        fulltext_context = "\n\n".join(fulltext_parts) if fulltext_parts else ""
+
+        # 3. Build messages for Qwen
+        has_rag = bool(context) or bool(fulltext_context)
+
+        # Combine: full transcripts first, then RAG chunks
+        if fulltext_context and context:
+            combined_context = f"{fulltext_context}\n\n---\nAdditional relevant excerpts from other documents:\n{context}"
+        elif fulltext_context:
+            combined_context = fulltext_context
+        else:
+            combined_context = context
+
+        if combined_context and web_search:
             user_content = f"""Context from source documents:
-{context}
+{combined_context}
 
 Question: {message}
 
 Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer."""
-        elif context:
+        elif combined_context:
             user_content = f"""Context from source documents:
-{context}
+{combined_context}
 
 Question: {message}
 
