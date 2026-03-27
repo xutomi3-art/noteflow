@@ -15,30 +15,51 @@ _MYSQL_CONFIG = {
     "db": "rag_flow",
 }
 
-TENANT_ID = "b89c34f31c6411f1a89302a7118c9470"
-
 MODEL_FIELDS = ("llm_id", "embd_id", "rerank_id")
 
+# Cached tenant ID (discovered at first use)
+_cached_tenant_id: str | None = None
 
-async def get_ragflow_models(tenant_id: str = TENANT_ID) -> dict:
+
+async def _resolve_tenant_id() -> str:
+    """Discover the RAGFlow tenant ID from the database."""
+    global _cached_tenant_id  # noqa: PLW0603
+    if _cached_tenant_id:
+        return _cached_tenant_id
+    conn = await aiomysql.connect(**_MYSQL_CONFIG)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute("SELECT id FROM tenant ORDER BY create_time LIMIT 1")
+            row = await cur.fetchone()
+            if not row:
+                raise ValueError("No RAGFlow tenant found in database")
+            _cached_tenant_id = row[0]
+            logger.info("Discovered RAGFlow tenant ID: %s", _cached_tenant_id)
+            return _cached_tenant_id
+    finally:
+        conn.close()
+
+
+async def get_ragflow_models(tenant_id: str | None = None) -> dict:
     """Read llm_id, embd_id, rerank_id from RAGFlow tenant table."""
+    tid = tenant_id or await _resolve_tenant_id()
     conn = await aiomysql.connect(**_MYSQL_CONFIG)
     try:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(
                 "SELECT llm_id, embd_id, rerank_id FROM tenant WHERE id = %s",
-                (tenant_id,),
+                (tid,),
             )
             row = await cur.fetchone()
             if not row:
-                raise ValueError(f"RAGFlow tenant {tenant_id} not found")
+                raise ValueError(f"RAGFlow tenant {tid} not found")
             return {k: row[k] for k in MODEL_FIELDS}
     finally:
         conn.close()
 
 
 async def update_ragflow_models(
-    tenant_id: str = TENANT_ID,
+    tenant_id: str | None = None,
     *,
     llm_id: str | None = None,
     embd_id: str | None = None,
@@ -53,11 +74,13 @@ async def update_ragflow_models(
     if rerank_id is not None:
         updates["rerank_id"] = rerank_id
 
+    tid = tenant_id or await _resolve_tenant_id()
+
     if not updates:
-        return await get_ragflow_models(tenant_id)
+        return await get_ragflow_models(tid)
 
     set_clause = ", ".join(f"{k} = %s" for k in updates)
-    values = list(updates.values()) + [tenant_id]
+    values = list(updates.values()) + [tid]
 
     conn = await aiomysql.connect(**_MYSQL_CONFIG)
     try:
@@ -67,8 +90,8 @@ async def update_ragflow_models(
                 values,
             )
         await conn.commit()
-        logger.info("Updated RAGFlow tenant %s: %s", tenant_id, updates)
+        logger.info("Updated RAGFlow tenant %s: %s", tid, updates)
     finally:
         conn.close()
 
-    return await get_ragflow_models(tenant_id)
+    return await get_ragflow_models(tid)
