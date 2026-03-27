@@ -224,8 +224,8 @@ export default function AdminLLMPage() {
                         (form[key] ?? 'false').toLowerCase() === 'true' ? 'bg-[#5b8c15]' : 'bg-gray-300'
                       }`}
                     >
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                        (form[key] ?? 'false').toLowerCase() === 'true' ? 'translate-x-5' : 'translate-x-0.5'
+                      <span className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                        (form[key] ?? 'false').toLowerCase() === 'true' ? 'translate-x-[22px]' : 'translate-x-0.5'
                       }`} />
                     </button>
                   </div>
