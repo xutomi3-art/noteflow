@@ -8,6 +8,7 @@ from sqlalchemy import select
 from backend.core.config import settings
 from backend.core.database import async_session
 from backend.models.notebook import Notebook
+from backend.models.source import Source
 from backend.services.event_bus import event_bus
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
@@ -311,15 +312,26 @@ async def _notify(
     notebook_id: str, source_id: str, status: str,
     error: str | None = None, progress: float | None = None,
 ) -> None:
-    """Push status update via SSE."""
+    """Push status update via SSE and persist progress to DB."""
+    progress_pct = round(progress * 100, 1) if progress is not None else None
     payload: dict = {
         "type": "source_status",
         "source_id": source_id,
         "status": status,
         "error": error,
     }
-    if progress is not None:
-        payload["progress"] = round(progress * 100, 1)  # 0-100 with 1 decimal
+    if progress_pct is not None:
+        payload["progress"] = progress_pct
+        # Persist progress to DB so it survives page refreshes
+        try:
+            async with async_session() as db:
+                sid = uuid.UUID(source_id)
+                source = await db.get(Source, sid)
+                if source:
+                    source.progress = progress_pct
+                    await db.commit()
+        except Exception:
+            pass  # SSE is best-effort for progress persistence
     await event_bus.publish(notebook_id, payload)
 
 

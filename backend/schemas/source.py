@@ -11,6 +11,7 @@ class SourceResponse(BaseModel):
     file_size: int | None = None
     status: str
     error_message: str | None = None
+    progress: float | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
