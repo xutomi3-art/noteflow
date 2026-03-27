@@ -1,36 +1,38 @@
 /**
- * AudioWorklet processor for capturing PCM 16-bit 16kHz mono audio.
- * Downsamples from device sample rate, buffers to 200ms chunks.
+ * AudioWorklet: accumulates PCM samples and sends ~256ms chunks as Int16.
+ * Based on huiyizhushou2's proven implementation.
+ * No downsampling — AudioContext should be created with sampleRate: 16000.
  */
-class PCMCaptureProcessor extends AudioWorkletProcessor {
+class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.buffer = [];
-    this.targetRate = 16000;
-    this.chunkSamples = 3200; // 200ms at 16kHz
+    this._buffer = new Float32Array(0);
+    this._bufferSize = 4096; // ~256ms at 16kHz
   }
 
   process(inputs) {
     const input = inputs[0];
     if (!input || !input[0]) return true;
 
-    const samples = input[0]; // Float32Array, mono channel
-    const ratio = sampleRate / this.targetRate;
+    const channelData = input[0];
 
-    // Downsample by skipping samples
-    for (let i = 0; i < samples.length; i += ratio) {
-      const idx = Math.floor(i);
-      if (idx < samples.length) {
-        // Convert Float32 [-1, 1] to Int16 [-32768, 32767]
-        const s = Math.max(-1, Math.min(1, samples[idx]));
-        this.buffer.push(s < 0 ? s * 0x8000 : s * 0x7FFF);
+    // Accumulate samples
+    const newBuf = new Float32Array(this._buffer.length + channelData.length);
+    newBuf.set(this._buffer);
+    newBuf.set(channelData, this._buffer.length);
+    this._buffer = newBuf;
+
+    // Send when buffer is full
+    while (this._buffer.length >= this._bufferSize) {
+      const chunk = this._buffer.slice(0, this._bufferSize);
+      this._buffer = this._buffer.slice(this._bufferSize);
+
+      // Convert float32 to int16
+      const int16 = new Int16Array(chunk.length);
+      for (let i = 0; i < chunk.length; i++) {
+        const s = Math.max(-1, Math.min(1, chunk[i]));
+        int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
-    }
-
-    // Send 200ms chunks
-    while (this.buffer.length >= this.chunkSamples) {
-      const chunk = this.buffer.splice(0, this.chunkSamples);
-      const int16 = new Int16Array(chunk);
       this.port.postMessage(int16.buffer, [int16.buffer]);
     }
 
@@ -38,4 +40,4 @@ class PCMCaptureProcessor extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor("pcm-capture-processor", PCMCaptureProcessor);
+registerProcessor("pcm-capture-processor", PCMProcessor);

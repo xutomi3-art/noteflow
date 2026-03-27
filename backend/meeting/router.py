@@ -34,6 +34,19 @@ async def create_meeting(
     return _to_out(meeting)
 
 
+@router.get("/active", response_model=MeetingOut | None)
+async def get_active_meeting(
+    notebook_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the currently active (recording/paused) meeting, or null."""
+    meeting = await service.get_active_meeting(db, uuid.UUID(notebook_id))
+    if not meeting:
+        return None
+    return _to_out(meeting)
+
+
 @router.get("/{meeting_id}", response_model=MeetingOut)
 async def get_meeting(
     notebook_id: str,
@@ -183,38 +196,56 @@ async def websocket_audio(
             logger.error("Meeting WS receive error: %s", e)
 
     async def send_transcripts():
-        """Receive ASR results and send to client + persist to DB."""
-        try:
-            async for utterance in asr_client.receive_results(meeting_id):
-                # Send to client
-                await websocket.send_json({
-                    "type": "utterance",
-                    "speaker_id": utterance.speaker_id,
-                    "text": utterance.text,
-                    "start_time_ms": utterance.start_time_ms,
-                    "end_time_ms": utterance.end_time_ms,
-                    "is_final": utterance.is_final,
-                    "sequence": utterance.sequence,
-                })
+        """Receive ASR results and send to client. Auto-reconnects ASR on failure."""
+        max_reconnects = 50  # ~2.5 hours at 3 min intervals
+        reconnect_count = 0
 
-                # Persist final utterances to DB
-                if utterance.is_final:
-                    async with async_session() as db:
-                        await service.save_utterance(
-                            db, uuid.UUID(meeting_id), utterance
-                        )
+        while reconnect_count <= max_reconnects:
+            try:
+                async for utterance in asr_client.receive_results(meeting_id):
+                    await websocket.send_json({
+                        "type": "utterance",
+                        "speaker_id": utterance.speaker_id,
+                        "text": utterance.text,
+                        "start_time_ms": utterance.start_time_ms,
+                        "end_time_ms": utterance.end_time_ms,
+                        "is_final": utterance.is_final,
+                        "sequence": utterance.sequence,
+                    })
 
-                # Broadcast via SSE event bus
-                await event_bus.publish(notebook_id, {
-                    "type": "meeting_utterance",
-                    "meeting_id": meeting_id,
-                    "speaker_id": utterance.speaker_id,
-                    "text": utterance.text,
-                    "is_final": utterance.is_final,
-                    "sequence": utterance.sequence,
-                })
-        except Exception as e:
-            logger.error("Meeting WS send error: %s", e)
+                    if utterance.is_final:
+                        async with async_session() as db:
+                            await service.save_utterance(
+                                db, uuid.UUID(meeting_id), utterance
+                            )
+
+                    await event_bus.publish(notebook_id, {
+                        "type": "meeting_utterance",
+                        "meeting_id": meeting_id,
+                        "speaker_id": utterance.speaker_id,
+                        "text": utterance.text,
+                        "is_final": utterance.is_final,
+                        "sequence": utterance.sequence,
+                    })
+            except Exception as e:
+                logger.error("Meeting ASR error: %s", e)
+
+            # ASR stream ended (error/timeout/proactive reconnect) — reconnect
+            session = asr_client.get_session(meeting_id)
+            if session and session.is_ended:
+                break  # Meeting was explicitly ended
+
+            reconnect_count += 1
+            logger.info("ASR reconnecting for meeting %s (attempt %d)", meeting_id, reconnect_count)
+            try:
+                await websocket.send_json({"type": "reconnecting"})
+                await asr_client.end_session(meeting_id)
+                await asyncio.sleep(1)
+                await asr_client.start_session(meeting_id)
+                await websocket.send_json({"type": "reconnected"})
+            except Exception as e:
+                logger.error("ASR reconnect failed: %s", e)
+                break
 
     # Run both tasks concurrently
     receive_task = asyncio.create_task(receive_audio())
@@ -226,6 +257,13 @@ async def websocket_audio(
     )
     for task in pending:
         task.cancel()
+
+    # Cleanup: close ASR session but keep meeting in "recording" state
+    # so user can resume after page refresh
+    try:
+        await asr_client.end_session(meeting_id)
+    except Exception as e:
+        logger.warning("Meeting ASR cleanup error: %s", e)
 
     logger.info("Meeting WS closed: %s", meeting_id)
 

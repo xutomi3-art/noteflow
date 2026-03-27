@@ -44,23 +44,34 @@ export function UtteranceList({ utterances, speakerMap, onRenameSpeaker }: Utter
 
   return (
     <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
-      {groups.map((group, i) => (
+      {groups.map((group, i) => {
+        const isPartialGroup = group.items.every((u) => !u.is_final);
+        return (
         <div key={i} className="space-y-0.5">
           <div className="flex items-baseline gap-2">
-            <SpeakerLabel
-              speakerId={group.speakerId}
-              name={speakerMap[group.speakerId] || group.speakerId}
-              onRename={onRenameSpeaker}
-            />
+            {isPartialGroup ? (
+              <span className="text-sm font-medium text-gray-400 italic">Identifying speaker...</span>
+            ) : (
+              <SpeakerLabel
+                speakerId={group.speakerId}
+                name={speakerMap[group.speakerId] || group.speakerId}
+                onRename={onRenameSpeaker}
+              />
+            )}
             <span className="text-xs text-gray-400">
               {formatTime(group.items[0].start_time_ms)}
             </span>
           </div>
-          <p className="text-sm text-gray-700 leading-relaxed pl-0">
-            {group.items.map((u) => u.text).join(" ")}
-          </p>
+          <div className="space-y-1">
+            {group.items.map((u, j) => (
+              <p key={j} className={`text-sm leading-relaxed ${u.is_final ? "text-gray-700" : "text-gray-400 italic"}`}>
+                {u.text}
+              </p>
+            ))}
+          </div>
         </div>
-      ))}
+        );
+      })}
       <div ref={endRef} />
     </div>
   );

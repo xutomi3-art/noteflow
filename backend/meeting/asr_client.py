@@ -1,75 +1,143 @@
 """
-Volcengine Seed-ASR 2.0 Streaming WebSocket Client
+Volcengine Seed-ASR 2.0 Streaming WebSocket Client.
 
-Implements the SAUC binary protocol for real-time speech recognition
-with speaker diarization via the bigmodel_async endpoint.
-
-Protocol: 4-byte header + payload_size(4B) + gzip-compressed payload
+Based on the proven implementation from huiyizhushou2.
+Protocol: WebSocket v3 SAUC bigmodel_async with binary framing + HTTP header auth.
+Config frames use JSON (no gzip). Audio frames use raw PCM (no gzip).
+Response frames: 4B header + 4B sequence + 4B payload_size + JSON payload.
 """
 import asyncio
 import gzip
 import json
 import logging
+import re
 import struct
+import time
 import uuid
 from dataclasses import dataclass, field
-from typing import AsyncGenerator
 
 import websockets
 
 logger = logging.getLogger(__name__)
 
-# --- Volcengine SAUC Binary Protocol Constants ---
+VOLCANO_WSS_URL = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
 
-PROTOCOL_VERSION = 0b0001
-HEADER_SIZE = 0b0001  # 1 * 4 = 4 bytes
+# Default credentials
+ASR_APP_ID = "5066898369"
+ASR_ACCESS_KEY = "hoSxELglG0VOYcnYxdVv9bKGEgtISscx"
+ASR_RESOURCE_ID = "volc.seedasr.sauc.duration"
 
-# Message types (4 bits)
-MSG_FULL_CLIENT_REQUEST = 0b0001
-MSG_AUDIO_ONLY = 0b0010
-MSG_FULL_SERVER_RESPONSE = 0b1001
-MSG_SERVER_ERROR = 0b1111
+# Binary frame header constants (matching Volcano protocol spec)
+_PROTO_VERSION_HEADER_SIZE = 0x11  # version=1, header_size=1 (4 bytes)
+_CONFIG_MSG_TYPE_FLAGS = 0x10       # msg_type=1 (full request), flags=0
+_CONFIG_SERIALIZATION = 0x10        # serialization=1 (JSON), compression=0 (none)
+_AUDIO_MSG_TYPE = 0x20              # msg_type=2 (audio-only), flags=0
+_AUDIO_MSG_TYPE_FINAL = 0x22        # msg_type=2 (audio-only), flags=2 (final)
+_AUDIO_SERIALIZATION = 0x00         # serialization=0 (raw), compression=0 (none)
+_RESERVED = 0x00
 
-# Message type specific flags (4 bits)
-FLAG_NONE = 0b0000
-FLAG_POSITIVE_SEQUENCE = 0b0001
-FLAG_LAST_PACKET_NO_SEQ = 0b0010
-FLAG_LAST_PACKET_WITH_SEQ = 0b0011
-
-# Serialization (4 bits)
-SERIAL_NONE = 0b0000
-SERIAL_JSON = 0b0001
-
-# Compression (4 bits)
-COMPRESS_NONE = 0b0000
-COMPRESS_GZIP = 0b0001
+# Response message types (upper nibble of byte 1)
+_RESP_TYPE_ASR_RESULT = 0x9
+_RESP_TYPE_ERROR = 0xF
 
 
-def _build_header(msg_type: int, flags: int, serial: int, compress: int) -> bytes:
-    """Build a 4-byte SAUC protocol header."""
-    byte0 = (PROTOCOL_VERSION << 4) | HEADER_SIZE
-    byte1 = (msg_type << 4) | flags
-    byte2 = (serial << 4) | compress
-    byte3 = 0x00  # reserved
-    return struct.pack("BBBB", byte0, byte1, byte2, byte3)
-
-
-def _build_frame(header: bytes, payload: bytes) -> bytes:
-    """Build a complete SAUC binary frame: header + payload_size + payload."""
-    return header + struct.pack(">I", len(payload)) + payload
-
-
-def _parse_header(data: bytes) -> dict:
-    """Parse a 4-byte SAUC header into its fields."""
-    byte0, byte1, byte2, byte3 = struct.unpack("BBBB", data[:4])
-    return {
-        "version": (byte0 >> 4) & 0x0F,
-        "header_size": (byte0 & 0x0F) * 4,
-        "msg_type": (byte1 >> 4) & 0x0F,
-        "flags": byte1 & 0x0F,
-        "serialization": (byte2 >> 4) & 0x0F,
-        "compression": byte2 & 0x0F,
+def _build_config_frame(hotwords: list[str] | None = None) -> bytes:
+    """Build binary config frame. JSON payload, no compression."""
+    request: dict = {
+        "model_name": "bigmodel",
+        "enable_punc": True,
+        "enable_itn": True,
+        "enable_ddc": True,           # 语义顺滑: removes fillers/stutters
+        "enable_nonstream": True,     # 二遍识别: VAD + re-recognition
+        "result_type": "single",      # Incremental: only new/changed utterances
+        "show_utterances": True,
+        "enable_speaker_info": True,
+        "ssd_version": "200",         # Required for ASR 2.0 speaker diarization
+        "end_window_size": 800,       # VAD: 800ms silence → definite (faster speaker turns)
+        "force_to_speech_time": 1000, # Minimum 1s speech before attempting VAD stop
     }
+    if hotwords:
+        words_list = [{"word": w} for w in hotwords[:100]]
+        request["corpus"] = {
+            "context": json.dumps({"hotwords": words_list}),
+        }
+    payload = {
+        "user": {"uid": str(uuid.uuid4())},
+        "request": request,
+        "audio": {
+            "format": "pcm",
+            "rate": 16000,
+            "bits": 16,
+            "channel": 1,
+            "codec": "raw",
+        },
+    }
+    payload_bytes = json.dumps(payload).encode("utf-8")
+    header = struct.pack(
+        ">BBBB",
+        _PROTO_VERSION_HEADER_SIZE,
+        _CONFIG_MSG_TYPE_FLAGS,
+        _CONFIG_SERIALIZATION,  # JSON, no compression
+        _RESERVED,
+    )
+    size = struct.pack(">I", len(payload_bytes))
+    return header + size + payload_bytes
+
+
+def _build_audio_frame(audio_data: bytes, is_final: bool = False) -> bytes:
+    """Build binary audio frame. Raw PCM, no compression."""
+    msg_type_flags = _AUDIO_MSG_TYPE_FINAL if is_final else _AUDIO_MSG_TYPE
+    header = struct.pack(
+        ">BBBB",
+        _PROTO_VERSION_HEADER_SIZE,
+        msg_type_flags,
+        _AUDIO_SERIALIZATION,  # raw, no compression
+        _RESERVED,
+    )
+    size = struct.pack(">I", len(audio_data))
+    return header + size + audio_data
+
+
+def _parse_response_frame(data: bytes) -> dict | None:
+    """Parse binary response frame.
+
+    Server frame: [4B header][4B sequence][4B payload_size][JSON payload]
+    Total overhead: 12 bytes before JSON.
+    """
+    if len(data) < 12:
+        logger.warning("ASR response too short (%d bytes)", len(data))
+        return None
+
+    msg_type = (data[1] >> 4) & 0x0F
+    compress = data[2] & 0x0F
+
+    if msg_type == _RESP_TYPE_ERROR:
+        if len(data) > 12:
+            try:
+                error_text = data[12:].decode("utf-8")
+                logger.error("ASR server error: %s", error_text)
+            except UnicodeDecodeError:
+                logger.error("ASR server error (binary): %s", data[12:].hex())
+        return {"_type": "error"}
+
+    if msg_type == _RESP_TYPE_ASR_RESULT:
+        payload_size = struct.unpack(">I", data[8:12])[0]
+        json_bytes = data[12:12 + payload_size]
+        if compress == 1:
+            try:
+                json_bytes = gzip.decompress(json_bytes)
+            except Exception as e:
+                logger.warning("ASR gzip decompress failed: %s", e)
+                return None
+        if not json_bytes:
+            return None
+        try:
+            return json.loads(json_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            logger.warning("ASR failed to parse result: %s", e)
+            return None
+
+    return None
 
 
 @dataclass
@@ -85,19 +153,13 @@ class Utterance:
 @dataclass
 class MeetingSession:
     meeting_id: str
-    ws: websockets.WebSocketClientProtocol | None = None
+    ws: object | None = None  # websockets connection
     utterances: list[Utterance] = field(default_factory=list)
     sequence_counter: int = 0
     is_paused: bool = False
     is_ended: bool = False
-    _receive_task: asyncio.Task | None = None
-
-
-# Default ASR configuration
-ASR_ENDPOINT = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
-ASR_APP_ID = "5066898369"
-ASR_ACCESS_KEY = "hoSxELglG0VOYcnYxdVv9bKGEgtISscx"
-ASR_RESOURCE_ID = "volc.seedasr.sauc.duration"
+    session_start: float = 0.0
+    _seen_definite: set = field(default_factory=set)  # track seen definite texts to avoid duplicates
 
 
 class VolcengineASRClient:
@@ -107,7 +169,7 @@ class VolcengineASRClient:
         self._sessions: dict[str, MeetingSession] = {}
 
     async def start_session(self, meeting_id: str) -> MeetingSession:
-        """Open a WebSocket connection to Volcengine ASR and send initial config."""
+        """Open WebSocket to Volcengine ASR and send config frame."""
         connect_id = str(uuid.uuid4())
         headers = {
             "X-Api-App-Key": ASR_APP_ID,
@@ -116,108 +178,139 @@ class VolcengineASRClient:
             "X-Api-Connect-Id": connect_id,
         }
 
-        ws = await websockets.connect(ASR_ENDPOINT, additional_headers=headers)
-        session = MeetingSession(meeting_id=meeting_id, ws=ws)
+        ws = await websockets.connect(VOLCANO_WSS_URL, additional_headers=headers)
+        session = MeetingSession(
+            meeting_id=meeting_id, ws=ws,
+            session_start=time.monotonic(),
+        )
         self._sessions[meeting_id] = session
 
-        # Send full client request with ASR configuration
-        config = {
-            "user": {"uid": f"noteflow-{meeting_id[:8]}"},
-            "audio": {
-                "format": "pcm",
-                "rate": 16000,
-                "bits": 16,
-                "channel": 1,
-            },
-            "request": {
-                "model_name": "bigmodel",
-                "enable_punc": True,
-                "enable_itn": True,
-                "show_utterances": True,
-                "enable_nonstream": True,  # 二遍识别
-                "enable_speaker_info": True,
-                "ssd_version": "200",
-                "result_type": "single",  # incremental results
-            },
-        }
+        # Send config frame (JSON, no gzip)
+        config_frame = _build_config_frame()
+        await ws.send(config_frame)
 
-        payload = gzip.compress(json.dumps(config).encode("utf-8"))
-        header = _build_header(
-            MSG_FULL_CLIENT_REQUEST, FLAG_NONE, SERIAL_JSON, COMPRESS_GZIP
-        )
-        frame = _build_frame(header, payload)
-        await ws.send(frame)
-
-        # Read the initial response
+        # Read initial response
         resp = await ws.recv()
-        self._parse_response(resp)  # validate no error
+        if isinstance(resp, bytes):
+            parsed = _parse_response_frame(resp)
+            if parsed and parsed.get("_type") == "error":
+                raise ConnectionError("ASR connect failed: server error")
+        else:
+            data = json.loads(resp)
+            if data.get("resp", {}).get("code") not in (None, 1000):
+                raise ConnectionError(f"ASR connect failed: {data}")
 
         logger.info("ASR session started for meeting %s (connect_id=%s)", meeting_id, connect_id)
         return session
 
     async def send_audio(self, meeting_id: str, pcm_data: bytes) -> None:
-        """Send a PCM audio chunk to the ASR session."""
+        """Send raw PCM audio chunk to ASR. No compression."""
         session = self._sessions.get(meeting_id)
         if not session or not session.ws or session.is_paused or session.is_ended:
             return
-
-        payload = gzip.compress(pcm_data)
-        header = _build_header(
-            MSG_AUDIO_ONLY, FLAG_NONE, SERIAL_NONE, COMPRESS_GZIP
-        )
-        frame = _build_frame(header, payload)
+        frame = _build_audio_frame(pcm_data)
         await session.ws.send(frame)
 
-    async def receive_results(self, meeting_id: str) -> AsyncGenerator[Utterance, None]:
-        """Async generator that yields utterances from the ASR session."""
+    async def receive_results(self, meeting_id: str):
+        """Async generator yielding Utterance objects from ASR.
+
+        With result_type="single", each response contains only new/changed utterances.
+        definite=True → finalized sentence with speaker_id.
+        """
         session = self._sessions.get(meeting_id)
         if not session or not session.ws:
             return
 
+        logger.info("ASR receive_results started for meeting %s (session_start=%.0f)", meeting_id, session.session_start)
         try:
             async for message in session.ws:
                 if session.is_ended:
                     break
-                result = self._parse_response(message)
-                if result is None:
+
+                # Proactive reconnect every ~170s to avoid ASR session timeout
+                if time.monotonic() - session.session_start > 170:
+                    logger.info("ASR proactive reconnect (session age %.0fs)", time.monotonic() - session.session_start)
+                    break
+
+                if isinstance(message, bytes):
+                    parsed = _parse_response_frame(message)
+                else:
+                    try:
+                        parsed = json.loads(message)
+                    except json.JSONDecodeError:
+                        continue
+
+                if parsed is None or parsed.get("_type") == "error":
                     continue
 
-                utterances = result.get("result", {}).get("utterances", [])
-                full_text = result.get("result", {}).get("text", "")
+                utterances = parsed.get("result", {}).get("utterances", [])
+                if not utterances:
+                    continue
 
-                if utterances:
-                    for utt in utterances:
-                        session.sequence_counter += 1
-                        u = Utterance(
-                            speaker_id=utt.get("speaker_id", "speaker_0"),
-                            text=utt.get("text", ""),
-                            start_time_ms=utt.get("start_time", 0),
-                            end_time_ms=utt.get("end_time", 0),
-                            is_final=utt.get("definite", False),
-                            sequence=session.sequence_counter,
-                        )
-                        session.utterances.append(u)
-                        yield u
-                elif full_text:
-                    # Fallback: no utterance breakdown, use full text
+                # Process each utterance — only yield NEW definite or latest partial
+                partial_utt = None  # track the one non-definite (currently speaking)
+
+                for utt in utterances:
+                    text = utt.get("text", "")
+                    if not text.strip():
+                        continue
+
+                    definite = utt.get("definite", False)
+                    start_time = utt.get("start_time", 0)
+                    end_time = utt.get("end_time", 0)
+
+                    # Speaker ID is in additions dict; normalize to "speaker_N" format
+                    additions = utt.get("additions", {})
+                    raw_speaker = str(additions.get("speaker_id", "")) if additions else ""
+                    if raw_speaker and raw_speaker.isdigit():
+                        speaker_id = f"speaker_{raw_speaker}"
+                    elif raw_speaker and raw_speaker.startswith("speaker_"):
+                        speaker_id = raw_speaker
+                    else:
+                        speaker_id = "speaker_0"
+
+                    if definite:
+                        # Dedup key: strip punctuation for matching (二遍识别 changes punctuation)
+                        dedup_key = re.sub(r'[\s，。！？,.!?、；：""\'\'《》【】()（）]', '', text)
+                        if dedup_key in session._seen_definite:
+                            continue  # Already sent this definite utterance
+                        session._seen_definite.add(dedup_key)
+
+                    if not definite:
+                        partial_utt = (speaker_id, text, start_time, end_time)
+                        continue  # Don't yield partials yet, yield after loop
+
                     session.sequence_counter += 1
                     u = Utterance(
-                        speaker_id="speaker_0",
-                        text=full_text,
-                        start_time_ms=0,
-                        end_time_ms=0,
+                        speaker_id=speaker_id,
+                        text=text,
+                        start_time_ms=start_time,
+                        end_time_ms=end_time,
                         is_final=True,
                         sequence=session.sequence_counter,
                     )
                     session.utterances.append(u)
                     yield u
+
+                # After processing all utterances in this response, yield the partial if any
+                if partial_utt:
+                    sp_id, p_text, p_start, p_end = partial_utt
+                    yield Utterance(
+                        speaker_id=sp_id,
+                        text=p_text,
+                        start_time_ms=p_start,
+                        end_time_ms=p_end,
+                        is_final=False,
+                        sequence=0,  # partials don't get persisted
+                    )
+
         except websockets.ConnectionClosed:
             logger.info("ASR WebSocket closed for meeting %s", meeting_id)
         except Exception as e:
             logger.error("ASR receive error for meeting %s: %s", meeting_id, e)
 
     async def end_session(self, meeting_id: str) -> list[Utterance]:
-        """Send final audio frame and close the ASR session. Returns all utterances."""
+        """Send final empty frame and close. Returns all finalized utterances."""
         session = self._sessions.get(meeting_id)
         if not session or not session.ws:
             return session.utterances if session else []
@@ -225,34 +318,41 @@ class VolcengineASRClient:
         session.is_ended = True
 
         try:
-            # Send empty last packet (negative packet)
-            header = _build_header(
-                MSG_AUDIO_ONLY, FLAG_LAST_PACKET_NO_SEQ, SERIAL_NONE, COMPRESS_GZIP
-            )
-            empty_payload = gzip.compress(b"")
-            frame = _build_frame(header, empty_payload)
-            await session.ws.send(frame)
+            # Send empty final frame
+            await session.ws.send(_build_audio_frame(b"", is_final=True))
 
-            # Read remaining results until connection closes
+            # Read remaining results
             try:
                 async for message in session.ws:
-                    result = self._parse_response(message)
-                    if result and result.get("result", {}).get("utterances"):
-                        for utt in result["result"]["utterances"]:
-                            if utt.get("definite"):
+                    if isinstance(message, bytes):
+                        parsed = _parse_response_frame(message)
+                    else:
+                        try:
+                            parsed = json.loads(message)
+                        except json.JSONDecodeError:
+                            continue
+
+                    if parsed and parsed.get("result", {}).get("utterances"):
+                        for utt in parsed["result"]["utterances"]:
+                            if utt.get("definite") and utt.get("text", "").strip():
+                                additions = utt.get("additions", {})
+                                raw_sp = str(additions.get("speaker_id", "")) if additions else ""
+                                speaker_id = f"speaker_{raw_sp}" if raw_sp and raw_sp.isdigit() else (raw_sp if raw_sp.startswith("speaker_") else "speaker_0")
                                 session.sequence_counter += 1
                                 session.utterances.append(Utterance(
-                                    speaker_id=utt.get("speaker_id", "speaker_0"),
-                                    text=utt.get("text", ""),
+                                    speaker_id=speaker_id,
+                                    text=utt["text"],
                                     start_time_ms=utt.get("start_time", 0),
                                     end_time_ms=utt.get("end_time", 0),
                                     is_final=True,
                                     sequence=session.sequence_counter,
                                 ))
-                    # Check if this is the last response
-                    hdr = _parse_header(message[:4])
-                    if hdr["flags"] in (FLAG_LAST_PACKET_NO_SEQ, FLAG_LAST_PACKET_WITH_SEQ):
-                        break
+
+                    # Check for final response flag
+                    if isinstance(message, bytes) and len(message) >= 2:
+                        flags = message[1] & 0x0F
+                        if flags in (0x02, 0x03):  # last packet
+                            break
             except websockets.ConnectionClosed:
                 pass
 
@@ -262,20 +362,15 @@ class VolcengineASRClient:
 
         all_utterances = session.utterances
         self._sessions.pop(meeting_id, None)
-        logger.info(
-            "ASR session ended for meeting %s (%d utterances)",
-            meeting_id, len(all_utterances),
-        )
+        logger.info("ASR session ended for meeting %s (%d utterances)", meeting_id, len(all_utterances))
         return all_utterances
 
     def pause_session(self, meeting_id: str) -> None:
-        """Pause audio forwarding (keeps WebSocket open for speaker continuity)."""
         session = self._sessions.get(meeting_id)
         if session:
             session.is_paused = True
 
     def resume_session(self, meeting_id: str) -> None:
-        """Resume audio forwarding."""
         session = self._sessions.get(meeting_id)
         if session:
             session.is_paused = False
@@ -284,56 +379,16 @@ class VolcengineASRClient:
         return self._sessions.get(meeting_id)
 
     def get_live_transcript(self, meeting_id: str) -> str:
-        """Return the current transcript as formatted text for chat context."""
+        """Return current finalized transcript for chat context."""
         session = self._sessions.get(meeting_id)
         if not session:
             return ""
         lines = []
         for u in session.utterances:
-            if u.is_final and u.text.strip():
-                ts = f"{u.start_time_ms // 60000:02d}:{(u.start_time_ms // 1000) % 60:02d}"
-                lines.append(f"[{u.speaker_id}] ({ts}) {u.text}")
+            ts = f"{u.start_time_ms // 60000:02d}:{(u.start_time_ms // 1000) % 60:02d}"
+            lines.append(f"[{u.speaker_id}] ({ts}) {u.text}")
         return "\n".join(lines)
 
-    def _parse_response(self, data: bytes) -> dict | None:
-        """Parse a SAUC binary response into a JSON dict."""
-        if len(data) < 4:
-            return None
 
-        hdr = _parse_header(data)
-        offset = hdr["header_size"]
-
-        if hdr["msg_type"] == MSG_SERVER_ERROR:
-            # Error frame: error_code(4B) + error_size(4B) + error_message
-            if len(data) >= offset + 8:
-                error_code = struct.unpack(">I", data[offset : offset + 4])[0]
-                error_size = struct.unpack(">I", data[offset + 4 : offset + 8])[0]
-                error_msg = data[offset + 8 : offset + 8 + error_size].decode("utf-8", errors="replace")
-                logger.error("ASR error %d: %s", error_code, error_msg)
-            return None
-
-        if hdr["msg_type"] != MSG_FULL_SERVER_RESPONSE:
-            return None
-
-        # Skip sequence number if present
-        if hdr["flags"] in (FLAG_POSITIVE_SEQUENCE, FLAG_LAST_PACKET_WITH_SEQ):
-            offset += 4  # skip 4-byte sequence
-
-        if len(data) < offset + 4:
-            return None
-
-        payload_size = struct.unpack(">I", data[offset : offset + 4])[0]
-        offset += 4
-        payload = data[offset : offset + payload_size]
-
-        if hdr["compression"] == COMPRESS_GZIP:
-            payload = gzip.decompress(payload)
-
-        if hdr["serialization"] == SERIAL_JSON:
-            return json.loads(payload)
-
-        return None
-
-
-# Singleton instance
+# Singleton
 asr_client = VolcengineASRClient()

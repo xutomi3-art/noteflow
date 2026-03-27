@@ -37,10 +37,8 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
   const handleEnd = async () => {
     const result = await endMeeting();
     if (result?.source_id && activeMeeting) {
-      // Refresh sources to show the new meeting source
       await fetchSources(activeMeeting.notebook_id);
     }
-    // Small delay then close
     setTimeout(() => {
       reset();
       onClose();
@@ -50,33 +48,33 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
         <button
-          onClick={() => { reset(); onClose(); }}
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          onClick={onClose}  /* Just hide panel, recording continues in background */
+          className="flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-700 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-3.5 h-3.5" />
           Sources
         </button>
         <div className="flex items-center gap-1.5">
           {isRecording && !isPaused && (
-            <span className="relative flex h-2.5 w-2.5">
+            <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
             </span>
           )}
           {isPaused && (
-            <span className="text-xs text-yellow-600 font-medium">PAUSED</span>
+            <span className="text-[11px] text-amber-600 font-medium">PAUSED</span>
           )}
-          <span className="text-xs font-mono text-gray-500">
-            {isRecording ? "REC" : ""}
-          </span>
+          {isRecording && (
+            <span className="text-[11px] font-medium text-red-500">REC</span>
+          )}
         </div>
       </div>
 
       {/* Timer + Controls */}
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
-        <span className="text-lg font-mono font-medium text-gray-800">
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-50/50 border-b border-slate-100">
+        <span className="text-lg font-mono font-semibold text-slate-800">
           {formatDuration(duration)}
         </span>
         <MeetingControls
@@ -89,7 +87,7 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
 
       {/* Error */}
       {error && (
-        <div className="px-3 py-2 bg-red-50 text-red-600 text-xs">
+        <div className="px-3 py-2 bg-red-50 text-red-600 text-[11px]">
           {error}
         </div>
       )}
@@ -102,7 +100,7 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
       />
 
       {/* Footer hint */}
-      <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-400 text-center">
+      <div className="px-3 py-2 border-t border-slate-100 text-[10px] text-slate-400 text-center">
         <Mic className="w-3 h-3 inline mr-1" />
         Click speaker names to rename
       </div>

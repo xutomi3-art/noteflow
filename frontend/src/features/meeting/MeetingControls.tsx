@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Pause, Play, Square } from "lucide-react";
 
 interface MeetingControlsProps {
   isPaused: boolean;
@@ -16,29 +15,24 @@ export function MeetingControls({ isPaused, onPause, onResume, onEnd }: MeetingC
       {/* Pause / Resume */}
       <button
         onClick={isPaused ? onResume : onPause}
-        className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-        title={isPaused ? "Resume" : "Pause"}
+        className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors bg-[#f0f5e0] text-[#5b8c15] hover:bg-[#e4edcf]"
       >
-        {isPaused ? (
-          <Play className="w-5 h-5 text-green-600" />
-        ) : (
-          <Pause className="w-5 h-5 text-yellow-600" />
-        )}
+        {isPaused ? "Resume" : "Pause"}
       </button>
 
       {/* End */}
       {confirmEnd ? (
-        <div className="flex items-center gap-1 text-sm">
-          <span className="text-gray-500">End?</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-slate-500">End meeting?</span>
           <button
             onClick={() => { onEnd(); setConfirmEnd(false); }}
-            className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+            className="px-2 py-1 rounded text-[11px] font-medium bg-red-500 text-white hover:bg-red-600"
           >
             Yes
           </button>
           <button
             onClick={() => setConfirmEnd(false)}
-            className="px-2 py-1 bg-gray-200 rounded text-xs hover:bg-gray-300"
+            className="px-2 py-1 rounded text-[11px] font-medium bg-slate-100 text-slate-600 hover:bg-slate-200"
           >
             No
           </button>
@@ -46,10 +40,9 @@ export function MeetingControls({ isPaused, onPause, onResume, onEnd }: MeetingC
       ) : (
         <button
           onClick={() => setConfirmEnd(true)}
-          className="p-2 rounded-lg hover:bg-red-50 transition-colors"
-          title="End meeting"
+          className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors bg-red-50 text-red-600 hover:bg-red-100"
         >
-          <Square className="w-5 h-5 text-red-500" />
+          End
         </button>
       )}
     </div>

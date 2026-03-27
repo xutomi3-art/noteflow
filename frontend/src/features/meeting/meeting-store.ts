@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { api } from "../../services/api";
 
+function getAccessToken(): string {
+  // Try api instance first, fall back to localStorage
+  return api.getToken() || localStorage.getItem("access_token") || "";
+}
+
 export interface Utterance {
   speaker_id: string;
   text: string;
@@ -39,6 +44,7 @@ interface MeetingState {
   _durationInterval: ReturnType<typeof setInterval> | null;
 
   startMeeting: (notebookId: string) => Promise<void>;
+  resumeExistingMeeting: (notebookId: string, meeting: Meeting) => Promise<void>;
   pauseMeeting: () => void;
   resumeMeeting: () => void;
   endMeeting: () => Promise<{ source_id: string } | null>;
@@ -69,7 +75,7 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(api.getToken() ? { Authorization: `Bearer ${api.getToken()}` } : {}),
+          Authorization: `Bearer ${getAccessToken()}`,
         },
       });
       if (!res.ok) {
@@ -78,38 +84,57 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
       }
       const meeting: Meeting = await res.json();
 
-      // 2. Request mic permission
+      // 2. Request mic — echoCancellation OFF so external audio (TV/speakers) is captured
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          channelCount: 1,
           sampleRate: 16000,
-          echoCancellation: true,
+          channelCount: 1,
+          echoCancellation: false,
           noiseSuppression: true,
         },
       });
 
-      // 3. Set up AudioWorklet
-      const audioCtx = new AudioContext({ sampleRate: 48000 });
-      await audioCtx.audioWorklet.addModule("/pcm-capture-processor.js");
+      // 3. AudioContext at 16kHz — no manual downsampling needed
+      const audioCtx = new AudioContext({ sampleRate: 16000 });
       const source = audioCtx.createMediaStreamSource(stream);
-      const worklet = new AudioWorkletNode(audioCtx, "pcm-capture-processor");
-      source.connect(worklet);
-      worklet.connect(audioCtx.destination); // needed to keep processing
+      let worklet: AudioWorkletNode | null = null;
 
-      // 4. Open WebSocket
+      // 4. Open WebSocket first (audio setup sends data to it)
       const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const token = api.getToken();
+      const token = getAccessToken();
       const wsUrl = `${wsProtocol}//${window.location.host}/api/notebooks/${notebookId}/meetings/${meeting.id}/audio?token=${token}`;
       const ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
 
-      ws.onopen = () => {
-        // 5. Start sending PCM chunks from worklet
-        worklet.port.onmessage = (e: MessageEvent) => {
-          if (ws.readyState === WebSocket.OPEN && !get().isPaused) {
-            ws.send(e.data);
-          }
-        };
+      // 5. Audio processing — prefer AudioWorklet, fallback to ScriptProcessor
+      const sendAudio = (data: ArrayBuffer) => {
+        if (ws.readyState === WebSocket.OPEN && !get().isPaused) {
+          ws.send(data);
+        }
+      };
+
+      ws.onopen = async () => {
+        try {
+          await audioCtx.audioWorklet.addModule("/pcm-capture-processor.js");
+          worklet = new AudioWorkletNode(audioCtx, "pcm-capture-processor");
+          worklet.port.onmessage = (e: MessageEvent) => sendAudio(e.data);
+          source.connect(worklet);
+          worklet.connect(audioCtx.destination);
+        } catch {
+          // Fallback: ScriptProcessor (deprecated but universal)
+          const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+          processor.onaudioprocess = (ev: AudioProcessingEvent) => {
+            const float32 = ev.inputBuffer.getChannelData(0);
+            const int16 = new Int16Array(float32.length);
+            for (let i = 0; i < float32.length; i++) {
+              const s = Math.max(-1, Math.min(1, float32[i]));
+              int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+            }
+            sendAudio(int16.buffer);
+          };
+          source.connect(processor);
+          processor.connect(audioCtx.destination);
+        }
       };
 
       ws.onmessage = (e: MessageEvent) => {
@@ -125,21 +150,17 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
               sequence: msg.sequence,
             };
             set((s) => {
-              // Replace interim utterances from same speaker, append final
-              if (utt.is_final) {
-                return { utterances: [...s.utterances, utt] };
-              }
-              // Update last non-final from same speaker
               const updated = [...s.utterances];
-              const lastIdx = updated.findLastIndex(
-                (u) => u.speaker_id === utt.speaker_id && !u.is_final
-              );
-              if (lastIdx >= 0) {
-                updated[lastIdx] = utt;
-              } else {
-                updated.push(utt);
+
+              if (utt.is_final) {
+                // Remove any partial (non-final) entries — they're replaced by this final
+                const cleaned = updated.filter((u) => u.is_final);
+                return { utterances: [...cleaned, utt] };
               }
-              return { utterances: updated };
+
+              // Non-final (partial): replace existing partial or append as the one active partial
+              const cleaned = updated.filter((u) => u.is_final);
+              return { utterances: [...cleaned, utt] };
             });
 
             // Track new speakers
@@ -183,6 +204,104 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
       });
     } catch (e: any) {
       set({ error: e.message || "Failed to start meeting" });
+      throw e;
+    }
+  },
+
+  resumeExistingMeeting: async (notebookId: string, meeting: Meeting) => {
+    try {
+      // 1. Fetch existing utterances
+      const uttRes = await fetch(`${BASE_URL}/api/notebooks/${notebookId}/meetings/${meeting.id}/utterances`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+      });
+      const existingUtterances: Utterance[] = uttRes.ok ? await uttRes.json() : [];
+
+      // 2. Request mic
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: false, noiseSuppression: true },
+      });
+
+      // 3. AudioContext at 16kHz
+      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      const source = audioCtx.createMediaStreamSource(stream);
+
+      // 4. WebSocket
+      const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const token = getAccessToken();
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/notebooks/${notebookId}/meetings/${meeting.id}/audio?token=${token}`;
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
+
+      const sendAudio = (data: ArrayBuffer) => {
+        if (ws.readyState === WebSocket.OPEN && !get().isPaused) ws.send(data);
+      };
+
+      ws.onopen = async () => {
+        try {
+          await audioCtx.audioWorklet.addModule("/pcm-capture-processor.js");
+          const worklet = new AudioWorkletNode(audioCtx, "pcm-capture-processor");
+          worklet.port.onmessage = (e: MessageEvent) => sendAudio(e.data);
+          source.connect(worklet);
+          worklet.connect(audioCtx.destination);
+        } catch {
+          const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+          processor.onaudioprocess = (ev: AudioProcessingEvent) => {
+            const float32 = ev.inputBuffer.getChannelData(0);
+            const int16 = new Int16Array(float32.length);
+            for (let i = 0; i < float32.length; i++) {
+              const s = Math.max(-1, Math.min(1, float32[i]));
+              int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+            }
+            sendAudio(int16.buffer);
+          };
+          source.connect(processor);
+          processor.connect(audioCtx.destination);
+        }
+      };
+
+      ws.onmessage = (e: MessageEvent) => {
+        if (typeof e.data === "string") {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "utterance") {
+            const utt: Utterance = {
+              speaker_id: msg.speaker_id, text: msg.text,
+              start_time_ms: msg.start_time_ms, end_time_ms: msg.end_time_ms,
+              is_final: msg.is_final, sequence: msg.sequence,
+            };
+            set((s) => {
+              const updated = s.utterances.filter((u) => u.is_final);
+              if (utt.is_final) return { utterances: [...updated, utt] };
+              return { utterances: [...updated, utt] };
+            });
+            if (!get().speakerMap[msg.speaker_id]) {
+              set((s) => ({ speakerMap: { ...s.speakerMap, [msg.speaker_id]: msg.speaker_id.replace("_", " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) } }));
+            }
+          }
+        }
+      };
+      ws.onerror = () => set({ error: "WebSocket connection error" });
+      ws.onclose = () => set({ isRecording: false });
+
+      // Calculate elapsed duration
+      const startedAt = new Date(meeting.started_at).getTime();
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+
+      const interval = setInterval(() => {
+        if (!get().isPaused) set((s) => ({ duration: s.duration + 1 }));
+      }, 1000);
+
+      set({
+        activeMeeting: meeting,
+        isRecording: true,
+        isPaused: false,
+        utterances: existingUtterances,
+        speakerMap: meeting.speaker_map || {},
+        duration: elapsed,
+        error: null,
+        _ws: ws, _audioContext: audioCtx, _mediaStream: stream, _workletNode: null, _durationInterval: interval,
+      });
+    } catch (e: any) {
+      set({ error: e.message || "Failed to resume meeting" });
       throw e;
     }
   },
@@ -233,7 +352,7 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
         `${BASE_URL}/api/notebooks/${activeMeeting.notebook_id}/meetings/${activeMeeting.id}/end`,
         {
           method: "POST",
-          headers: api.getToken() ? { Authorization: `Bearer ${api.getToken()}` } : {},
+          headers: { Authorization: `Bearer ${getAccessToken()}` },
         }
       );
       if (res.ok) {
@@ -271,7 +390,7 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            ...(api.getToken() ? { Authorization: `Bearer ${api.getToken()}` } : {}),
+            Authorization: `Bearer ${getAccessToken()}`,
           },
           body: JSON.stringify({ speaker_map: { [speakerId]: name } }),
         }

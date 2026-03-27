@@ -106,13 +106,38 @@ async def get_utterances(
     return list(result.scalars().all())
 
 
-def get_live_transcript_for_notebook(notebook_id: str) -> str:
-    """Get live transcript from any active meeting in a notebook (for chat context)."""
-    for session in asr_client._sessions.values():
-        if not session.is_ended:
-            # Check if this session belongs to the notebook
-            # (meeting_id is stored, we need to look it up)
-            return asr_client.get_live_transcript(session.meeting_id)
+async def get_live_transcript_for_notebook_async(notebook_id: str) -> str:
+    """Get live meeting transcript for chat context.
+    Always uses speaker_map to replace speaker IDs with names."""
+    try:
+        async with async_session() as db:
+            meeting = await get_active_meeting(db, uuid.UUID(notebook_id))
+            if not meeting:
+                return ""
+
+            speaker_map = meeting.speaker_map or {}
+
+            # Try in-memory ASR session first (most up-to-date)
+            session = asr_client.get_session(str(meeting.id))
+            if session and not session.is_ended and session.utterances:
+                lines = []
+                for u in session.utterances:
+                    name = speaker_map.get(u.speaker_id, u.speaker_id)
+                    ts = f"{u.start_time_ms // 60000:02d}:{(u.start_time_ms // 1000) % 60:02d}"
+                    lines.append(f"[{name}] ({ts}) {u.text}")
+                return "\n".join(lines)
+
+            # Fallback: read from DB (e.g. after page refresh, ASR session closed)
+            utterances = await get_utterances(db, meeting.id)
+            if utterances:
+                lines = []
+                for u in utterances:
+                    name = speaker_map.get(u.speaker_id, u.speaker_id)
+                    ts = f"{u.start_time_ms // 60000:02d}:{(u.start_time_ms // 1000) % 60:02d}"
+                    lines.append(f"[{name}] ({ts}) {u.text}")
+                return "\n".join(lines)
+    except Exception:
+        pass
     return ""
 
 
@@ -186,7 +211,7 @@ async def end_meeting(
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_md)
 
-    # 10. Create Source record
+    # 10. Create Source record — commit FIRST to satisfy FK constraint
     source = Source(
         id=source_id,
         notebook_id=meeting.notebook_id,
@@ -198,6 +223,7 @@ async def end_meeting(
         status="uploading",
     )
     db.add(source)
+    await db.flush()  # INSERT source before updating meeting FK
 
     # 11. Update meeting record
     meeting.status = "ended"
