@@ -121,6 +121,7 @@ async def upload_source(
         file_size=source.file_size,
         status=source.status,
         error_message=source.error_message,
+        progress=source.progress,
         created_at=source.created_at,
     )
 
@@ -203,6 +204,7 @@ async def add_url_source(
         file_size=source.file_size,
         status=source.status,
         error_message=source.error_message,
+        progress=source.progress,
         created_at=source.created_at,
     )
 
@@ -226,6 +228,7 @@ async def list_sources(
             file_size=s.file_size,
             status=s.status,
             error_message=s.error_message,
+            progress=s.progress,
             created_at=s.created_at,
         )
         for s in sources
