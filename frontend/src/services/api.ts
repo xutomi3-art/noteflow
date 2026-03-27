@@ -189,7 +189,7 @@ class ApiClient {
 
   subscribeToSourceStatus(
     notebookId: string,
-    onEvent: (event: { type: string; source_id: string; status: string; error?: string }) => void,
+    onEvent: (event: { type: string; source_id: string; status: string; error?: string; progress?: number }) => void,
   ): () => void {
     const token = this.accessToken;
     const url = `${API_BASE}/notebooks/${notebookId}/sources/status`;
