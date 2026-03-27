@@ -312,7 +312,7 @@ async def _notify(
     notebook_id: str, source_id: str, status: str,
     error: str | None = None, progress: float | None = None,
 ) -> None:
-    """Push status update via SSE and persist progress to DB."""
+    """Push status update via SSE."""
     progress_pct = round(progress * 100, 1) if progress is not None else None
     payload: dict = {
         "type": "source_status",
@@ -322,16 +322,6 @@ async def _notify(
     }
     if progress_pct is not None:
         payload["progress"] = progress_pct
-        # Persist progress to DB so it survives page refreshes
-        try:
-            async with async_session() as db:
-                sid = uuid.UUID(source_id)
-                source = await db.get(Source, sid)
-                if source:
-                    source.progress = progress_pct
-                    await db.commit()
-        except Exception:
-            pass  # SSE is best-effort for progress persistence
     await event_bus.publish(notebook_id, payload)
 
 
@@ -375,7 +365,7 @@ async def process_document(
     async with async_session() as db:
         try:
             # Step 1: Update status to parsing
-            await update_source_status(db, sid, "parsing")
+            await update_source_status(db, sid, "parsing", progress=5.0)
             await _notify(notebook_id, source_id, "parsing", progress=0.05)
 
             # Step 2: Excel/CSV — upload directly to RAGFlow (native Excel support)
@@ -454,7 +444,7 @@ async def process_document(
                 content = None
 
             # Step 4: Upload to RAGFlow
-            await update_source_status(db, sid, "vectorizing")
+            await update_source_status(db, sid, "vectorizing", progress=45.0)
             await _notify(notebook_id, source_id, "vectorizing", progress=0.45)
 
             dataset_id = await _ensure_dataset(db, nid)

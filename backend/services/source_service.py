@@ -54,11 +54,14 @@ async def update_source_status(
     ragflow_doc_id: str | None = None,
     duckdb_path: str | None = None,
     retry_count: int | None = None,
+    progress: float | None = None,
 ) -> Source | None:
     source = await get_source(db, source_id)
     if source is None:
         return None
     source.status = status
+    if progress is not None:
+        source.progress = progress
     if error_message is not None:
         source.error_message = error_message
     if ragflow_dataset_id is not None:
