@@ -149,6 +149,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
                   ...s,
                   status: event.status as Source["status"],
                   error_message: event.error || null,
+                  progress: event.progress ?? s.progress,
                 }
               : s,
           );

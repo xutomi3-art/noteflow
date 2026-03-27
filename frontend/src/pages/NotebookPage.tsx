@@ -84,10 +84,13 @@ function isProcessingStatus(status: Source["status"]): boolean {
   return status === "uploading" || status === "parsing" || status === "vectorizing";
 }
 
-function statusLabel(status: Source["status"]): string {
-  if (status === "uploading") return "Processing...";
-  if (status === "parsing") return "Processing...";
-  if (status === "vectorizing") return "Processing...";
+function statusLabel(status: Source["status"], progress?: number | null): string {
+  if (status === "uploading") return "Uploading...";
+  if (status === "parsing") return "Parsing...";
+  if (status === "vectorizing") {
+    if (progress != null && progress > 0) return `Processing ${progress.toFixed(1)}%`;
+    return "Processing...";
+  }
   if (status === "failed") return "Failed";
   return "";
 }
@@ -295,7 +298,22 @@ export default function NotebookPage() {
   const [rightWidth, setRightWidth] = useState(340);
   const [isDragging, setIsDragging] = useState(false);
   const [showMeetingPanel, setShowMeetingPanel] = useState(false);
+  const [pendingResumeMeeting, setPendingResumeMeeting] = useState<any>(null);
   const meetingActive = useMeetingStore((s) => s.activeMeeting !== null);
+
+  // Check for active meeting on page load (e.g. after refresh)
+  useEffect(() => {
+    if (!id || meetingActive) return;
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+    fetch(`/api/notebooks/${id}/meetings/active`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.ok ? r.json() : null).then(meeting => {
+      if (meeting && meeting.status === "recording") {
+        setPendingResumeMeeting(meeting);
+      }
+    }).catch(() => {});
+  }, [id, meetingActive]);
 
   // Auto-widen source panel during meeting
   const effectiveLeftWidth = showMeetingPanel ? Math.max(leftWidth, 420) : leftWidth;
@@ -397,7 +415,7 @@ export default function NotebookPage() {
   const selectedCount = selectedIds.size;
   const isAllSelected = readySources.length > 0 && readySources.every((s) => selectedIds.has(s.id));
   const hasProcessingSelected = sources.some((s) => selectedIds.has(s.id) && isProcessingStatus(s.status));
-  const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && readySources.length > 0 && selectedIds.size > 0;
+  const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && (readySources.length > 0 && selectedIds.size > 0 || meetingActive);
 
   // Data loading — verify access FIRST, then load data
   useEffect(() => {
@@ -1467,8 +1485,59 @@ export default function NotebookPage() {
               </button>
             )}
 
-            {/* New Meeting button */}
-            {notebook?.user_role !== "viewer" && !showMeetingPanel && (
+            {/* Meeting: recording banner (when panel is hidden but meeting active) */}
+            {!showMeetingPanel && meetingActive && (
+              <button
+                onClick={() => setShowMeetingPanel(true)}
+                className="w-full flex items-center justify-between px-3 py-2.5 mb-4 rounded-xl bg-red-50 border border-red-200 transition-colors hover:bg-red-100"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                  </span>
+                  <span className="text-[12px] font-medium text-red-600">Meeting recording...</span>
+                </div>
+                <span className="text-[11px] text-red-400">View →</span>
+              </button>
+            )}
+
+            {/* Resume interrupted meeting banner */}
+            {pendingResumeMeeting && !meetingActive && (
+              <div className="w-full mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-[12px] font-medium text-amber-700 mb-2">Meeting was interrupted. Resume recording?</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        setShowMeetingPanel(true);
+                        await useMeetingStore.getState().resumeExistingMeeting(id!, pendingResumeMeeting);
+                        setPendingResumeMeeting(null);
+                      } catch { setShowMeetingPanel(false); }
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#5b8c15] text-white hover:bg-[#4a7512]"
+                  >
+                    Resume
+                  </button>
+                  <button
+                    onClick={async () => {
+                      // End the meeting
+                      const token = localStorage.getItem("access_token");
+                      await fetch(`/api/notebooks/${id}/meetings/${pendingResumeMeeting.id}/end`, {
+                        method: "POST", headers: { Authorization: `Bearer ${token}` },
+                      }).catch(() => {});
+                      setPendingResumeMeeting(null);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  >
+                    End meeting
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* New Meeting button (only when no meeting active) */}
+            {notebook?.user_role !== "viewer" && !meetingActive && !pendingResumeMeeting && (
               <button
                 onClick={async () => {
                   if (!id) return;
@@ -1479,7 +1548,7 @@ export default function NotebookPage() {
                     setShowMeetingPanel(false);
                   }
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 mb-4 rounded-xl border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors text-[13px] font-medium"
+                className="w-full flex items-center justify-center gap-2 py-2.5 mb-4 rounded-xl border border-[#5b8c15]/30 text-[#5b8c15] hover:bg-[#5b8c15]/5 transition-colors text-[13px] font-medium"
               >
                 <Mic className="w-4 h-4" />
                 New Meeting
@@ -1502,7 +1571,7 @@ export default function NotebookPage() {
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
                 const linkedSource = upload.sourceId ? sources.find(s => s.id === upload.sourceId) : null;
-                const processingLabel = linkedSource ? statusLabel(linkedSource.status) : null;
+                const processingLabel = linkedSource ? statusLabel(linkedSource.status, linkedSource.progress) : null;
                 return (
                 <div key={`pending-${upload.id}`} className="relative overflow-hidden rounded-xl bg-slate-50">
                   {/* Progress bar fill */}
@@ -1596,7 +1665,7 @@ export default function NotebookPage() {
                     </p>
                     {isProcessingStatus(source.status) && (
                       <span className="text-[10px] text-amber-500 font-medium">
-                        {statusLabel(source.status)}
+                        {statusLabel(source.status, source.progress)}
                       </span>
                     )}
                     {source.status === "failed" && (
@@ -1982,7 +2051,7 @@ export default function NotebookPage() {
             <div className="max-w-3xl mx-auto">
               <div
                 className={`relative bg-white border rounded-2xl shadow-sm flex items-center px-2 py-2 transition-all ${
-                  hasProcessingSelected || readySources.length === 0
+                  hasProcessingSelected || (readySources.length === 0 && !meetingActive)
                     ? "border-slate-100 bg-slate-50/50"
                     : "border-slate-200 focus-within:ring-2 focus-within:ring-[#5b8c15]/20 focus-within:border-[#5b8c15]"
                 }`}
@@ -1990,17 +2059,19 @@ export default function NotebookPage() {
                 <input
                   type="text"
                   placeholder={
-                    readySources.length === 0
-                      ? "Upload sources to start chatting..."
-                      : hasProcessingSelected
-                        ? "Waiting for sources to finish processing..."
-                        : "Start typing..."
+                    meetingActive
+                      ? "Ask about the meeting..."
+                      : readySources.length === 0
+                        ? "Upload sources to start chatting..."
+                        : hasProcessingSelected
+                          ? "Waiting for sources to finish processing..."
+                          : "Start typing..."
                   }
                   className="flex-1 bg-transparent border-none outline-none px-4 text-[14px] text-slate-700 disabled:cursor-not-allowed"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={isStreaming || hasProcessingSelected || readySources.length === 0}
+                  disabled={isStreaming || hasProcessingSelected || (readySources.length === 0 && !meetingActive)}
                 />
                 <div className="flex items-center gap-2 pr-1">
                   <button

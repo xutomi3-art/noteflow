@@ -35,6 +35,7 @@ export interface Source {
   file_size: number | null;
   status: "uploading" | "parsing" | "vectorizing" | "ready" | "failed";
   error_message: string | null;
+  progress: number | null;
   created_at: string;
 }
 

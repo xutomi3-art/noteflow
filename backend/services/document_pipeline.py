@@ -308,18 +308,19 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
 
 
 async def _notify(
-    notebook_id: str, source_id: str, status: str, error: str | None = None
+    notebook_id: str, source_id: str, status: str,
+    error: str | None = None, progress: float | None = None,
 ) -> None:
     """Push status update via SSE."""
-    await event_bus.publish(
-        notebook_id,
-        {
-            "type": "source_status",
-            "source_id": source_id,
-            "status": status,
-            "error": error,
-        },
-    )
+    payload: dict = {
+        "type": "source_status",
+        "source_id": source_id,
+        "status": status,
+        "error": error,
+    }
+    if progress is not None:
+        payload["progress"] = round(progress * 100, 1)  # 0-100 with 1 decimal
+    await event_bus.publish(notebook_id, payload)
 
 
 async def _ensure_dataset(
@@ -454,7 +455,7 @@ async def process_document(
 
             # Upload to RAGFlow
             if content is not None:
-                # Upload parsed content as .txt (book chunk method requires txt/pdf/doc/docx)
+                # Upload parsed content as .md
                 md_filename = os.path.splitext(filename)[0] + ".md"
                 doc_id = await ragflow_client.upload_document(
                     dataset_id, md_filename, content.encode("utf-8")
@@ -492,6 +493,7 @@ async def process_document(
                 # Poll for completion (initial wait up to 15 minutes)
                 completed = False
                 failed_status = None
+                last_progress = -1.0
                 for _ in range(180):
                     await asyncio.sleep(5)
                     doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
@@ -499,6 +501,11 @@ async def process_document(
                         continue
                     run = doc_status.get("run", "UNSTART")
                     chunks = doc_status.get("chunk_count", 0)
+                    progress = doc_status.get("progress", 0)
+                    # Send progress update if changed (avoid spamming)
+                    if isinstance(progress, (int, float)) and progress != last_progress:
+                        last_progress = progress
+                        await _notify(notebook_id, source_id, "vectorizing", progress=progress)
                     if run in ("DONE", "SUCCEEDED") or chunks > 0:
                         logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
                         completed = True
