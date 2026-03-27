@@ -86,8 +86,7 @@ function isProcessingStatus(status: Source["status"]): boolean {
 
 function statusLabel(status: Source["status"], progress?: number | null): string {
   if (status === "uploading") return "Uploading...";
-  if (status === "parsing") return "Parsing...";
-  if (status === "vectorizing") {
+  if (status === "parsing" || status === "vectorizing") {
     if (progress != null && progress > 0) return `Processing ${progress.toFixed(1)}%`;
     return "Processing...";
   }
