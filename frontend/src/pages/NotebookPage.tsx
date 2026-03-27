@@ -1193,18 +1193,13 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
-      // For PDF files, open PDF modal viewer; for others, open source content in left panel
-      const source = sources.find((s) => s.id === sourceId);
-      const isPdf = source?.file_type === "pdf" || citation.file_type === "pdf" || citation.filename?.toLowerCase().endsWith(".pdf");
-      if (isPdf && id) {
-        const page = citation.location?.page ?? 1;
-        openPdf(sourceId, source?.filename || citation.filename || "Document", page);
-      } else if (id) {
+      // Open parsed markdown content in left panel with excerpt highlighted
+      if (id) {
         setActiveSource(id, sourceId, citation.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
-    [messages, id, sources, setActiveSource, openPdf],
+    [messages, id, sources, setActiveSource],
   );
 
   if (notFound) {
