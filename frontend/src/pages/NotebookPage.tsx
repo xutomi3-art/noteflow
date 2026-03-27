@@ -603,9 +603,9 @@ export default function NotebookPage() {
 
   // Scroll to and highlight excerpt in source content viewer
   useEffect(() => {
-    if (!activeSourceContent || !highlightExcerpt || !sourceContentRef.current) return;
+    if (!activeSourceContent || !highlightExcerpt) return;
 
-    // Wait for DOM to render (300ms ensures MarkdownContent has mounted)
+    // Wait for DOM to render (ref may not be attached yet when content first loads)
     const timer = setTimeout(() => {
       const container = sourceContentRef.current;
       if (!container) return;
