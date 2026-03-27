@@ -364,7 +364,7 @@ async def process_document(
         try:
             # Step 1: Update status to parsing
             await update_source_status(db, sid, "parsing")
-            await _notify(notebook_id, source_id, "parsing")
+            await _notify(notebook_id, source_id, "parsing", progress=0.05)
 
             # Step 2: Excel/CSV — upload directly to RAGFlow (native Excel support)
             if file_type in ("xlsx", "xls", "csv"):
@@ -415,8 +415,10 @@ async def process_document(
 
                 # Use MinerU for high-quality document parsing
                 logger.info("Parsing %s via MinerU...", filename)
+                await _notify(notebook_id, source_id, "parsing", progress=0.10)
                 parse_name = os.path.splitext(filename)[0] + ".pdf" if parse_path != file_path else filename
                 parsed = await mineru_client.parse_document(parse_path, parse_name)
+                await _notify(notebook_id, source_id, "parsing", progress=0.30)
                 if parsed:
                     # Inject PDF page markers into markdown for accurate citation page numbers
                     content = _inject_pdf_page_markers(parsed, parse_path)
@@ -428,6 +430,7 @@ async def process_document(
                         content += "\n\n" + "\n\n".join(image_texts)
                         logger.info("Added %d image descriptions to %s", len(image_texts), filename)
                     _save_parsed_content(file_path, content)
+                    await _notify(notebook_id, source_id, "parsing", progress=0.40)
                     logger.info("MinerU parsed %s: %d chars", filename, len(content))
                 else:
                     # MinerU failed — fall back to RAGFlow built-in parser
@@ -440,7 +443,7 @@ async def process_document(
 
             # Step 4: Upload to RAGFlow
             await update_source_status(db, sid, "vectorizing")
-            await _notify(notebook_id, source_id, "vectorizing")
+            await _notify(notebook_id, source_id, "vectorizing", progress=0.45)
 
             dataset_id = await _ensure_dataset(db, nid)
             if dataset_id is None:
@@ -503,9 +506,11 @@ async def process_document(
                     chunks = doc_status.get("chunk_count", 0)
                     progress = doc_status.get("progress", 0)
                     # Send progress update if changed (avoid spamming)
+                    # Scale RAGFlow 0-1 to overall 0.45-1.0 range
                     if isinstance(progress, (int, float)) and progress != last_progress:
                         last_progress = progress
-                        await _notify(notebook_id, source_id, "vectorizing", progress=progress)
+                        overall = 0.45 + progress * 0.55
+                        await _notify(notebook_id, source_id, "vectorizing", progress=overall)
                     if run in ("DONE", "SUCCEEDED") or chunks > 0:
                         logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
                         completed = True
