@@ -655,13 +655,16 @@ export default function NotebookPage() {
       const keyExcerpt = toKey(excerpt);
 
       // Try progressively shorter substrings for matching
+      // Use END of excerpt (closest to citation marker) for shorter matches — more specific
       let matchIdx = -1;
-      const tryLengths = [keyExcerpt.length, 60, 40, 20, 12];
+      const tryLengths = [keyExcerpt.length, 100, 70, 50];
       for (const len of tryLengths) {
         if (len >= keyExcerpt.length) {
           matchIdx = keyFull.indexOf(keyExcerpt);
         } else if (keyExcerpt.length > len) {
-          matchIdx = keyFull.indexOf(keyExcerpt.slice(0, len));
+          // Use the LAST N chars (tail) — these are closest to the citation and most specific
+          const tail = keyExcerpt.slice(-len);
+          matchIdx = keyFull.indexOf(tail);
         }
         if (matchIdx !== -1) break;
       }
@@ -1196,22 +1199,24 @@ export default function NotebookPage() {
       // Extract the text immediately before the citation badge in the AI response
       // This is the actual sentence being cited, not the chunk's first 300 chars
       let highlightText: string | null = null;
-      const parentEl = badge.parentElement;
+      const parentEl = badge.closest("li") || badge.closest("p") || badge.parentElement;
       if (parentEl) {
-        // Walk backwards from badge to collect preceding text in the same paragraph/list-item
-        let text = "";
-        let node: Node | null = badge.previousSibling;
-        while (node) {
-          const t = node.textContent || "";
-          text = t + text;
-          if (text.length >= 60) break;
-          node = node.previousSibling;
+        // Get the full text of the enclosing paragraph/list-item up to the badge
+        const fullText = parentEl.textContent || "";
+        // Find badge's text position by walking nodes
+        let beforeBadge = "";
+        const walk = document.createTreeWalker(parentEl, NodeFilter.SHOW_TEXT);
+        let tNode: Text | null;
+        while ((tNode = walk.nextNode() as Text | null)) {
+          // Stop if this text node is after the badge
+          if (badge.compareDocumentPosition(tNode) & Node.DOCUMENT_POSITION_PRECEDING) break;
+          beforeBadge += tNode.textContent || "";
         }
         // Clean up: remove other citation markers like [1][2], trim
-        text = text.replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
+        let text = beforeBadge.replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
         if (text.length >= 15) {
-          // Take last 80 chars as the cited sentence fragment
-          highlightText = text.length > 80 ? text.slice(-80) : text;
+          // Take last 150 chars — longer text = more unique match
+          highlightText = text.length > 150 ? text.slice(-150) : text;
         }
       }
 
