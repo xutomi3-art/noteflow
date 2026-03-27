@@ -79,13 +79,28 @@ export default function AdminLLMPage() {
   const [ragflowMessage, setRagflowMessage] = useState('');
   const [ragflowError, setRagflowError] = useState('');
 
+  // RAGFlow model providers (embedding/rerank connection details)
+  interface Provider { llm_factory: string; model_type: string; llm_name: string; api_base: string; status: string }
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [providerForms, setProviderForms] = useState<Record<string, string>>({});
+  const [providerSaving, setProviderSaving] = useState<string | null>(null);
+
   const fetchRagflowModels = useCallback(async () => {
     setRagflowLoading(true);
     setRagflowError('');
     try {
-      const data = await api.getRagflowModels();
-      setRagflowModels(data);
-      setRagflowForm(data);
+      const [models, provs] = await Promise.all([
+        api.getRagflowModels(),
+        api.getRagflowProviders(),
+      ]);
+      setRagflowModels(models);
+      setRagflowForm(models);
+      setProviders(provs);
+      const pForms: Record<string, string> = {};
+      for (const p of provs) {
+        pForms[`${p.llm_factory}/${p.llm_name}`] = p.api_base || '';
+      }
+      setProviderForms(pForms);
     } catch (e) {
       setRagflowError(e instanceof Error ? e.message : 'Failed to load RAGFlow models');
     } finally {
@@ -306,6 +321,57 @@ export default function AdminLLMPage() {
                 <span className="text-sm text-green-600">{ragflowMessage}</span>
               )}
             </div>
+
+            {/* Model Provider Connections */}
+            {providers.length > 0 && (
+              <div className="mt-6 pt-5 border-t border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Model Provider Connections</h4>
+                <div className="space-y-3">
+                  {providers.map((p) => {
+                    const pk = `${p.llm_factory}/${p.llm_name}`;
+                    return (
+                      <div key={pk} className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium text-gray-700">{p.llm_name}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{p.llm_factory}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">{p.model_type}</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={providerForms[pk] ?? ''}
+                            onChange={(e) => setProviderForms({ ...providerForms, [pk]: e.target.value })}
+                            placeholder="API Base URL (e.g. http://10.200.0.102:9997)"
+                            className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+                          />
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const newBase = providerForms[pk];
+                            if (newBase === (p.api_base || '')) return;
+                            setProviderSaving(pk);
+                            try {
+                              const updated = await api.updateRagflowProvider({ llm_factory: p.llm_factory, llm_name: p.llm_name, api_base: newBase });
+                              setProviders(updated);
+                              setRagflowMessage('Provider updated');
+                              setTimeout(() => setRagflowMessage(''), 3000);
+                            } catch (e) {
+                              setRagflowError(e instanceof Error ? e.message : 'Failed to update provider');
+                            } finally {
+                              setProviderSaving(null);
+                            }
+                          }}
+                          disabled={providerSaving === pk || providerForms[pk] === (p.api_base || '')}
+                          className="mt-5 px-2 py-1.5 text-xs font-medium text-[#5b8c15] border border-[#5b8c15]/30 rounded-lg hover:bg-[#5b8c15]/5 transition-colors disabled:opacity-30 disabled:cursor-default whitespace-nowrap"
+                        >
+                          {providerSaving === pk ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

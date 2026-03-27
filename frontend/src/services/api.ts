@@ -610,6 +610,18 @@ class ApiClient {
     });
   }
 
+  // RAGFlow Model Providers
+  async getRagflowProviders(): Promise<{ llm_factory: string; model_type: string; llm_name: string; api_base: string; status: string }[]> {
+    return this.request("/admin/ragflow-providers");
+  }
+
+  async updateRagflowProvider(body: { llm_factory: string; llm_name: string; api_base?: string; api_key?: string }): Promise<{ llm_factory: string; model_type: string; llm_name: string; api_base: string; status: string }[]> {
+    return this.request("/admin/ragflow-providers", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  }
+
   // Feedback
   async submitFeedback(type: string, content: string, screenshot?: File): Promise<{ id: string }> {
     const formData = new FormData();

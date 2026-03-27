@@ -348,6 +348,39 @@ async def update_ragflow_models(
         raise HTTPException(status_code=502, detail=f"Failed to update RAGFlow config: {e}")
 
 
+@router.get("/ragflow-providers")
+async def get_ragflow_providers(
+    _admin: User = Depends(get_admin_user),
+):
+    """Get RAGFlow model provider configs (embedding/rerank API bases)."""
+    from backend.services.ragflow_config_service import get_ragflow_providers as _get
+    try:
+        return await _get()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to read RAGFlow providers: {e}")
+
+
+@router.put("/ragflow-providers")
+async def update_ragflow_provider(
+    body: dict = Body(...),
+    _admin: User = Depends(get_admin_user),
+):
+    """Update a RAGFlow model provider's api_base or api_key."""
+    from backend.services.ragflow_config_service import update_ragflow_provider as _update
+    llm_factory = body.get("llm_factory")
+    llm_name = body.get("llm_name")
+    if not llm_factory or not llm_name:
+        raise HTTPException(status_code=400, detail="llm_factory and llm_name required")
+    api_base = body.get("api_base")
+    api_key = body.get("api_key")
+    if api_base is None and api_key is None:
+        raise HTTPException(status_code=400, detail="api_base or api_key required")
+    try:
+        return await _update(llm_factory, llm_name, api_base=api_base, api_key=api_key)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to update RAGFlow provider: {e}")
+
+
 @router.get("/feedback")
 async def list_feedback(
     status: str | None = Query(None),
