@@ -1193,9 +1193,31 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
+      // Extract the text immediately before the citation badge in the AI response
+      // This is the actual sentence being cited, not the chunk's first 300 chars
+      let highlightText: string | null = null;
+      const parentEl = badge.parentElement;
+      if (parentEl) {
+        // Walk backwards from badge to collect preceding text in the same paragraph/list-item
+        let text = "";
+        let node: Node | null = badge.previousSibling;
+        while (node) {
+          const t = node.textContent || "";
+          text = t + text;
+          if (text.length >= 60) break;
+          node = node.previousSibling;
+        }
+        // Clean up: remove other citation markers like [1][2], trim
+        text = text.replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
+        if (text.length >= 15) {
+          // Take last 80 chars as the cited sentence fragment
+          highlightText = text.length > 80 ? text.slice(-80) : text;
+        }
+      }
+
       // Open parsed markdown content in left panel with excerpt highlighted
       if (id) {
-        setActiveSource(id, sourceId, citation.excerpt || null);
+        setActiveSource(id, sourceId, highlightText || citation.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
