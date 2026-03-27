@@ -11,6 +11,7 @@ interface SourceState {
   activeSourceContent: string | null;
   isLoadingContent: boolean;
   highlightExcerpt: string | null;
+  highlightSeq: number;
   raptorStatus: "idle" | "running" | "done" | "failed";
 
   fetchSources: (notebookId: string) => Promise<void>;
@@ -35,6 +36,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   activeSourceContent: null,
   isLoadingContent: false,
   highlightExcerpt: null,
+  highlightSeq: 0,
   raptorStatus: "idle",
 
   fetchSources: async (notebookId: string) => {
@@ -173,10 +175,10 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     }
     // If same source is already active, just update the highlight excerpt
     if (sourceId === get().activeSourceId) {
-      set({ highlightExcerpt: excerpt ?? null });
+      set({ highlightExcerpt: excerpt ?? null, highlightSeq: get().highlightSeq + 1 });
       return;
     }
-    set({ activeSourceId: sourceId, activeSourceContent: null, isLoadingContent: true, highlightExcerpt: excerpt ?? null });
+    set({ activeSourceId: sourceId, activeSourceContent: null, isLoadingContent: true, highlightExcerpt: excerpt ?? null, highlightSeq: get().highlightSeq + 1 });
     try {
       const result = await api.getSourceContent(notebookId, sourceId);
       // Only update if this source is still the active one

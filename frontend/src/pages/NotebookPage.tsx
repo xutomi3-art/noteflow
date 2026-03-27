@@ -377,7 +377,7 @@ export default function NotebookPage() {
 
   // Stores
   const { user, logout } = useAuthStore();
-  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt, raptorStatus } =
+  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt, highlightSeq, raptorStatus } =
     useSourceStore();
   const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, thinkingSteps, reset: resetChat } = useChatStore();
   const {
@@ -605,7 +605,7 @@ export default function NotebookPage() {
   useEffect(() => {
     if (!activeSourceContent || !highlightExcerpt || !sourceContentRef.current) return;
 
-    // Wait for DOM to render
+    // Wait for DOM to render (300ms ensures MarkdownContent has mounted)
     const timer = setTimeout(() => {
       const container = sourceContentRef.current;
       if (!container) return;
@@ -708,10 +708,10 @@ export default function NotebookPage() {
           break;
         }
       }
-    }, 100);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [activeSourceContent, highlightExcerpt]);
+  }, [activeSourceContent, highlightExcerpt, highlightSeq]);
 
   // Handlers
   const handleSend = useCallback(() => {
