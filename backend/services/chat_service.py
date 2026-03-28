@@ -135,7 +135,7 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
             "filename": doc_name,
             "file_type": file_type,
             "location": location,
-            "excerpt": text[:300] if text else "",
+            "excerpt": text if text else "",
         })
 
     context = "\n---\n".join(context_parts)

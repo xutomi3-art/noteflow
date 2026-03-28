@@ -690,7 +690,9 @@ export default function NotebookPage() {
       while (rawIdx < fullText.length && !isContent(fullText[rawIdx])) rawIdx++;
 
       // Map match end position (in keyFull) back to rawIdx
-      const matchKeyLen = Math.min(keyExcerpt.length, tryLengths.find(l => l <= keyExcerpt.length) || keyExcerpt.length);
+      // Cap highlight to 200 key-chars to avoid highlighting entire parent chunks
+      const actualMatchLen = tryLengths.find(l => l <= keyExcerpt.length) || keyExcerpt.length;
+      const matchKeyLen = Math.min(actualMatchLen, 200);
       let rawEnd = rawIdx;
       let endKeyPos = 0;
       while (rawEnd < fullText.length && endKeyPos < matchKeyLen) {
@@ -1216,22 +1218,10 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
-      // Extract the sentence before the citation badge from the AI response
-      let highlightText: string | null = null;
-      const parentEl = badge.closest("li") || badge.closest("p") || badge.parentElement;
-      if (parentEl) {
-        const range = document.createRange();
-        range.setStart(parentEl, 0);
-        range.setEnd(badge, 0);
-        const text = range.toString().replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
-        if (text.length >= 15) {
-          highlightText = text.length > 150 ? text.slice(-150) : text;
-        }
-      }
-
-      // Open parsed markdown content in left panel with highlighted text
+      // Use the RAGFlow chunk excerpt for highlighting — this is the actual source text
+      // (AI response text is paraphrased and won't match the original document)
       if (id) {
-        setActiveSource(id, sourceId, highlightText || citation.excerpt || null);
+        setActiveSource(id, sourceId, citation.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
