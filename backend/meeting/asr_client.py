@@ -348,7 +348,7 @@ class WhisperASRClient:
     No speaker diarization — all text attributed to speaker_0.
     """
 
-    def __init__(self, base_url: str = "http://10.200.0.102:9997/v1") -> None:
+    def __init__(self, base_url: str = "http://10.200.0.102:8200/v1") -> None:
         self._sessions: dict[str, MeetingSession] = {}
         self.base_url = base_url.rstrip("/")
 
@@ -434,7 +434,7 @@ class WhisperASRClient:
         """POST audio to whisper API and return text."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             form_data: dict[str, str] = {
-                "model": "Belle-whisper-large-v3-zh",
+                "model": "FireRedASR-AED-L",
                 "language": "zh",
                 "temperature": "0",
                 "response_format": "json",
