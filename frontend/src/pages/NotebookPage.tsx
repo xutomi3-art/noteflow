@@ -1228,9 +1228,11 @@ export default function NotebookPage() {
         if (excerpt) {
           let tries = 0;
           const doHighlight = () => {
+            // Wait for content to finish loading and ref to be attached
+            const { isLoadingContent: loading, activeSourceId: activeId } = useSourceStore.getState();
             const container = sourceContentRef.current;
-            if (!container || !container.textContent) {
-              if (tries++ < 20) setTimeout(doHighlight, 300);
+            if (loading || !container || !container.textContent || activeId !== sourceId) {
+              if (tries++ < 30) setTimeout(doHighlight, 300);
               return;
             }
             // Remove previous highlights
