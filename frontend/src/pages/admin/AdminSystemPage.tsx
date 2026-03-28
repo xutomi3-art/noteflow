@@ -5,21 +5,29 @@ import { useAdminStore } from '@/stores/admin-store';
 const SERVICE_LABELS: Record<string, string> = {
   postgresql: 'PostgreSQL',
   ragflow: 'RAGFlow',
+  mineru: 'MinerU',
   elasticsearch: 'Elasticsearch',
   redis: 'Redis',
-  mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
-  llm: 'LLM',
+  chat_llm_primary: 'Chat LLM (Primary)',
+  chat_llm_secondary: 'Chat LLM (Secondary)',
+  vision_llm: 'Vision LLM',
+  embedding: 'Embedding',
+  rerank: 'Rerank',
 };
 
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
   postgresql: 'Primary database',
   ragflow: 'RAG retrieval engine',
+  mineru: 'Document parsing service',
   elasticsearch: 'Full-text search & vector index',
   redis: 'Cache & session store',
-  mineru: 'Document parsing service',
   docmee: 'AI PPT generation service',
-  llm: 'Chat, Embedding & Vision API',
+  chat_llm_primary: 'Local GPU — sends "hi" to verify generation',
+  chat_llm_secondary: 'Cloud backup — auto-fallback when primary is down',
+  vision_llm: 'Image/chart analysis in PDFs',
+  embedding: 'Text → vector conversion (BGE-M3)',
+  rerank: 'Search result re-ranking (gte-rerank)',
 };
 
 interface ConfigField {
@@ -55,18 +63,6 @@ const MICROSOFT_OAUTH_FIELDS: ConfigField[] = [
   { key: 'microsoft_client_secret', label: 'Client Secret', placeholder: 'your-client-secret', secret: true },
   { key: 'microsoft_tenant_id', label: 'Tenant ID', placeholder: 'common (or your-tenant-id)' },
   { key: 'microsoft_redirect_uri', label: 'Redirect URI', placeholder: 'https://noteflow.jotoai.com/api/auth/microsoft/callback' },
-];
-
-const LLM_FIELDS: ConfigField[] = [
-  { key: 'qwen_api_key', label: 'API Key', placeholder: 'sk-...', secret: true },
-  { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. https://api.openai.com/v1' },
-  { key: 'llm_model', label: 'Model', placeholder: 'e.g. gpt-4o, qwen3.5-plus, GLM-5' },
-  { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: '65536' },
-];
-
-const RAGFLOW_FIELDS: ConfigField[] = [
-  { key: 'ragflow_api_key', label: 'API Key', placeholder: 'ragflow-...', secret: true },
-  { key: 'ragflow_base_url', label: 'Base URL', placeholder: 'http://ragflow:9380' },
 ];
 
 const DOCMEE_FIELDS: ConfigField[] = [
@@ -218,6 +214,9 @@ export default function AdminSystemPage() {
     await fetchSettings();
   }, [saveSettings, fetchSettings]);
 
+  // Render health rows from the actual API response, using labels when available
+  const healthEntries = Object.entries(health);
+
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
@@ -238,73 +237,54 @@ export default function AdminSystemPage() {
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Service Health</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              {Object.keys(health).length > 0
-                ? `${Object.values(health).filter(h => h.status === 'ok').length}/${Object.keys(health).length} services healthy`
+              {healthEntries.length > 0
+                ? `${healthEntries.filter(([, h]) => h.status === 'ok').length}/${healthEntries.length} services healthy`
                 : 'Click Refresh to check'}
             </p>
           </div>
-          {Object.keys(health).length > 0 && (
+          {healthEntries.length > 0 && (
             <div className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-              Object.values(health).every(h => h.status === 'ok')
+              healthEntries.every(([, h]) => h.status === 'ok')
                 ? 'bg-green-50 text-green-700'
-                : 'bg-red-50 text-red-700'
+                : healthEntries.some(([, h]) => h.status === 'warning')
+                  ? 'bg-amber-50 text-amber-700'
+                  : 'bg-red-50 text-red-700'
             }`}>
-              {Object.values(health).every(h => h.status === 'ok') ? 'All Healthy' : 'Issues Detected'}
+              {healthEntries.every(([, h]) => h.status === 'ok') ? 'All Healthy' : 'Issues Detected'}
             </div>
           )}
         </div>
         <div className="space-y-2">
-          {(Object.keys(SERVICE_LABELS) as string[]).map((key) => {
-            const h = health[key];
-            if (!h && Object.keys(health).length === 0) return null;
-            return (
-              <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                      !h ? 'bg-gray-300' : h.status === 'ok' ? 'bg-green-500' : h.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-900">
-                      {SERVICE_LABELS[key] || key}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {SERVICE_DESCRIPTIONS[key] || ''}
-                    </div>
+          {healthEntries.map(([key, h]) => (
+            <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                    h.status === 'ok' ? 'bg-green-500' : h.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
+                  }`}
+                />
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-gray-900">
+                    {SERVICE_LABELS[key] || key}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {SERVICE_DESCRIPTIONS[key] || ''}
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0 ml-4">
-                  {h ? (
-                    <>
-                      <div className={`text-xs font-medium ${h.status === 'ok' ? 'text-green-600' : h.status === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
-                        {h.status === 'ok' ? 'Healthy' : h.status === 'warning' ? 'Warning' : 'Error'}
-                      </div>
-                      <div className="text-[10px] text-gray-400">
-                        {h.message || (h.status === 'ok' ? `${h.latency_ms}ms` : 'Unreachable')}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-xs text-gray-400">—</div>
-                  )}
+              </div>
+              <div className="text-right flex-shrink-0 ml-4">
+                <div className={`text-xs font-medium ${h.status === 'ok' ? 'text-green-600' : h.status === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
+                  {h.status === 'ok' ? 'Healthy' : h.status === 'warning' ? 'Warning' : 'Error'}
+                </div>
+                <div className="text-[10px] text-gray-400 max-w-[250px] truncate">
+                  {h.message || (h.status === 'ok' ? `${h.latency_ms}ms` : 'Unreachable')}
                 </div>
               </div>
-            );
-          })}
-          {/* Show any extra services not in SERVICE_LABELS */}
-          {Object.entries(health)
-            .filter(([key]) => !(key in SERVICE_LABELS))
-            .map(([key, h]) => (
-              <div key={key} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <div className="text-sm font-medium text-gray-900">{key}</div>
-                </div>
-                <div className="text-xs text-gray-400">
-                  {h.status === 'ok' ? `${h.latency_ms}ms` : (h.message || 'Error')}
-                </div>
-              </div>
-            ))}
+            </div>
+          ))}
+          {healthEntries.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">No health data — click Refresh</p>
+          )}
         </div>
       </div>
 
@@ -330,30 +310,10 @@ export default function AdminSystemPage() {
         </div>
       </div>
 
-      {/* LLM */}
-      <ConfigSection
-        title="LLM"
-        description="OpenAI-compatible API for chat, embedding, and vision"
-        fields={LLM_FIELDS}
-        settings={settings}
-        saveSettings={handleSaveConfig}
-        saveLabel="Save LLM"
-      />
-
-      {/* RAGFlow */}
-      <ConfigSection
-        title="RAGFlow"
-        description="Configure the RAGFlow retrieval engine connection"
-        fields={RAGFLOW_FIELDS}
-        settings={settings}
-        saveSettings={handleSaveConfig}
-        saveLabel="Save RAGFlow"
-      />
-
       {/* Docmee AiPPT */}
       <ConfigSection
         title="Docmee AiPPT"
-        description="Configure the Docmee API for AI-powered PPT generation"
+        description="API key for AI-powered PPT generation"
         fields={DOCMEE_FIELDS}
         settings={settings}
         saveSettings={handleSaveConfig}
