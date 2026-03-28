@@ -1194,20 +1194,16 @@ export default function NotebookPage() {
       const msgEl = badge.closest("[data-message-id]") as HTMLElement | null;
       const msgId = msgEl?.dataset.messageId;
       let msg = currentMessages.find((m) => m.id === msgId);
-
-      // Fallback: if no message parent found (e.g. overview citations), search all messages
       if (!msg) {
         msg = currentMessages.find((m) => m.citations.some((c) => c.index === citationIndex));
       }
-      if (!msg) return;
 
-      const citation = msg.citations.find((c) => c.index === citationIndex);
-      if (!citation) return;
+      const citation = msg?.citations.find((c) => c.index === citationIndex);
 
-      // Resolve source_id: use the one from citation, or fall back to filename matching
+      // Resolve source_id from citation or from the active source
       const currentSources = useSourceStore.getState().sources;
-      let sourceId = citation.source_id;
-      if (!sourceId && citation.filename) {
+      let sourceId = citation?.source_id || "";
+      if (!sourceId && citation?.filename) {
         const citStem = citation.filename.replace(/\.[^.]+$/, "").toLowerCase();
         const matched = currentSources.find((s) => {
           const sStem = s.filename.replace(/\.[^.]+$/, "").toLowerCase();
@@ -1216,12 +1212,16 @@ export default function NotebookPage() {
         });
         if (matched) sourceId = matched.id;
       }
+      // Last resort: use currently active source
+      if (!sourceId) {
+        sourceId = useSourceStore.getState().activeSourceId || "";
+      }
       if (!sourceId) return;
 
-      // Use the RAGFlow chunk excerpt for highlighting — this is the actual source text
-      // (AI response text is paraphrased and won't match the original document)
+      // Use the RAGFlow chunk excerpt for highlighting (actual source text)
+      // If citation not found in store, the source panel still opens without highlight
       if (id) {
-        setActiveSource(id, sourceId, citation.excerpt || null);
+        setActiveSource(id, sourceId, citation?.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
