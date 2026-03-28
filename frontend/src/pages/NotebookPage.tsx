@@ -601,138 +601,7 @@ export default function NotebookPage() {
     }
   }, [streamingContent]);
 
-  // Scroll to and highlight excerpt in source content viewer
-  useEffect(() => {
-    if (!activeSourceContent || !highlightExcerpt) return;
-
-    // Wait for DOM to render (ref may not be attached yet when content first loads)
-    // Use multiple retries to handle async rendering
-    let attempts = 0;
-    const tryHighlight = () => {
-      const container = sourceContentRef.current;
-      if (!container) {
-        if (attempts++ < 10) setTimeout(tryHighlight, 200);
-        return;
-      }
-
-      // Remove previous highlights
-      container.querySelectorAll("mark.citation-highlight").forEach((el) => {
-        const parent = el.parentNode;
-        if (parent) {
-          parent.replaceChild(document.createTextNode(el.textContent || ""), el);
-          parent.normalize();
-        }
-      });
-
-      // Normalize text by stripping HTML tags, markdown syntax, and extra whitespace
-      const toPlainText = (s: string) =>
-        s
-          .replace(/<[^>]+>/g, "")           // strip HTML tags
-          .replace(/^#{1,6}\s+/gm, "")       // strip heading markers
-          .replace(/\*\*(.+?)\*\*/g, "$1")   // strip bold
-          .replace(/\*(.+?)\*/g, "$1")       // strip italic
-          .replace(/`{1,3}[^`]*`{1,3}/g, (m) => m.replace(/`/g, "")) // strip code markers
-          .replace(/^\|.*\|$/gm, (row) => row.replace(/\|/g, " "))   // strip table pipes
-          .replace(/^[-|:\s]+$/gm, "")       // strip table separator rows
-          .replace(/^[-*]\s+/gm, "")         // strip list markers
-          .replace(/^\d+\.\s+/gm, "")        // strip ordered list markers
-          .replace(/\s+/g, " ")              // normalize whitespace
-          .trim();
-
-      const excerpt = toPlainText(highlightExcerpt);
-      if (!excerpt || excerpt.length < 4) return;
-
-      // Strip all non-content chars for matching (block elements concatenate without spaces,
-      // DOM has pipe chars from markdown tables that excerpts don't)
-      const toKey = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
-
-      // Walk text nodes to build full text
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-      const allText: { node: Text; start: number }[] = [];
-      let fullText = "";
-      let node: Text | null;
-      while ((node = walker.nextNode() as Text | null)) {
-        allText.push({ node, start: fullText.length });
-        fullText += node.textContent || "";
-      }
-
-      const keyFull = toKey(fullText);
-      const keyExcerpt = toKey(excerpt);
-
-      // Try progressively shorter substrings for matching
-      // Use END of excerpt (closest to citation marker) for shorter matches — more specific
-      let matchIdx = -1;
-      const tryLengths = [keyExcerpt.length, 100, 70, 50];
-      for (const len of tryLengths) {
-        if (len >= keyExcerpt.length) {
-          matchIdx = keyFull.indexOf(keyExcerpt);
-        } else if (keyExcerpt.length > len) {
-          // Use the LAST N chars (tail) — these are closest to the citation and most specific
-          const tail = keyExcerpt.slice(-len);
-          matchIdx = keyFull.indexOf(tail);
-        }
-        if (matchIdx !== -1) break;
-      }
-
-      if (matchIdx === -1) return;
-
-      // Map key index back to raw fullText index (skip non-letter/non-digit chars)
-      const isContent = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
-      let rawIdx = 0;
-      let keyPos = 0;
-      while (rawIdx < fullText.length && keyPos < matchIdx) {
-        if (isContent(fullText[rawIdx])) {
-          keyPos++;
-        }
-        rawIdx++;
-      }
-      // Skip any non-content chars at the match start
-      while (rawIdx < fullText.length && !isContent(fullText[rawIdx])) rawIdx++;
-
-      // Map match end position (in keyFull) back to rawIdx
-      // Cap highlight to 200 key-chars to avoid highlighting entire parent chunks
-      const actualMatchLen = tryLengths.find(l => l <= keyExcerpt.length) || keyExcerpt.length;
-      const matchKeyLen = Math.min(actualMatchLen, 200);
-      let rawEnd = rawIdx;
-      let endKeyPos = 0;
-      while (rawEnd < fullText.length && endKeyPos < matchKeyLen) {
-        if (isContent(fullText[rawEnd])) endKeyPos++;
-        rawEnd++;
-      }
-
-      // Find and highlight all text nodes within the match range
-      let firstMark: HTMLElement | null = null;
-      for (const { node: textNode, start } of allText) {
-        const nodeLen = textNode.textContent?.length || 0;
-        const nodeEnd = start + nodeLen;
-        // Skip nodes entirely before or after the match
-        if (nodeEnd <= rawIdx || start >= rawEnd) continue;
-
-        const localStart = Math.max(0, rawIdx - start);
-        const localEnd = Math.min(nodeLen, rawEnd - start);
-        if (localStart >= localEnd) continue;
-
-        const range = document.createRange();
-        range.setStart(textNode, localStart);
-        range.setEnd(textNode, localEnd);
-        const mark = document.createElement("mark");
-        mark.className = "citation-highlight";
-        mark.style.cssText = "background: #fef08a; padding: 2px 0; border-radius: 2px; scroll-margin-top: 80px;";
-        try {
-          range.surroundContents(mark);
-          if (!firstMark) firstMark = mark;
-        } catch {
-          // Cross-element range — skip this node
-        }
-      }
-      if (firstMark) {
-        firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    };
-    const timer = setTimeout(tryHighlight, 300);
-
-    return () => clearTimeout(timer);
-  }, [activeSourceContent, highlightExcerpt, highlightSeq]);
+  // Highlight is now handled by the ref callback on the source content div (see JSX below)
 
   // Handlers
   const handleSend = useCallback(() => {
@@ -1220,68 +1089,8 @@ export default function NotebookPage() {
 
       // Open source content and highlight
       if (id) {
-        const excerpt = citation?.excerpt || null;
-        setActiveSource(id, sourceId, excerpt);
+        setActiveSource(id, sourceId, citation?.excerpt || null);
         setIsLeftCollapsed(false);
-
-        // Direct highlight: poll for sourceContentRef after content loads
-        if (excerpt) {
-          let tries = 0;
-          const doHighlight = () => {
-            // Wait for content to finish loading and ref to be attached
-            const { isLoadingContent: loading } = useSourceStore.getState();
-            const container = sourceContentRef.current;
-            if (loading || !container || !container.textContent) {
-              if (tries++ < 30) setTimeout(doHighlight, 300);
-              return;
-            }
-            // Remove previous highlights
-            container.querySelectorAll("mark.citation-highlight").forEach((el) => {
-              const parent = el.parentNode;
-              if (parent) { parent.replaceChild(document.createTextNode(el.textContent || ""), el); parent.normalize(); }
-            });
-            // Strip non-content chars for fuzzy matching
-            const toKey = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
-            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-            const allText: { node: Text; start: number }[] = [];
-            let fullText = "";
-            let tn: Text | null;
-            while ((tn = walker.nextNode() as Text | null)) { allText.push({ node: tn, start: fullText.length }); fullText += tn.textContent || ""; }
-            const keyFull = toKey(fullText);
-            const keyExcerpt = toKey(excerpt.replace(/<[^>]+>/g, "").replace(/\s+/g, " "));
-            // Try tail matching with progressively shorter substrings
-            let matchIdx = -1;
-            for (const len of [keyExcerpt.length, 100, 70, 50]) {
-              if (len >= keyExcerpt.length) { matchIdx = keyFull.indexOf(keyExcerpt); }
-              else { matchIdx = keyFull.indexOf(keyExcerpt.slice(-len)); }
-              if (matchIdx !== -1) break;
-            }
-            if (matchIdx === -1) return;
-            // Map key index to raw text index
-            const isC = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
-            let rawIdx = 0, kp = 0;
-            while (rawIdx < fullText.length && kp < matchIdx) { if (isC(fullText[rawIdx])) kp++; rawIdx++; }
-            while (rawIdx < fullText.length && !isC(fullText[rawIdx])) rawIdx++;
-            // Highlight up to 200 chars
-            let rawEnd = rawIdx, ekp = 0;
-            while (rawEnd < fullText.length && ekp < 200) { if (isC(fullText[rawEnd])) ekp++; rawEnd++; }
-            let firstMark: HTMLElement | null = null;
-            for (const { node: textNode, start } of allText) {
-              const nodeLen = textNode.textContent?.length || 0;
-              if (start + nodeLen <= rawIdx || start >= rawEnd) continue;
-              const ls = Math.max(0, rawIdx - start), le = Math.min(nodeLen, rawEnd - start);
-              if (ls >= le) continue;
-              try {
-                const r = document.createRange(); r.setStart(textNode, ls); r.setEnd(textNode, le);
-                const m = document.createElement("mark"); m.className = "citation-highlight";
-                m.style.cssText = "background: #fef08a; padding: 2px 0; border-radius: 2px; scroll-margin-top: 80px;";
-                r.surroundContents(m); if (!firstMark) firstMark = m;
-              } catch { /* cross-element */ }
-            }
-            if (firstMark) firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
-          };
-          setTimeout(doHighlight, 500);
-        }
       }
     },
     [id, setActiveSource],
@@ -1531,7 +1340,59 @@ export default function NotebookPage() {
                     <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                   </div>
                 ) : activeSourceContent ? (
-                  <div ref={sourceContentRef}>
+                  <div ref={(el) => {
+                    sourceContentRef.current = el;
+                    // Highlight excerpt after markdown renders
+                    if (el && highlightExcerpt) {
+                      requestAnimationFrame(() => {
+                        // Clean previous highlights
+                        el.querySelectorAll("mark.citation-highlight").forEach((m) => {
+                          const p = m.parentNode;
+                          if (p) { p.replaceChild(document.createTextNode(m.textContent || ""), m); p.normalize(); }
+                        });
+                        // Simple search: find excerpt text in rendered content
+                        const strip = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
+                        const fullKey = strip(el.textContent || "");
+                        const excKey = strip(highlightExcerpt.replace(/<[^>]+>/g, ""));
+                        let idx = -1;
+                        // Try full match, then tail 100/70/50 chars
+                        for (const len of [excKey.length, 100, 70, 50]) {
+                          const needle = len >= excKey.length ? excKey : excKey.slice(-len);
+                          idx = fullKey.indexOf(needle);
+                          if (idx !== -1) break;
+                        }
+                        if (idx === -1) return;
+                        // Map key index back to raw text position
+                        const raw = el.textContent || "";
+                        const isC = (c: string) => /[\p{L}\p{N}]/u.test(c);
+                        let ri = 0, ki = 0;
+                        while (ri < raw.length && ki < idx) { if (isC(raw[ri])) ki++; ri++; }
+                        while (ri < raw.length && !isC(raw[ri])) ri++;
+                        // Find end (cap at 200 key-chars)
+                        let re = ri, ek = 0;
+                        while (re < raw.length && ek < 200) { if (isC(raw[re])) ek++; re++; }
+                        // Walk text nodes and highlight
+                        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+                        const nodes: { node: Text; start: number }[] = [];
+                        let full = "", tn: Text | null;
+                        while ((tn = walker.nextNode() as Text | null)) { nodes.push({ node: tn, start: full.length }); full += tn.textContent || ""; }
+                        let first: HTMLElement | null = null;
+                        for (const { node, start } of nodes) {
+                          const nLen = node.textContent?.length || 0;
+                          if (start + nLen <= ri || start >= re) continue;
+                          const ls = Math.max(0, ri - start), le = Math.min(nLen, re - start);
+                          if (ls >= le) continue;
+                          try {
+                            const r = document.createRange(); r.setStart(node, ls); r.setEnd(node, le);
+                            const m = document.createElement("mark"); m.className = "citation-highlight";
+                            m.style.cssText = "background:#fef08a;padding:2px 0;border-radius:2px;scroll-margin-top:80px";
+                            r.surroundContents(m); if (!first) first = m;
+                          } catch { /* cross-element */ }
+                        }
+                        if (first) first.scrollIntoView({ behavior: "smooth", block: "center" });
+                      });
+                    }
+                  }}>
                     <MarkdownContent
                       content={activeSourceContent}
                       className="text-[13px] leading-relaxed"
