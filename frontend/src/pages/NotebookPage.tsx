@@ -1112,9 +1112,11 @@ export default function NotebookPage() {
           });
           const strip = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
           const fullKey = strip(el.textContent);
-          const excKey = strip(excerpt!.replace(/<[^>]+>/g, ""));
+          // Strip HTML tags, image markdown ![](url), and page markers before matching
+          const cleanExcerpt = excerpt!.replace(/<[^>]+>/g, "").replace(/!\[.*?\]\([^)]*\)/g, "").replace(/<!--[^>]*-->/g, "");
+          const excKey = strip(cleanExcerpt);
           let idx = -1;
-          for (const len of [excKey.length, 100, 70, 50]) {
+          for (const len of [excKey.length, 100, 70, 50, 30]) {
             idx = fullKey.indexOf(len >= excKey.length ? excKey : excKey.slice(-len));
             if (idx !== -1) break;
           }
