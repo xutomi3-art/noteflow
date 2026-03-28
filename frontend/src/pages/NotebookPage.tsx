@@ -684,32 +684,42 @@ export default function NotebookPage() {
       // Skip any non-content chars at the match start
       while (rawIdx < fullText.length && !isContent(fullText[rawIdx])) rawIdx++;
 
-      // Find the text node containing the match start
+      // Map match end position (in keyFull) back to rawIdx
+      const matchKeyLen = Math.min(keyExcerpt.length, tryLengths.find(l => l <= keyExcerpt.length) || keyExcerpt.length);
+      let rawEnd = rawIdx;
+      let endKeyPos = 0;
+      while (rawEnd < fullText.length && endKeyPos < matchKeyLen) {
+        if (isContent(fullText[rawEnd])) endKeyPos++;
+        rawEnd++;
+      }
+
+      // Find and highlight all text nodes within the match range
+      let firstMark: HTMLElement | null = null;
       for (const { node: textNode, start } of allText) {
-        const nodeEnd = start + (textNode.textContent?.length || 0);
-        if (start <= rawIdx && rawIdx < nodeEnd) {
-          const localOffset = rawIdx - start;
-          const markLen = Math.min(40, (textNode.textContent?.length || 0) - localOffset);
-          if (markLen <= 0) break;
-          const range = document.createRange();
-          range.setStart(textNode, localOffset);
-          range.setEnd(textNode, localOffset + markLen);
+        const nodeLen = textNode.textContent?.length || 0;
+        const nodeEnd = start + nodeLen;
+        // Skip nodes entirely before or after the match
+        if (nodeEnd <= rawIdx || start >= rawEnd) continue;
 
-          const mark = document.createElement("mark");
-          mark.className = "citation-highlight";
-          mark.style.cssText = "background: #fef08a; padding: 2px 0; border-radius: 2px; scroll-margin-top: 80px;";
-          try {
-            range.surroundContents(mark);
-          } catch {
-            // If surroundContents fails (cross-element), just scroll to the range position
-            const rect = range.getBoundingClientRect();
-            container.scrollTo({ top: container.scrollTop + rect.top - container.getBoundingClientRect().top - 100, behavior: "smooth" });
-            return;
-          }
+        const localStart = Math.max(0, rawIdx - start);
+        const localEnd = Math.min(nodeLen, rawEnd - start);
+        if (localStart >= localEnd) continue;
 
-          mark.scrollIntoView({ behavior: "smooth", block: "center" });
-          break;
+        const range = document.createRange();
+        range.setStart(textNode, localStart);
+        range.setEnd(textNode, localEnd);
+        const mark = document.createElement("mark");
+        mark.className = "citation-highlight";
+        mark.style.cssText = "background: #fef08a; padding: 2px 0; border-radius: 2px; scroll-margin-top: 80px;";
+        try {
+          range.surroundContents(mark);
+          if (!firstMark) firstMark = mark;
+        } catch {
+          // Cross-element range — skip this node
         }
+      }
+      if (firstMark) {
+        firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, 300);
 
@@ -1196,24 +1206,11 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
-      // Extract the text immediately before the citation badge in the AI response
-      // This is the actual sentence being cited, not the chunk's first 300 chars
-      let highlightText: string | null = null;
-      const parentEl = badge.closest("li") || badge.closest("p") || badge.parentElement;
-      if (parentEl) {
-        // Use Range to get all text from start of parent to the badge position
-        const range = document.createRange();
-        range.setStart(parentEl, 0);
-        range.setEnd(badge, 0);
-        let text = range.toString().replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
-        if (text.length >= 15) {
-          highlightText = text.length > 150 ? text.slice(-150) : text;
-        }
-      }
-
-      // Open parsed markdown content in left panel with excerpt highlighted
+      // Use the full RAGFlow chunk text (parent chunk) for highlighting
+      // This is the exact text the LLM used to generate its answer
+      // Open parsed markdown content in left panel with chunk highlighted
       if (id) {
-        setActiveSource(id, sourceId, highlightText || citation.excerpt || null);
+        setActiveSource(id, sourceId, citation.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
