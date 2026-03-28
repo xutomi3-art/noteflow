@@ -469,7 +469,7 @@ export default function AdminLLMPage() {
                             if (!hasChanges) return;
                             setProviderSaving(pk);
                             try {
-                              const update: Record<string, string> = { llm_factory: p.llm_factory, llm_name: p.llm_name };
+                              const update: { llm_factory: string; llm_name: string; api_base?: string; api_key?: string } = { llm_factory: p.llm_factory, llm_name: p.llm_name };
                               if (baseChanged) update.api_base = pf.api_base;
                               if (keyChanged) update.api_key = pf.api_key;
                               const updated = await api.updateRagflowProvider(update);
