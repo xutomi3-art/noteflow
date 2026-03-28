@@ -1229,9 +1229,9 @@ export default function NotebookPage() {
           let tries = 0;
           const doHighlight = () => {
             // Wait for content to finish loading and ref to be attached
-            const { isLoadingContent: loading, activeSourceId: activeId } = useSourceStore.getState();
+            const { isLoadingContent: loading } = useSourceStore.getState();
             const container = sourceContentRef.current;
-            if (loading || !container || !container.textContent || activeId !== sourceId) {
+            if (loading || !container || !container.textContent) {
               if (tries++ < 30) setTimeout(doHighlight, 300);
               return;
             }
