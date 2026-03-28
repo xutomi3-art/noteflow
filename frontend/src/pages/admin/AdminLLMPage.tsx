@@ -1,63 +1,110 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Save, TestTube, Loader2, Database } from 'lucide-react';
+import { Save, TestTube, Loader2, Database, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAdminStore } from '@/stores/admin-store';
 import { api } from '@/services/api';
 
+/* ------------------------------------------------------------------ */
+/* Field / group types                                                */
+/* ------------------------------------------------------------------ */
+interface Field {
+  key: string;
+  label: string;
+  secret?: boolean;
+  placeholder?: string;
+  toggle?: boolean;
+}
+
+interface ModelTier {
+  tier: 'primary' | 'secondary';
+  label: string;
+  fields: Field[];
+}
+
+interface ModelGroup {
+  title: string;
+  description: string;
+  tiers: ModelTier[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Model groups — organized by model TYPE, each with primary/secondary */
+/* ------------------------------------------------------------------ */
+const MODEL_GROUPS: ModelGroup[] = [
+  {
+    title: 'Chat LLM',
+    description: 'Main text generation model — used for Q&A, Studio, Overview, and all AI features',
+    tiers: [
+      {
+        tier: 'primary',
+        label: 'Primary (Local GPU)',
+        fields: [
+          { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. http://10.200.0.102:8100/v1' },
+          { key: 'llm_model', label: 'Model', placeholder: 'e.g. Qwen3.5-35B' },
+          { key: 'qwen_api_key', label: 'API Key', secret: true, placeholder: 'not needed for local vLLM' },
+          { key: 'llm_context_window', label: 'Context Window', placeholder: 'e.g. 32768' },
+          { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: 'e.g. 16384' },
+        ],
+      },
+      {
+        tier: 'secondary',
+        label: 'Secondary (Cloud Backup)',
+        fields: [
+          { key: 'llm_backup_enabled', label: 'Enable Fallback', toggle: true, placeholder: 'Auto-switch to cloud when local GPU is down' },
+          { key: 'llm_backup_base_url', label: 'Base URL', placeholder: 'e.g. https://dashscope.aliyuncs.com/compatible-mode/v1' },
+          { key: 'llm_backup_model', label: 'Model', placeholder: 'e.g. qwen3.5-plus' },
+          { key: 'llm_backup_api_key', label: 'API Key', secret: true },
+          { key: 'llm_backup_context_window', label: 'Context Window', placeholder: 'e.g. 1000000' },
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Vision LLM',
+    description: 'Extracts text from charts, diagrams, and images in PDFs during document processing',
+    tiers: [
+      {
+        tier: 'primary',
+        label: 'Primary',
+        fields: [
+          { key: 'vision_enabled', label: 'Vision Analysis', toggle: true, placeholder: 'Analyze chart/diagram images in PDFs' },
+          { key: 'llm_vision_model', label: 'Model', placeholder: 'default: glm-4.5v' },
+          { key: 'llm_vision_base_url', label: 'Base URL', placeholder: 'default: https://open.bigmodel.cn/api/paas/v4' },
+          { key: 'llm_vision_api_key', label: 'API Key', secret: true },
+        ],
+      },
+      {
+        tier: 'secondary',
+        label: 'Secondary (Backup)',
+        fields: [],
+      },
+    ],
+  },
+];
+
+/* Standalone settings groups (no primary/secondary) */
 interface FieldGroup {
   title: string;
   description: string;
-  fields: { key: string; label: string; secret?: boolean; placeholder?: string; toggle?: boolean }[];
+  fields: Field[];
 }
 
-const GROUPS: FieldGroup[] = [
+const EXTRA_GROUPS: FieldGroup[] = [
   {
-    title: 'LLM (Chat Model)',
-    description: 'Any OpenAI-compatible API — Qwen, GPT, DeepSeek, Claude, etc.',
-    fields: [
-      { key: 'qwen_api_key', label: 'API Key', secret: true },
-      { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. https://api.openai.com/v1' },
-      { key: 'llm_model', label: 'Model', placeholder: 'e.g. gpt-4o, qwen3.5-plus, deepseek-chat' },
-      { key: 'llm_context_window', label: 'Context Window (tokens)', placeholder: 'e.g. 128000, 256000, 1000000' },
-      { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: 'e.g. 8192' },
-    ],
-  },
-  {
-    title: 'Backup LLM (Cloud Fallback)',
-    description: 'When the primary model (local GPU) is unreachable, requests automatically fall back to this cloud model',
-    fields: [
-      { key: 'llm_backup_enabled', label: 'Enable Backup', toggle: true, placeholder: 'Automatically switch to cloud model when local GPU is down' },
-      { key: 'llm_backup_base_url', label: 'Backup Base URL', placeholder: 'e.g. https://dashscope.aliyuncs.com/compatible-mode/v1' },
-      { key: 'llm_backup_model', label: 'Backup Model', placeholder: 'e.g. qwen3.5-plus' },
-      { key: 'llm_backup_api_key', label: 'Backup API Key', secret: true },
-      { key: 'llm_backup_context_window', label: 'Backup Context Window', placeholder: 'e.g. 1000000' },
-    ],
-  },
-  {
-    title: 'RAGFlow',
-    description: 'RAGFlow connection and retrieval parameters',
+    title: 'RAG Retrieval',
+    description: 'RAGFlow connection and retrieval tuning parameters',
     fields: [
       { key: 'ragflow_api_key', label: 'API Key', secret: true },
       { key: 'ragflow_base_url', label: 'Base URL' },
       { key: 'rag_top_k', label: 'Top-K Chunks', placeholder: 'default: 8' },
       { key: 'rag_similarity_threshold', label: 'Similarity Threshold', placeholder: 'default: 0.0 (0.0–1.0, lower = more results)' },
       { key: 'rag_vector_weight', label: 'Vector Weight', placeholder: 'default: 0.7 (0.0–1.0, higher = more semantic)' },
-      { key: 'rag_rerank_id', label: 'Rerank Model', placeholder: 'default: gte-rerank (passed to RAGFlow retrieval API)' },
+      { key: 'rag_rerank_id', label: 'Rerank Model', placeholder: 'default: gte-rerank' },
       { key: 'raptor_enabled', label: 'Raptor Clustering', toggle: true, placeholder: 'Cross-document hierarchical summarization (uses LLM tokens, slower indexing)' },
     ],
   },
   {
-    title: 'Vision LLM',
-    description: 'Extracts text from charts, diagrams, and images embedded in PDFs during document processing',
-    fields: [
-      { key: 'vision_enabled', label: 'Vision Analysis', toggle: true, placeholder: 'Analyze chart/diagram images in PDFs using Vision LLM (adds processing time)' },
-      { key: 'llm_vision_model', label: 'Vision Model', placeholder: 'default: glm-4.5v' },
-      { key: 'llm_vision_base_url', label: 'Vision API Base URL', placeholder: 'default: https://open.bigmodel.cn/api/paas/v4' },
-      { key: 'llm_vision_api_key', label: 'Vision API Key', secret: true },
-    ],
-  },
-  {
     title: 'Query Processing',
-    description: 'Noteflow query rewrite and deep thinking — uses the main LLM, not RAGFlow',
+    description: 'Query rewrite and deep thinking — uses the main Chat LLM',
     fields: [
       { key: 'query_rewrite_enabled', label: 'Query Rewrite', toggle: true, placeholder: 'Rewrite user questions into keywords for better retrieval (uses LLM, adds latency)' },
       { key: 'rag_decompose_model', label: 'Deep Think Model', placeholder: 'empty = use main model (for CoT query decomposition)' },
@@ -66,7 +113,10 @@ const GROUPS: FieldGroup[] = [
   },
 ];
 
-const ALL_KEYS = GROUPS.flatMap((g) => g.fields.map((f) => f.key));
+const ALL_KEYS = [
+  ...MODEL_GROUPS.flatMap((g) => g.tiers.flatMap((t) => t.fields.map((f) => f.key))),
+  ...EXTRA_GROUPS.flatMap((g) => g.fields.map((f) => f.key)),
+];
 
 function formatTokens(n: number): string {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -74,6 +124,9 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+/* ------------------------------------------------------------------ */
+/* Component                                                          */
+/* ------------------------------------------------------------------ */
 export default function AdminLLMPage() {
   const { settings, fetchSettings, saveSettings, isLoading } = useAdminStore();
   const [form, setForm] = useState<Record<string, string>>({});
@@ -139,19 +192,16 @@ export default function AdminLLMPage() {
     return s?.source ?? 'env';
   };
 
-  // Compute dynamic token budget from context window
   const budget = useMemo(() => {
     const contextWindow = parseInt(form.llm_context_window || '0') || 128000;
     const maxOutput = parseInt(form.llm_max_output_tokens || '0') || 8192;
     const topK = parseInt(form.rag_top_k || '0') || 15;
-
     const systemPrompt = 1000;
-    const historyBudget = Math.min(Math.round(contextWindow * 0.06), 60000); // ~6% for history
-    const ragBudget = topK * 1500; // ~1500 tokens per chunk
+    const historyBudget = Math.min(Math.round(contextWindow * 0.06), 60000);
+    const ragBudget = topK * 1500;
     const excelBudget = Math.min(Math.round(contextWindow * 0.4), 600000);
     const normalCap = Math.round(contextWindow * 0.25);
     const excelCap = Math.round(contextWindow * 0.8);
-
     return { contextWindow, maxOutput, systemPrompt, historyBudget, ragBudget, excelBudget, normalCap, excelCap, topK };
   }, [form.llm_context_window, form.llm_max_output_tokens, form.rag_top_k]);
 
@@ -218,6 +268,48 @@ export default function AdminLLMPage() {
     }
   };
 
+  /* ---- Shared field renderer ---- */
+  const renderField = (f: Field) => (
+    <div key={f.key}>
+      {f.toggle ? (
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-sm font-medium text-gray-700">{f.label}</label>
+            {f.placeholder && <p className="text-[11px] text-gray-400 mt-0.5">{f.placeholder}</p>}
+          </div>
+          <button
+            onClick={() => setForm({ ...form, [f.key]: (form[f.key] ?? 'false').toLowerCase() === 'true' ? 'false' : 'true' })}
+            className={`relative w-10 h-5 rounded-full transition-colors ${
+              (form[f.key] ?? 'false').toLowerCase() === 'true' ? 'bg-[#5b8c15]' : 'bg-gray-300'
+            }`}
+          >
+            <span className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+              (form[f.key] ?? 'false').toLowerCase() === 'true' ? 'translate-x-[22px]' : 'translate-x-0.5'
+            }`} />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-sm font-medium text-gray-700">{f.label}</label>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+              getSource(f.key) === 'db' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {getSource(f.key) === 'db' ? 'DB override' : 'env default'}
+            </span>
+          </div>
+          <input
+            type={f.secret ? 'password' : 'text'}
+            value={form[f.key] ?? ''}
+            onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+            placeholder={f.placeholder || f.label}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+          />
+        </>
+      )}
+    </div>
+  );
+
   const budgetRows = [
     { label: "System Prompt", tokens: budget.systemPrompt, color: "bg-slate-400" },
     { label: "Chat History", tokens: budget.historyBudget, color: "bg-blue-400" },
@@ -231,112 +323,117 @@ export default function AdminLLMPage() {
     <div className="max-w-2xl space-y-6">
       <h2 className="text-2xl font-semibold text-gray-900 mb-2">LLM & Services</h2>
 
-      {GROUPS.map((group) => (
+      {/* ========== Model groups (Primary / Secondary) ========== */}
+      {MODEL_GROUPS.map((group) => (
         <div key={group.title} className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-0.5">{group.title}</h3>
-          <p className="text-xs text-gray-400 mb-4">{group.description}</p>
-          <div className="space-y-4">
-            {group.fields.map(({ key, label, secret, placeholder, toggle }: { key: string; label: string; secret?: boolean; placeholder?: string; toggle?: boolean }) => (
-              <div key={key}>
-                {toggle ? (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">{label}</label>
-                      {placeholder && <p className="text-[11px] text-gray-400 mt-0.5">{placeholder}</p>}
-                    </div>
-                    <button
-                      onClick={() => setForm({ ...form, [key]: (form[key] ?? 'false').toLowerCase() === 'true' ? 'false' : 'true' })}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${
-                        (form[key] ?? 'false').toLowerCase() === 'true' ? 'bg-[#5b8c15]' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                        (form[key] ?? 'false').toLowerCase() === 'true' ? 'translate-x-[22px]' : 'translate-x-0.5'
-                      }`} />
-                    </button>
+          <h3 className="text-base font-semibold text-gray-900 mb-0.5">{group.title}</h3>
+          <p className="text-xs text-gray-400 mb-5">{group.description}</p>
+
+          <div className="space-y-5">
+            {group.tiers.map((tier) => (
+              <div key={tier.tier}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                    tier.tier === 'primary'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    {tier.tier === 'primary' ? 'Primary' : 'Secondary'}
+                  </span>
+                  <span className="text-xs text-gray-500">{tier.label}</span>
+                </div>
+
+                {tier.fields.length > 0 ? (
+                  <div className="space-y-3 pl-3 border-l-2 border-gray-100">
+                    {tier.fields.map(renderField)}
                   </div>
                 ) : (
-                  <>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-sm font-medium text-gray-700">{label}</label>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        getSource(key) === 'db'
-                          ? 'bg-blue-50 text-blue-600'
-                          : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {getSource(key) === 'db' ? 'DB override' : 'env default'}
-                      </span>
-                    </div>
-                    <input
-                      type={secret ? 'password' : 'text'}
-                      value={form[key] ?? ''}
-                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                      placeholder={placeholder || label}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
-                    />
-                  </>
+                  <div className="pl-3 border-l-2 border-gray-100">
+                    <p className="text-xs text-gray-400 italic py-2">Not configured — leave empty for now</p>
+                  </div>
                 )}
+
+                {tier.tier === 'primary' && <div className="border-b border-gray-100 mt-5" />}
               </div>
             ))}
           </div>
         </div>
       ))}
 
-      {/* RAGFlow Internal Models — separate API */}
+      {/* ========== Embedding & Rerank (RAGFlow Internal) ========== */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <div className="flex items-center gap-2 mb-0.5">
           <Database size={16} className="text-gray-500" />
-          <h3 className="text-sm font-semibold text-gray-900">RAGFlow Internal Models</h3>
+          <h3 className="text-base font-semibold text-gray-900">Embedding & Rerank</h3>
         </div>
-        <p className="text-xs text-gray-400 mb-4">
-          Models used by RAGFlow internally for chunk processing (keyword generation, embedding, reranking).
-          These are stored in RAGFlow&apos;s database, not in Noteflow settings.
+        <p className="text-xs text-gray-400 mb-5">
+          Models used by RAGFlow for chunking, embedding, and reranking. Stored in RAGFlow&apos;s database.
         </p>
-        {ragflowError && (
-          <p className="text-sm text-red-600 mb-3">{ragflowError}</p>
-        )}
+        {ragflowError && <p className="text-sm text-red-600 mb-3">{ragflowError}</p>}
         {ragflowLoading ? (
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Loader2 size={14} className="animate-spin" /> Loading…
           </div>
         ) : (
           <>
-            <div className="space-y-4">
-              {[
-                { key: 'llm_id', label: 'Chunk Processing LLM', placeholder: 'e.g. qwen-plus (for auto_keywords/questions & RAPTOR)' },
-                { key: 'embd_id', label: 'Embedding Model', placeholder: 'e.g. text-embedding-v3' },
-                { key: 'rerank_id', label: 'Rerank Model', placeholder: 'e.g. gte-rerank@Tongyi-Qianwen' },
-              ].map(({ key, label, placeholder }) => (
-                <div key={key}>
-                  <label className="text-sm font-medium text-gray-700 mb-1.5 block">{label}</label>
-                  <input
-                    type="text"
-                    value={ragflowForm[key] ?? ''}
-                    onChange={(e) => setRagflowForm({ ...ragflowForm, [key]: e.target.value })}
-                    placeholder={placeholder}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
-                  />
-                </div>
-              ))}
+            {/* Primary tier */}
+            <div className="mb-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Primary
+                </span>
+                <span className="text-xs text-gray-500">Active models in RAGFlow</span>
+              </div>
+              <div className="space-y-4 pl-3 border-l-2 border-gray-100">
+                {[
+                  { key: 'llm_id', label: 'Chunk Processing LLM', placeholder: 'e.g. qwen-plus (for auto_keywords/questions & RAPTOR)' },
+                  { key: 'embd_id', label: 'Embedding Model', placeholder: 'e.g. BAAI/bge-m3' },
+                  { key: 'rerank_id', label: 'Rerank Model', placeholder: 'e.g. gte-rerank@Tongyi-Qianwen' },
+                ].map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label className="text-sm font-medium text-gray-700 mb-1.5 block">{label}</label>
+                    <input
+                      type="text"
+                      value={ragflowForm[key] ?? ''}
+                      onChange={(e) => setRagflowForm({ ...ragflowForm, [key]: e.target.value })}
+                      placeholder={placeholder}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pl-3 flex items-center gap-3">
+                <button
+                  onClick={handleSaveRagflow}
+                  disabled={ragflowSaving}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
+                >
+                  {ragflowSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  Save RAGFlow Models
+                </button>
+                {ragflowMessage && <span className="text-sm text-green-600">{ragflowMessage}</span>}
+              </div>
             </div>
-            <div className="mt-4 flex items-center gap-3">
-              <button
-                onClick={handleSaveRagflow}
-                disabled={ragflowSaving}
-                className="flex items-center gap-2 px-3 py-1.5 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors disabled:opacity-50"
-              >
-                {ragflowSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                Save RAGFlow Models
-              </button>
-              {ragflowMessage && (
-                <span className="text-sm text-green-600">{ragflowMessage}</span>
-              )}
+
+            <div className="border-b border-gray-100 mb-5" />
+
+            {/* Secondary tier — placeholder */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  Secondary
+                </span>
+                <span className="text-xs text-gray-500">Backup (not yet supported by RAGFlow)</span>
+              </div>
+              <div className="pl-3 border-l-2 border-gray-100">
+                <p className="text-xs text-gray-400 italic py-2">Not configured — RAGFlow does not support embedding fallback yet</p>
+              </div>
             </div>
 
             {/* Model Provider Connections */}
             {providers.length > 0 && (
-              <div className="mt-6 pt-5 border-t border-gray-100">
-                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Model Provider Connections</h4>
+              <div className="pt-5 border-t border-gray-100">
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Provider Connections</h4>
                 <div className="space-y-3">
                   {providers.map((p) => {
                     const pk = `${p.llm_factory}/${p.llm_name}`;
@@ -387,7 +484,18 @@ export default function AdminLLMPage() {
         )}
       </div>
 
-      {/* Token Budget — auto-calculated */}
+      {/* ========== Extra groups (flat, no primary/secondary) ========== */}
+      {EXTRA_GROUPS.map((group) => (
+        <div key={group.title} className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <h3 className="text-base font-semibold text-gray-900 mb-0.5">{group.title}</h3>
+          <p className="text-xs text-gray-400 mb-4">{group.description}</p>
+          <div className="space-y-4">
+            {group.fields.map(renderField)}
+          </div>
+        </div>
+      ))}
+
+      {/* ========== Token Budget ========== */}
       <div className="bg-gray-50 rounded-xl border border-gray-100 p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Token Budget (auto-calculated)</h3>
         <p className="text-xs text-gray-500 mb-4">
@@ -395,7 +503,6 @@ export default function AdminLLMPage() {
           {' '}&middot; Context Window: <span className="font-medium text-gray-700">{formatTokens(budget.contextWindow)} tokens</span>
           {' '}&middot; Max Output: <span className="font-medium text-gray-700">{formatTokens(budget.maxOutput)} tokens</span>
         </p>
-
         <div className="mb-4">
           <p className="text-xs font-semibold text-gray-600 mb-2">Allocation</p>
           <div className="space-y-1.5">
@@ -420,8 +527,6 @@ export default function AdminLLMPage() {
             </div>
           </div>
         </div>
-
-        {/* Utilization warning */}
         {totalBudget > budget.contextWindow && (
           <div className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2 mb-3">
             Warning: Total budget ({formatTokens(totalBudget)}) exceeds context window ({formatTokens(budget.contextWindow)}). The system will truncate context dynamically.
@@ -429,6 +534,7 @@ export default function AdminLLMPage() {
         )}
       </div>
 
+      {/* ========== Actions ========== */}
       <div className="flex items-center gap-3">
         <button
           onClick={handleSave}
@@ -447,10 +553,7 @@ export default function AdminLLMPage() {
           Test Connections
         </button>
       </div>
-
-      {saveMessage && (
-        <p className="text-sm text-green-600">{saveMessage}</p>
-      )}
+      {saveMessage && <p className="text-sm text-green-600">{saveMessage}</p>}
       {testResult && (
         <p className={`text-sm ${testResult.ok ? 'text-green-600' : 'text-red-600'}`}>
           {testResult.message}
