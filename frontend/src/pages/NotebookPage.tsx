@@ -1199,6 +1199,16 @@ export default function NotebookPage() {
       }
 
       const citation = msg?.citations.find((c) => c.index === citationIndex);
+      // Debug: log to window for inspection
+      (window as Record<string, unknown>).__lastCitationDebug = {
+        msgId,
+        msgFound: !!msg,
+        citationFound: !!citation,
+        excerptLen: citation?.excerpt?.length ?? 0,
+        sourceId: citation?.source_id ?? "none",
+        totalMsgs: currentMessages.length,
+        msgHasCitations: msg?.citations?.length ?? 0,
+      };
 
       // Resolve source_id from citation or from the active source
       const currentSources = useSourceStore.getState().sources;
