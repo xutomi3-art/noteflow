@@ -1340,7 +1340,7 @@ export default function NotebookPage() {
                     <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                   </div>
                 ) : activeSourceContent ? (
-                  <div ref={(el) => {
+                  <div key={`src-${activeSourceId}-${highlightSeq}`} ref={(el) => {
                     sourceContentRef.current = el;
                     // Highlight excerpt after markdown renders
                     if (el && highlightExcerpt) {
