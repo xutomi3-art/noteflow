@@ -189,9 +189,10 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
                 "For year-only mentions (e.g. '2024'), keep just the year — do NOT expand to Jan 1.\n"
                 "3. Add synonyms for key actions "
                 "(e.g. attend → present, attendance; founded → established, inception)\n"
-                "4. Output keywords in BOTH the question's language AND English "
-                "(e.g. Chinese question about 成立 → 成立, 创立, founded, established)\n"
-                "Output keywords ONLY, comma-delimited. No explanations."
+                "4. If the question is NOT in English, start with a full English translation of the question, "
+                "then add keywords in both languages "
+                "(e.g. '上海美国学校成立于哪一年' → 'When was Shanghai American School founded, 上海美国学校, 成立, founded, established')\n"
+                "Output the translation + keywords, comma-delimited. No explanations."
             )},
             {"role": "user", "content": message},
         ]
