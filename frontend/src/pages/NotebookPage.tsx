@@ -1185,14 +1185,17 @@ export default function NotebookPage() {
       const citationIndex = parseInt(badge.dataset.citationIndex || "", 10);
       if (isNaN(citationIndex)) return;
 
+      // Read messages fresh from store to avoid stale closure
+      const currentMessages = useChatStore.getState().messages;
+
       // Find the message that contains this citation
       const msgEl = badge.closest("[data-message-id]") as HTMLElement | null;
       const msgId = msgEl?.dataset.messageId;
-      let msg = messages.find((m) => m.id === msgId);
+      let msg = currentMessages.find((m) => m.id === msgId);
 
       // Fallback: if no message parent found (e.g. overview citations), search all messages
       if (!msg) {
-        msg = messages.find((m) => m.citations.some((c) => c.index === citationIndex));
+        msg = currentMessages.find((m) => m.citations.some((c) => c.index === citationIndex));
       }
       if (!msg) return;
 
@@ -1200,10 +1203,11 @@ export default function NotebookPage() {
       if (!citation) return;
 
       // Resolve source_id: use the one from citation, or fall back to filename matching
+      const currentSources = useSourceStore.getState().sources;
       let sourceId = citation.source_id;
       if (!sourceId && citation.filename) {
         const citStem = citation.filename.replace(/\.[^.]+$/, "").toLowerCase();
-        const matched = sources.find((s) => {
+        const matched = currentSources.find((s) => {
           const sStem = s.filename.replace(/\.[^.]+$/, "").toLowerCase();
           return sStem === citStem || s.filename.toLowerCase() === citation.filename.toLowerCase()
             || sStem.includes(citStem) || citStem.includes(sStem);
@@ -1213,7 +1217,6 @@ export default function NotebookPage() {
       if (!sourceId) return;
 
       // Extract the sentence before the citation badge from the AI response
-      // This is more precise than the RAGFlow chunk (which can be very large)
       let highlightText: string | null = null;
       const parentEl = badge.closest("li") || badge.closest("p") || badge.parentElement;
       if (parentEl) {
@@ -1232,7 +1235,7 @@ export default function NotebookPage() {
         setIsLeftCollapsed(false);
       }
     },
-    [messages, id, sources, setActiveSource],
+    [id, setActiveSource],
   );
 
   if (notFound) {
