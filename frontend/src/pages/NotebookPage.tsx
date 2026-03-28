@@ -1112,8 +1112,14 @@ export default function NotebookPage() {
           });
           const strip = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
           const fullKey = strip(el.textContent);
-          // Strip HTML tags, image markdown ![](url), page markers, and heading markers before matching
-          const cleanExcerpt = excerpt!.replace(/<[^>]+>/g, "").replace(/!\[.*?\]\([^)]*\)/g, "").replace(/<!--[^>]*-->/g, "").replace(/^#{1,6}\s+/gm, "");
+          // Strip HTML tags, image markdown ![](url), page markers, heading markers, and broken comment fragments
+          const cleanExcerpt = excerpt!
+            .replace(/<[^>]+>/g, "")              // HTML tags
+            .replace(/!\[.*?\]\([^)]*\)/g, "")    // image markdown
+            .replace(/<!--[^>]*-->/g, "")         // HTML comments
+            .replace(/^#{1,6}\s+/gm, "")          // heading markers
+            .replace(/page:\d+\s*-->/g, "")       // broken comment fragments like " page:153 -->"
+            .replace(/<!--\s*/g, "");             // orphan comment opens
           const excKey = strip(cleanExcerpt);
           let idx = -1;
           // Try full match first, then progressively shorter prefixes from the START
