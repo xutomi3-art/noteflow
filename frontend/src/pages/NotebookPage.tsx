@@ -1218,11 +1218,68 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
-      // Use the RAGFlow chunk excerpt for highlighting (actual source text)
-      // If citation not found in store, the source panel still opens without highlight
+      // Open source content and highlight
       if (id) {
-        setActiveSource(id, sourceId, citation?.excerpt || null);
+        const excerpt = citation?.excerpt || null;
+        setActiveSource(id, sourceId, excerpt);
         setIsLeftCollapsed(false);
+
+        // Direct highlight: poll for sourceContentRef after content loads
+        if (excerpt) {
+          let tries = 0;
+          const doHighlight = () => {
+            const container = sourceContentRef.current;
+            if (!container || !container.textContent) {
+              if (tries++ < 20) setTimeout(doHighlight, 300);
+              return;
+            }
+            // Remove previous highlights
+            container.querySelectorAll("mark.citation-highlight").forEach((el) => {
+              const parent = el.parentNode;
+              if (parent) { parent.replaceChild(document.createTextNode(el.textContent || ""), el); parent.normalize(); }
+            });
+            // Strip non-content chars for fuzzy matching
+            const toKey = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
+            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+            const allText: { node: Text; start: number }[] = [];
+            let fullText = "";
+            let tn: Text | null;
+            while ((tn = walker.nextNode() as Text | null)) { allText.push({ node: tn, start: fullText.length }); fullText += tn.textContent || ""; }
+            const keyFull = toKey(fullText);
+            const keyExcerpt = toKey(excerpt.replace(/<[^>]+>/g, "").replace(/\s+/g, " "));
+            // Try tail matching with progressively shorter substrings
+            let matchIdx = -1;
+            for (const len of [keyExcerpt.length, 100, 70, 50]) {
+              if (len >= keyExcerpt.length) { matchIdx = keyFull.indexOf(keyExcerpt); }
+              else { matchIdx = keyFull.indexOf(keyExcerpt.slice(-len)); }
+              if (matchIdx !== -1) break;
+            }
+            if (matchIdx === -1) return;
+            // Map key index to raw text index
+            const isC = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
+            let rawIdx = 0, kp = 0;
+            while (rawIdx < fullText.length && kp < matchIdx) { if (isC(fullText[rawIdx])) kp++; rawIdx++; }
+            while (rawIdx < fullText.length && !isC(fullText[rawIdx])) rawIdx++;
+            // Highlight up to 200 chars
+            let rawEnd = rawIdx, ekp = 0;
+            while (rawEnd < fullText.length && ekp < 200) { if (isC(fullText[rawEnd])) ekp++; rawEnd++; }
+            let firstMark: HTMLElement | null = null;
+            for (const { node: textNode, start } of allText) {
+              const nodeLen = textNode.textContent?.length || 0;
+              if (start + nodeLen <= rawIdx || start >= rawEnd) continue;
+              const ls = Math.max(0, rawIdx - start), le = Math.min(nodeLen, rawEnd - start);
+              if (ls >= le) continue;
+              try {
+                const r = document.createRange(); r.setStart(textNode, ls); r.setEnd(textNode, le);
+                const m = document.createElement("mark"); m.className = "citation-highlight";
+                m.style.cssText = "background: #fef08a; padding: 2px 0; border-radius: 2px; scroll-margin-top: 80px;";
+                r.surroundContents(m); if (!firstMark) firstMark = m;
+              } catch { /* cross-element */ }
+            }
+            if (firstMark) firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
+          };
+          setTimeout(doHighlight, 500);
+        }
       }
     },
     [id, setActiveSource],
