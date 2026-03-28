@@ -1062,7 +1062,7 @@ export default function NotebookPage() {
       let citation: { index: number; source_id: string; filename: string; excerpt: string } | undefined;
       if (msgEl?.dataset.citations) {
         try {
-          const citations = JSON.parse(msgEl.dataset.citations);
+          const citations = JSON.parse(decodeURIComponent(atob(msgEl.dataset.citations)));
           citation = citations.find((c: { index: number }) => c.index === citationIndex);
         } catch { /* ignore parse error */ }
       }
@@ -1838,7 +1838,7 @@ export default function NotebookPage() {
               {/* Chat History */}
               <div className="space-y-8">
                 {messages.map((msg) => (
-                  <div key={msg.id} data-message-id={msg.id} data-citations={msg.citations?.length ? JSON.stringify(msg.citations) : undefined}>
+                  <div key={msg.id} data-message-id={msg.id} data-citations={msg.citations?.length ? btoa(encodeURIComponent(JSON.stringify(msg.citations))) : undefined}>
                     {msg.role === "user" ? (
                       <div className="flex justify-end">
                         <div className="bg-[#eef1f5] text-slate-800 px-5 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-[14px]">
