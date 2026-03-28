@@ -201,7 +201,7 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
             rewrite_messages,
             model=rewrite_model,
             temperature=0.0,
-            max_tokens=150,
+            max_tokens=1000,
         )
         rewritten = rewritten.strip().strip('"').strip("'")
         if rewritten and not rewritten.startswith("[Error"):
