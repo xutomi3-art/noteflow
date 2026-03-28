@@ -13,11 +13,11 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
-    # LLM API (OpenAI-compatible endpoint)
-    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    LLM_MODEL: str = "qwen3.5-plus"
+    # LLM API (OpenAI-compatible endpoint) — primary: local GPU
+    LLM_BASE_URL: str = "http://10.200.0.102:8100/v1"
+    LLM_MODEL: str = "Qwen3.5-35B"
     LLM_MAX_OUTPUT_TOKENS: int = 16384
-    LLM_CONTEXT_WINDOW: int = 1000000  # qwen3.5-plus supports 1M context
+    LLM_CONTEXT_WINDOW: int = 32768  # local vLLM default; adjust via admin panel
     RAG_TOP_K: int = 8
     RAG_SIMILARITY_THRESHOLD: float = 0.0
     RAG_VECTOR_WEIGHT: float = 0.7
@@ -26,9 +26,16 @@ class Settings(BaseSettings):
     RAG_RERANK_ID: str = "gte-rerank"
     RAG_THINK_ROUNDS: int = 5  # max ReAct rounds for deep thinking
 
-    # LLM API key
+    # LLM API key (not needed for local vLLM, kept for cloud backup)
     QWEN_API_KEY: str = ""
-    QWEN_EMBEDDING_MODEL: str = "text-embedding-v3"
+    QWEN_EMBEDDING_MODEL: str = "BAAI/bge-m3"
+
+    # Backup LLM — cloud fallback when primary (local GPU) is down
+    LLM_BACKUP_ENABLED: bool = True
+    LLM_BACKUP_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    LLM_BACKUP_MODEL: str = "qwen3.5-plus"
+    LLM_BACKUP_API_KEY: str = ""  # separate key for cloud; falls back to QWEN_API_KEY if empty
+    LLM_BACKUP_CONTEXT_WINDOW: int = 1000000  # qwen3.5-plus supports 1M context
 
     # RAGFlow
     RAGFLOW_BASE_URL: str = "http://ragflow:9380"

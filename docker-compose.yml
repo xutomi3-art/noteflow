@@ -6,6 +6,7 @@ services:
       - "443:443"
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./docker/nginx/locations.inc:/etc/nginx/conf.d/locations.inc:ro
       - certbot-webroot:/var/www/certbot:ro
       - certbot-certs:/etc/letsencrypt:ro
       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
@@ -53,9 +54,14 @@ services:
       - RAGFLOW_API_KEY=${RAGFLOW_API_KEY:-}
       - MINERU_BASE_URL=${MINERU_BASE_URL:-http://cloud.jototech.cn:17860}
       - UPLOAD_DIR=/app/uploads
-      - LLM_BASE_URL=${LLM_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
-      - LLM_MODEL=${LLM_MODEL:-qwen3.5-plus}
-      - LLM_CONTEXT_WINDOW=${LLM_CONTEXT_WINDOW:-256000}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://10.200.0.102:8100/v1}
+      - LLM_MODEL=${LLM_MODEL:-Qwen3.5-35B}
+      - LLM_CONTEXT_WINDOW=${LLM_CONTEXT_WINDOW:-32768}
+      - LLM_BACKUP_ENABLED=${LLM_BACKUP_ENABLED:-true}
+      - LLM_BACKUP_BASE_URL=${LLM_BACKUP_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      - LLM_BACKUP_MODEL=${LLM_BACKUP_MODEL:-qwen3.5-plus}
+      - LLM_BACKUP_API_KEY=${LLM_BACKUP_API_KEY:-}
+      - LLM_BACKUP_CONTEXT_WINDOW=${LLM_BACKUP_CONTEXT_WINDOW:-1000000}
       - LLM_VISION_MODEL=${LLM_VISION_MODEL:-glm-4.5v}
       - LLM_VISION_BASE_URL=${LLM_VISION_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       - LLM_VISION_API_KEY=${LLM_VISION_API_KEY:-}

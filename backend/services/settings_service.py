@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 CONFIGURABLE_KEYS = {
     "llm_base_url", "llm_model", "llm_max_output_tokens", "llm_context_window", "rag_top_k", "rag_similarity_threshold", "rag_vector_weight", "rag_rewrite_model", "rag_decompose_model", "rag_think_rounds", "rag_rerank_id",
     "qwen_api_key",
+    "llm_backup_enabled", "llm_backup_base_url", "llm_backup_model", "llm_backup_api_key", "llm_backup_context_window",
     "ragflow_api_key", "ragflow_base_url", "raptor_enabled", "query_rewrite_enabled",
     "llm_vision_model", "llm_vision_base_url", "llm_vision_api_key", "vision_enabled",
     "docmee_api_key",
@@ -30,7 +31,7 @@ CONFIGURABLE_KEYS = {
 }
 
 # Keys that contain sensitive values — mask on read
-SENSITIVE_KEYS = {"qwen_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret", "microsoft_client_secret", "llm_vision_api_key"}
+SENSITIVE_KEYS = {"qwen_api_key", "llm_backup_api_key", "ragflow_api_key", "docmee_api_key", "smtp_password", "alibaba_tts_token", "google_client_secret", "microsoft_client_secret", "llm_vision_api_key"}
 
 # Mapping from setting key to Settings attribute
 _ENV_MAP = {
@@ -46,6 +47,11 @@ _ENV_MAP = {
     "rag_think_rounds": "RAG_THINK_ROUNDS",
     "rag_rerank_id": "RAG_RERANK_ID",
     "qwen_api_key": "QWEN_API_KEY",
+    "llm_backup_enabled": "LLM_BACKUP_ENABLED",
+    "llm_backup_base_url": "LLM_BACKUP_BASE_URL",
+    "llm_backup_model": "LLM_BACKUP_MODEL",
+    "llm_backup_api_key": "LLM_BACKUP_API_KEY",
+    "llm_backup_context_window": "LLM_BACKUP_CONTEXT_WINDOW",
     "ragflow_api_key": "RAGFLOW_API_KEY",
     "ragflow_base_url": "RAGFLOW_BASE_URL",
     "raptor_enabled": "RAPTOR_ENABLED",
@@ -138,6 +144,10 @@ async def set_setting(db: AsyncSession, key: str, value: str, user_id: uuid.UUID
     if key in ("qwen_api_key", "llm_base_url", "llm_model"):
         from backend.services.qwen_client import qwen_client
         qwen_client.__init__()
+    # Reinitialize backup client if backup settings changed
+    elif key in ("llm_backup_enabled", "llm_backup_base_url", "llm_backup_model", "llm_backup_api_key"):
+        from backend.services.qwen_client import qwen_client
+        qwen_client._init_backup()
 
 
 async def load_db_settings() -> None:

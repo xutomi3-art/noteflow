@@ -22,6 +22,17 @@ const GROUPS: FieldGroup[] = [
     ],
   },
   {
+    title: 'Backup LLM (Cloud Fallback)',
+    description: 'When the primary model (local GPU) is unreachable, requests automatically fall back to this cloud model',
+    fields: [
+      { key: 'llm_backup_enabled', label: 'Enable Backup', toggle: true, placeholder: 'Automatically switch to cloud model when local GPU is down' },
+      { key: 'llm_backup_base_url', label: 'Backup Base URL', placeholder: 'e.g. https://dashscope.aliyuncs.com/compatible-mode/v1' },
+      { key: 'llm_backup_model', label: 'Backup Model', placeholder: 'e.g. qwen3.5-plus' },
+      { key: 'llm_backup_api_key', label: 'Backup API Key', secret: true },
+      { key: 'llm_backup_context_window', label: 'Backup Context Window', placeholder: 'e.g. 1000000' },
+    ],
+  },
+  {
     title: 'RAGFlow',
     description: 'RAGFlow connection and retrieval parameters',
     fields: [
