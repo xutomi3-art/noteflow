@@ -606,9 +606,14 @@ export default function NotebookPage() {
     if (!activeSourceContent || !highlightExcerpt) return;
 
     // Wait for DOM to render (ref may not be attached yet when content first loads)
-    const timer = setTimeout(() => {
+    // Use multiple retries to handle async rendering
+    let attempts = 0;
+    const tryHighlight = () => {
       const container = sourceContentRef.current;
-      if (!container) return;
+      if (!container) {
+        if (attempts++ < 10) setTimeout(tryHighlight, 200);
+        return;
+      }
 
       // Remove previous highlights
       container.querySelectorAll("mark.citation-highlight").forEach((el) => {
@@ -721,7 +726,8 @@ export default function NotebookPage() {
       if (firstMark) {
         firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
       }
-    }, 300);
+    };
+    const timer = setTimeout(tryHighlight, 300);
 
     return () => clearTimeout(timer);
   }, [activeSourceContent, highlightExcerpt, highlightSeq]);
