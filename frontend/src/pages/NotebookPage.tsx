@@ -1200,7 +1200,7 @@ export default function NotebookPage() {
 
       const citation = msg?.citations.find((c) => c.index === citationIndex);
       // Debug: log to window for inspection
-      (window as Record<string, unknown>).__lastCitationDebug = {
+      (window as unknown as Record<string, unknown>).__lastCitationDebug = {
         msgId,
         msgFound: !!msg,
         citationFound: !!citation,
