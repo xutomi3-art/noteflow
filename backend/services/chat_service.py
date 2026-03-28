@@ -180,19 +180,15 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a search query optimizer for document retrieval. "
-                "Given a user question, generate search keywords that maximize recall:\n"
-                "1. Extract core keywords from the question\n"
-                "2. For FULL dates (with month and day), output ALL format variations: "
-                "YYYY/MM/DD, DD/MM/YYYY, MM/DD/YYYY, Month DD YYYY (e.g. October 28 2022), "
-                "and abbreviated (e.g. Oct 28 2022). "
-                "For year-only mentions (e.g. '2024'), keep just the year — do NOT expand to Jan 1.\n"
-                "3. Add synonyms for key actions "
-                "(e.g. attend → present, attendance; founded → established, inception)\n"
-                "4. If the question is NOT in English, start with a full English translation of the question, "
-                "then add keywords in both languages "
-                "(e.g. '上海美国学校成立于哪一年' → 'When was Shanghai American School founded, 上海美国学校, 成立, founded, established')\n"
-                "Output the translation + keywords, comma-delimited. No explanations."
+                "Extract 5-15 search keywords from the user question. Rules:\n"
+                "- If the question is NOT in English, first write a short English translation\n"
+                "- Then list keywords in both languages\n"
+                "- Add 2-3 synonyms for key terms\n"
+                "- For dates with month/day, add format variations\n"
+                "- Output ONLY comma-separated keywords, nothing else\n"
+                "- Maximum 15 keywords total\n\n"
+                "Example: '上海美国学校成立于哪一年' → "
+                "When was Shanghai American School founded, 上海美国学校, SAS, 成立, founded, established, inception year"
             )},
             {"role": "user", "content": message},
         ]
@@ -201,10 +197,20 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
             rewrite_messages,
             model=rewrite_model,
             temperature=0.0,
-            max_tokens=1000,
+            max_tokens=150,
         )
         rewritten = rewritten.strip().strip('"').strip("'")
         if rewritten and not rewritten.startswith("[Error"):
+            # Deduplicate and limit keywords
+            parts = [p.strip() for p in rewritten.split(",") if p.strip()]
+            seen: set[str] = set()
+            unique: list[str] = []
+            for p in parts:
+                key = p.lower()
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(p)
+            rewritten = ", ".join(unique[:20])  # hard cap at 20 keywords
             logger.info("Query rewrite: [%s] -> [%s]", message, rewritten)
             return rewritten
     except Exception as e:
