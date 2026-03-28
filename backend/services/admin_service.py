@@ -323,10 +323,13 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     except Exception as e:
         services["embedding"] = {"status": "error", "latency_ms": 0, "message": f"Could not check: {str(e)[:80]}"}
 
-    # Rerank — check DashScope API reachability
+    # Rerank — check DashScope API reachability (use backup key if primary is not DashScope)
+    rerank_key = settings.QWEN_API_KEY
+    if "dashscope" not in settings.LLM_BASE_URL and settings.LLM_BACKUP_API_KEY:
+        rerank_key = settings.LLM_BACKUP_API_KEY
     services["rerank"] = await _check_http(
         "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
-        headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"} if settings.QWEN_API_KEY else {},
+        headers={"Authorization": f"Bearer {rerank_key}"} if rerank_key else {},
     )
     rerank_model = settings.RAG_RERANK_ID or "gte-rerank"
     services["rerank"]["message"] = rerank_model + (f" — {services['rerank']['message']}" if services["rerank"].get("message") else "")

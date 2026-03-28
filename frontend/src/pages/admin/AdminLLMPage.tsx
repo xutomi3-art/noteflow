@@ -144,9 +144,9 @@ export default function AdminLLMPage() {
   const [ragflowError, setRagflowError] = useState('');
 
   // RAGFlow model providers (embedding/rerank connection details)
-  interface Provider { llm_factory: string; model_type: string; llm_name: string; api_base: string; status: string }
+  interface Provider { llm_factory: string; model_type: string; llm_name: string; api_base: string; api_key?: string; status: string }
   const [providers, setProviders] = useState<Provider[]>([]);
-  const [providerForms, setProviderForms] = useState<Record<string, string>>({});
+  const [providerForms, setProviderForms] = useState<Record<string, { api_base: string; api_key: string }>>({});
   const [providerSaving, setProviderSaving] = useState<string | null>(null);
 
   const fetchRagflowModels = useCallback(async () => {
@@ -160,9 +160,9 @@ export default function AdminLLMPage() {
       setRagflowModels(models);
       setRagflowForm(models);
       setProviders(provs);
-      const pForms: Record<string, string> = {};
+      const pForms: Record<string, { api_base: string; api_key: string }> = {};
       for (const p of provs) {
-        pForms[`${p.llm_factory}/${p.llm_name}`] = p.api_base || '';
+        pForms[`${p.llm_factory}/${p.llm_name}`] = { api_base: p.api_base || '', api_key: '' };
       }
       setProviderForms(pForms);
     } catch (e) {
@@ -434,33 +434,47 @@ export default function AdminLLMPage() {
             {providers.length > 0 && (
               <div className="pt-5 border-t border-gray-100">
                 <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Provider Connections</h4>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {providers.map((p) => {
                     const pk = `${p.llm_factory}/${p.llm_name}`;
+                    const pf = providerForms[pk] || { api_base: '', api_key: '' };
+                    const baseChanged = pf.api_base !== (p.api_base || '');
+                    const keyChanged = pf.api_key !== '';
+                    const hasChanges = baseChanged || keyChanged;
                     return (
-                      <div key={pk} className="flex items-center gap-2">
+                      <div key={pk} className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1.5">
                             <span className="text-xs font-medium text-gray-700">{p.llm_name}</span>
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{p.llm_factory}</span>
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">{p.model_type}</span>
                           </div>
                           <input
                             type="text"
-                            value={providerForms[pk] ?? ''}
-                            onChange={(e) => setProviderForms({ ...providerForms, [pk]: e.target.value })}
+                            value={pf.api_base}
+                            onChange={(e) => setProviderForms({ ...providerForms, [pk]: { ...pf, api_base: e.target.value } })}
                             placeholder="API Base URL (e.g. http://10.200.0.102:9997)"
+                            className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] mb-1.5"
+                          />
+                          <input
+                            type="password"
+                            value={pf.api_key}
+                            onChange={(e) => setProviderForms({ ...providerForms, [pk]: { ...pf, api_key: e.target.value } })}
+                            placeholder="API Key (leave empty to keep current)"
                             className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
                           />
                         </div>
                         <button
                           onClick={async () => {
-                            const newBase = providerForms[pk];
-                            if (newBase === (p.api_base || '')) return;
+                            if (!hasChanges) return;
                             setProviderSaving(pk);
                             try {
-                              const updated = await api.updateRagflowProvider({ llm_factory: p.llm_factory, llm_name: p.llm_name, api_base: newBase });
+                              const update: Record<string, string> = { llm_factory: p.llm_factory, llm_name: p.llm_name };
+                              if (baseChanged) update.api_base = pf.api_base;
+                              if (keyChanged) update.api_key = pf.api_key;
+                              const updated = await api.updateRagflowProvider(update);
                               setProviders(updated);
+                              setProviderForms({ ...providerForms, [pk]: { ...pf, api_key: '' } });
                               setRagflowMessage('Provider updated');
                               setTimeout(() => setRagflowMessage(''), 3000);
                             } catch (e) {
@@ -469,8 +483,8 @@ export default function AdminLLMPage() {
                               setProviderSaving(null);
                             }
                           }}
-                          disabled={providerSaving === pk || providerForms[pk] === (p.api_base || '')}
-                          className="mt-5 px-2 py-1.5 text-xs font-medium text-[#5b8c15] border border-[#5b8c15]/30 rounded-lg hover:bg-[#5b8c15]/5 transition-colors disabled:opacity-30 disabled:cursor-default whitespace-nowrap"
+                          disabled={providerSaving === pk || !hasChanges}
+                          className="mt-6 px-2 py-1.5 text-xs font-medium text-[#5b8c15] border border-[#5b8c15]/30 rounded-lg hover:bg-[#5b8c15]/5 transition-colors disabled:opacity-30 disabled:cursor-default whitespace-nowrap"
                         >
                           {providerSaving === pk ? <Loader2 size={12} className="animate-spin" /> : 'Save'}
                         </button>
