@@ -9,8 +9,14 @@ const SERVICE_LABELS: Record<string, string> = {
   redis: 'Redis',
   mineru: 'MinerU',
   docmee: 'Docmee AiPPT',
-  deepseek: 'DeepSeek',
+  chat_llm_primary: 'Chat LLM (Primary)',
+  chat_llm_secondary: 'Chat LLM (Secondary)',
+  vision_llm: 'Vision LLM',
+  embedding: 'Embedding',
+  rerank: 'Rerank',
+  // legacy keys
   llm: 'LLM',
+  deepseek: 'DeepSeek',
 };
 
 function formatBytes(bytes: number): string {
@@ -185,10 +191,17 @@ export default function AdminDashboardPage() {
           ) : (
             Object.entries(health).map(([key, h]) => (
               <div key={key} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">
-                <div className={`w-2 h-2 rounded-full ${h.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
+                <div className={`w-2 h-2 rounded-full shrink-0 ${
+                  h.status === 'ok' ? 'bg-green-500' : h.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
+                }`} />
                 <span className="text-sm text-gray-700">{SERVICE_LABELS[key] || key}</span>
-                {h.status === 'ok' && h.latency_ms != null && (
+                {h.latency_ms != null && h.latency_ms > 0 && (
                   <span className="text-[10px] text-gray-400">{h.latency_ms}ms</span>
+                )}
+                {h.message && (
+                  <span className={`text-[10px] ${h.status === 'ok' ? 'text-gray-400' : 'text-red-400'} truncate max-w-[200px]`}>
+                    {h.message}
+                  </span>
                 )}
               </div>
             ))

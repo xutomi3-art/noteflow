@@ -61,11 +61,9 @@ async def list_users(
 
     items = []
     for u in users:
-        # Count notebooks owned by user
         nb_count = (await db.execute(
             select(func.count(Notebook.id)).where(Notebook.owner_id == u.id)
         )).scalar() or 0
-        # Count documents uploaded by user
         doc_count = (await db.execute(
             select(func.count(Source.id)).where(Source.uploaded_by == u.id)
         )).scalar() or 0
@@ -109,6 +107,10 @@ async def update_user(db: AsyncSession, user_id: str, updates: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Health check helpers
+# ---------------------------------------------------------------------------
+
 async def _check_http(url: str, headers: dict | None = None) -> dict:
     """Check an HTTP endpoint and return status + latency."""
     try:
@@ -122,13 +124,74 @@ async def _check_http(url: str, headers: dict | None = None) -> dict:
                 "message": None if resp.status_code < 400 else f"HTTP {resp.status_code}",
             }
     except Exception as e:
-        return {"status": "error", "latency_ms": 0, "message": str(e)}
+        return {"status": "error", "latency_ms": 0, "message": str(e)[:120]}
 
+
+async def _probe_chat_completion(base_url: str, model: str, api_key: str) -> dict:
+    """Send a real chat completion request ("hi") to verify the LLM can generate."""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            start = datetime.now()
+            resp = await client.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "max_tokens": 5,
+                    "temperature": 0,
+                },
+            )
+            latency = (datetime.now() - start).total_seconds() * 1000
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                return {
+                    "status": "ok",
+                    "latency_ms": round(latency),
+                    "message": f'"{text[:30]}" ({model})',
+                }
+            else:
+                body = resp.text[:100]
+                return {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}: {body}"}
+    except Exception as e:
+        return {"status": "error", "latency_ms": 0, "message": str(e)[:120]}
+
+
+async def _probe_embedding(base_url: str, model: str, api_key: str = "") -> dict:
+    """Send a small text to the embedding endpoint and verify vectors are returned."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            start = datetime.now()
+            resp = await client.post(
+                f"{base_url.rstrip('/')}/embeddings",
+                headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+                json={"model": model, "input": "health check"},
+            )
+            latency = (datetime.now() - start).total_seconds() * 1000
+            if resp.status_code == 200:
+                data = resp.json()
+                embeddings = data.get("data", [])
+                if embeddings and len(embeddings[0].get("embedding", [])) > 0:
+                    dim = len(embeddings[0]["embedding"])
+                    return {"status": "ok", "latency_ms": round(latency), "message": f"{dim}d vectors ({model})"}
+                return {"status": "error", "latency_ms": round(latency), "message": "Empty embedding returned"}
+            else:
+                return {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}"}
+    except Exception as e:
+        return {"status": "error", "latency_ms": 0, "message": str(e)[:120]}
+
+
+# ---------------------------------------------------------------------------
+# Main health check — real functional probes for each model
+# ---------------------------------------------------------------------------
 
 async def check_service_health(db: AsyncSession | None = None) -> dict:
     services = {}
 
-    # PostgreSQL — actual query to verify
+    # ── Infrastructure ──────────────────────────────────────────────
+
+    # PostgreSQL
     if db:
         try:
             from sqlalchemy import text
@@ -137,7 +200,7 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
             latency = (datetime.now() - start).total_seconds() * 1000
             services["postgresql"] = {"status": "ok", "latency_ms": round(latency), "message": None}
         except Exception as e:
-            services["postgresql"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+            services["postgresql"] = {"status": "error", "latency_ms": 0, "message": str(e)[:120]}
     else:
         services["postgresql"] = {"status": "ok", "latency_ms": 0, "message": None}
 
@@ -147,7 +210,7 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
         headers={"Authorization": f"Bearer {settings.RAGFLOW_API_KEY}"},
     )
 
-    # MinerU — GET /gradio_api/info (Gradio API info endpoint)
+    # MinerU
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             start = datetime.now()
@@ -158,9 +221,9 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
             else:
                 services["mineru"] = {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}"}
     except Exception as e:
-        services["mineru"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+        services["mineru"] = {"status": "error", "latency_ms": 0, "message": str(e)[:120]}
 
-    # Elasticsearch — check cluster health (green/yellow = ok, red = error)
+    # Elasticsearch
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             start = datetime.now()
@@ -176,14 +239,13 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
             else:
                 services["elasticsearch"] = {"status": "error", "latency_ms": round(latency), "message": f"HTTP {resp.status_code}"}
     except Exception as e:
-        services["elasticsearch"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+        services["elasticsearch"] = {"status": "error", "latency_ms": 0, "message": str(e)[:120]}
 
-    # Redis — AUTH + PING, expect +PONG response
+    # Redis
     try:
         import socket
         start = datetime.now()
         sock = socket.create_connection(("ragflow-redis", 6379), timeout=3)
-        # RAGFlow Redis requires auth
         redis_pass = getattr(settings, "RAGFLOW_REDIS_PASSWORD", "infini_rag_flow")
         sock.sendall(f"AUTH {redis_pass}\r\nPING\r\n".encode())
         reply = sock.recv(128)
@@ -192,11 +254,11 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
         if b"+PONG" in reply:
             services["redis"] = {"status": "ok", "latency_ms": round(latency), "message": None}
         else:
-            services["redis"] = {"status": "error", "latency_ms": round(latency), "message": f"unexpected reply: {reply.decode(errors='replace')}"}
+            services["redis"] = {"status": "error", "latency_ms": round(latency), "message": f"unexpected: {reply.decode(errors='replace')[:60]}"}
     except Exception as e:
-        services["redis"] = {"status": "error", "latency_ms": 0, "message": str(e)}
+        services["redis"] = {"status": "error", "latency_ms": 0, "message": str(e)[:120]}
 
-    # Docmee (AiPPT)
+    # Docmee
     if settings.DOCMEE_API_KEY:
         services["docmee"] = await _check_http(
             "https://docmee.cn/api/user/apiInfo",
@@ -205,44 +267,63 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     else:
         services["docmee"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
 
-    # LLM API — connectivity check + recent request success rate
-    if settings.QWEN_API_KEY:
-        base = settings.LLM_BASE_URL.rstrip("/")
-        llm_health = await _check_http(
-            f"{base}/models",
-            headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"},
-        )
-        # Check recent chat success rate from chat_logs (last 30 minutes)
-        if db:
-            try:
-                from sqlalchemy import text
-                row = await db.execute(text(
-                    "SELECT "
-                    "COUNT(*) AS total, "
-                    "COUNT(*) FILTER (WHERE status = 'ok') AS ok, "
-                    "COUNT(*) FILTER (WHERE status != 'ok' OR error_message IS NOT NULL) AS errors, "
-                    "ROUND(AVG(total_duration)::numeric, 1) AS avg_duration "
-                    "FROM chat_logs WHERE created_at > NOW() - INTERVAL '30 minutes'"
-                ))
-                stats = row.fetchone()
-                total = stats[0] if stats else 0
-                ok_count = stats[1] if stats else 0
-                error_count = stats[2] if stats else 0
-                avg_dur = float(stats[3]) if stats and stats[3] else 0
+    # ── AI Models — real functional probes ───────────────────────
 
-                if total > 0:
-                    rate = round(ok_count * 100 / total)
-                    msg = llm_health.get("message") or ""
-                    llm_health["message"] = f"{rate}% success ({ok_count}/{total} last 30min, avg {avg_dur}s)"
-                    if error_count > 0 and rate < 80:
-                        llm_health["status"] = "warning"
-                    elif error_count > 0 and rate < 50:
-                        llm_health["status"] = "error"
-            except Exception as e:
-                logger.warning("Failed to check LLM success rate: %s", e)
-        services["llm"] = llm_health
+    # Chat LLM Primary — send "hi", expect a real reply
+    primary_key = settings.QWEN_API_KEY or "not-needed"
+    services["chat_llm_primary"] = await _probe_chat_completion(
+        settings.LLM_BASE_URL, settings.LLM_MODEL, primary_key,
+    )
+
+    # Chat LLM Secondary — only if backup is enabled and configured
+    if settings.LLM_BACKUP_ENABLED and settings.LLM_BACKUP_BASE_URL:
+        backup_key = settings.LLM_BACKUP_API_KEY or settings.QWEN_API_KEY
+        if backup_key:
+            services["chat_llm_secondary"] = await _probe_chat_completion(
+                settings.LLM_BACKUP_BASE_URL, settings.LLM_BACKUP_MODEL, backup_key,
+            )
+        else:
+            services["chat_llm_secondary"] = {"status": "error", "latency_ms": 0, "message": "No API key for backup"}
     else:
-        services["llm"] = {"status": "error", "latency_ms": 0, "message": "API key not configured"}
+        services["chat_llm_secondary"] = {"status": "error", "latency_ms": 0, "message": "Backup not enabled"}
+
+    # Vision LLM — check endpoint reachability (real probe would need an image)
+    if settings.VISION_ENABLED:
+        vision_base = settings.LLM_VISION_BASE_URL or settings.LLM_BASE_URL
+        vision_key = settings.LLM_VISION_API_KEY or settings.QWEN_API_KEY
+        vision_health = await _check_http(
+            f"{vision_base.rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {vision_key}"} if vision_key else {},
+        )
+        vision_health["message"] = f"{settings.LLM_VISION_MODEL}" + (f" — {vision_health['message']}" if vision_health.get("message") else "")
+        services["vision_llm"] = vision_health
+    else:
+        services["vision_llm"] = {"status": "ok", "latency_ms": 0, "message": "Disabled"}
+
+    # Embedding — send real text, check vectors come back
+    # Read the embedding provider URL from RAGFlow config
+    try:
+        from backend.services.ragflow_config_service import get_ragflow_providers
+        provs = await get_ragflow_providers()
+        # Find the active embedding provider
+        emb_prov = next((p for p in provs if p["model_type"] == "embedding" and p.get("api_base")), None)
+        if emb_prov:
+            services["embedding"] = await _probe_embedding(
+                f"{emb_prov['api_base'].rstrip('/')}/v1",
+                emb_prov["llm_name"],
+            )
+        else:
+            services["embedding"] = {"status": "error", "latency_ms": 0, "message": "No embedding provider configured in RAGFlow"}
+    except Exception as e:
+        services["embedding"] = {"status": "error", "latency_ms": 0, "message": f"Could not check: {str(e)[:80]}"}
+
+    # Rerank — check DashScope API reachability
+    services["rerank"] = await _check_http(
+        "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+        headers={"Authorization": f"Bearer {settings.QWEN_API_KEY}"} if settings.QWEN_API_KEY else {},
+    )
+    rerank_model = settings.RAG_RERANK_ID or "gte-rerank"
+    services["rerank"]["message"] = rerank_model + (f" — {services['rerank']['message']}" if services["rerank"].get("message") else "")
 
     return services
 
@@ -278,7 +359,6 @@ async def get_container_resources() -> list[dict]:
 
     transport = httpx.AsyncHTTPTransport(uds=DOCKER_SOCKET)
     async with httpx.AsyncClient(transport=transport, base_url="http://docker") as client:
-        # List running containers
         try:
             resp = await client.get("/containers/json", timeout=5.0)
             if resp.status_code != 200:
@@ -303,7 +383,6 @@ async def get_container_resources() -> list[dict]:
                     continue
                 stats = stats_resp.json()
 
-                # Calculate CPU %
                 cpu_delta = (
                     stats["cpu_stats"]["cpu_usage"]["total_usage"]
                     - stats["precpu_stats"]["cpu_usage"]["total_usage"]
@@ -317,10 +396,8 @@ async def get_container_resources() -> list[dict]:
                 )
                 cpu_percent = (cpu_delta / system_delta) * num_cpus * 100.0 if system_delta > 0 else 0.0
 
-                # Memory
                 mem_usage = stats["memory_stats"].get("usage", 0)
                 mem_limit = stats["memory_stats"].get("limit", 0)
-                # Subtract cache from usage for accurate reading
                 cache = stats["memory_stats"].get("stats", {}).get("cache", 0)
                 mem_actual = mem_usage - cache
                 mem_percent = (mem_actual / mem_limit) * 100.0 if mem_limit > 0 else 0.0
