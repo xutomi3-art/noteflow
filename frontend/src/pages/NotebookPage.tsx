@@ -1056,38 +1056,40 @@ export default function NotebookPage() {
       const citationIndex = parseInt(badge.dataset.citationIndex || "", 10);
       if (isNaN(citationIndex)) return;
 
-      // Read messages fresh from store to avoid stale closure
-      const currentMessages = useChatStore.getState().messages;
-
-      // Find the message that contains this citation
+      // Read citations directly from DOM (stored as data-citations on message div)
+      // This avoids all stale closure / store timing issues
       const msgEl = badge.closest("[data-message-id]") as HTMLElement | null;
-      const msgId = msgEl?.dataset.messageId;
-      let msg = currentMessages.find((m) => m.id === msgId);
-      if (!msg) {
-        msg = currentMessages.find((m) => m.citations.some((c) => c.index === citationIndex));
+      let citation: { index: number; source_id: string; filename: string; excerpt: string } | undefined;
+      if (msgEl?.dataset.citations) {
+        try {
+          const citations = JSON.parse(msgEl.dataset.citations);
+          citation = citations.find((c: { index: number }) => c.index === citationIndex);
+        } catch { /* ignore parse error */ }
       }
 
-      const citation = msg?.citations.find((c) => c.index === citationIndex);
+      // Fallback: try store if DOM didn't have citations
+      if (!citation) {
+        const currentMessages = useChatStore.getState().messages;
+        const msg = currentMessages.find((m) => m.id === msgEl?.dataset.messageId)
+          || currentMessages.find((m) => m.citations?.some((c) => c.index === citationIndex));
+        citation = msg?.citations?.find((c) => c.index === citationIndex) as typeof citation;
+      }
 
-      // Resolve source_id from citation or from the active source
+      // Resolve source_id
       const currentSources = useSourceStore.getState().sources;
       let sourceId = citation?.source_id || "";
       if (!sourceId && citation?.filename) {
         const citStem = citation.filename.replace(/\.[^.]+$/, "").toLowerCase();
         const matched = currentSources.find((s) => {
           const sStem = s.filename.replace(/\.[^.]+$/, "").toLowerCase();
-          return sStem === citStem || s.filename.toLowerCase() === citation.filename.toLowerCase()
+          return sStem === citStem || s.filename.toLowerCase() === citation!.filename.toLowerCase()
             || sStem.includes(citStem) || citStem.includes(sStem);
         });
         if (matched) sourceId = matched.id;
       }
-      // Last resort: use currently active source
-      if (!sourceId) {
-        sourceId = useSourceStore.getState().activeSourceId || "";
-      }
+      if (!sourceId) sourceId = useSourceStore.getState().activeSourceId || "";
       if (!sourceId) return;
 
-      // Open source content and highlight
       const excerpt = citation?.excerpt || null;
       if (id) {
         setActiveSource(id, sourceId, excerpt);
@@ -1832,7 +1834,7 @@ export default function NotebookPage() {
               {/* Chat History */}
               <div className="space-y-8">
                 {messages.map((msg) => (
-                  <div key={msg.id} data-message-id={msg.id}>
+                  <div key={msg.id} data-message-id={msg.id} data-citations={msg.citations?.length ? JSON.stringify(msg.citations) : undefined}>
                     {msg.role === "user" ? (
                       <div className="flex justify-end">
                         <div className="bg-[#eef1f5] text-slate-800 px-5 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-[14px]">
