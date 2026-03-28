@@ -297,7 +297,9 @@ class VolcengineASRClient:
 
 # ── Whisper ASR Client (local Belle-whisper via Xinference) ────────
 
-WHISPER_FLUSH_INTERVAL = 3  # seconds between transcription calls
+WHISPER_FLUSH_INTERVAL = 5  # seconds — longer chunks = better accuracy
+WHISPER_MIN_AUDIO_SECS = 1.5  # skip chunks shorter than this
+WHISPER_SILENCE_THRESHOLD = 200  # PCM amplitude below this = silence
 WHISPER_SAMPLE_RATE = 16000
 WHISPER_SAMPLE_WIDTH = 2  # 16-bit
 
@@ -311,6 +313,32 @@ def _pcm_to_wav(pcm_data: bytes) -> bytes:
         wf.setframerate(WHISPER_SAMPLE_RATE)
         wf.writeframes(pcm_data)
     return buf.getvalue()
+
+
+def _has_speech(pcm_data: bytes, threshold: int = WHISPER_SILENCE_THRESHOLD) -> bool:
+    """Simple VAD: check if PCM audio has any samples above threshold."""
+    if len(pcm_data) < 4:
+        return False
+    n_samples = len(pcm_data) // 2
+    samples = struct.unpack(f"<{n_samples}h", pcm_data[:n_samples * 2])
+    # Check RMS energy
+    rms = (sum(s * s for s in samples) / n_samples) ** 0.5
+    return rms > threshold
+
+
+def _is_repetitive(text: str) -> bool:
+    """Detect whisper hallucination: repeated phrases like '嗯嗯嗯嗯' or 'thank you thank you'."""
+    if len(text) < 4:
+        return False
+    # Check if a single char repeated
+    if len(set(text.replace(" ", ""))) <= 2:
+        return True
+    # Check if a short phrase repeats 3+ times
+    for phrase_len in range(2, min(10, len(text) // 3 + 1)):
+        phrase = text[:phrase_len]
+        if text.count(phrase) >= 3:
+            return True
+    return False
 
 
 class WhisperASRClient:
@@ -355,45 +383,69 @@ class WhisperASRClient:
             if session.is_paused or session.is_ended:
                 continue
 
-            # Take all buffered audio
-            if len(session._audio_buffer) < WHISPER_SAMPLE_RATE * WHISPER_SAMPLE_WIDTH:
-                # Less than 1 second of audio — skip
+            min_bytes = int(WHISPER_MIN_AUDIO_SECS * WHISPER_SAMPLE_RATE * WHISPER_SAMPLE_WIDTH)
+            if len(session._audio_buffer) < min_bytes:
                 continue
 
             pcm_data = bytes(session._audio_buffer)
             session._audio_buffer.clear()
 
-            # Calculate time offset
+            # Simple VAD: skip if audio is mostly silence
+            if not _has_speech(pcm_data):
+                continue
+
             elapsed_ms = int((time.monotonic() - session.session_start) * 1000)
             duration_ms = int(len(pcm_data) / (WHISPER_SAMPLE_RATE * WHISPER_SAMPLE_WIDTH) * 1000)
             start_ms = max(0, elapsed_ms - duration_ms)
 
+            # Build prompt from last 2 utterances for context continuity
+            prompt_parts = [u.text for u in session.utterances[-2:]]
+            prompt = "".join(prompt_parts) if prompt_parts else ""
+
             try:
                 wav_data = _pcm_to_wav(pcm_data)
-                text = await self._transcribe(wav_data)
-                if text and text.strip():
-                    session.sequence_counter += 1
-                    utt = Utterance(
-                        speaker_id="speaker_0",
-                        text=text.strip(),
-                        start_time_ms=start_ms,
-                        end_time_ms=elapsed_ms,
-                        is_final=True,
-                        sequence=session.sequence_counter,
-                    )
-                    session.utterances.append(utt)
-                    if session._result_queue:
-                        await session._result_queue.put(utt)
+                text = await self._transcribe(wav_data, prompt=prompt)
+                text = (text or "").strip()
+
+                # Filter hallucinations
+                if not text or _is_repetitive(text):
+                    continue
+
+                # Dedup: skip if identical to last utterance
+                if session.utterances and session.utterances[-1].text == text:
+                    continue
+
+                session.sequence_counter += 1
+                utt = Utterance(
+                    speaker_id="speaker_0",
+                    text=text,
+                    start_time_ms=start_ms,
+                    end_time_ms=elapsed_ms,
+                    is_final=True,
+                    sequence=session.sequence_counter,
+                )
+                session.utterances.append(utt)
+                if session._result_queue:
+                    await session._result_queue.put(utt)
             except Exception as e:
                 logger.error("Whisper transcription failed for meeting %s: %s", meeting_id, e)
 
-    async def _transcribe(self, wav_data: bytes) -> str:
+    async def _transcribe(self, wav_data: bytes, prompt: str = "") -> str:
         """POST audio to whisper API and return text."""
         async with httpx.AsyncClient(timeout=30.0) as client:
+            form_data: dict[str, str] = {
+                "model": "Belle-whisper-large-v3-zh",
+                "language": "zh",
+                "temperature": "0",
+                "response_format": "json",
+            }
+            if prompt:
+                # initial_prompt gives whisper context from previous segments
+                form_data["initial_prompt"] = prompt[-200:]  # last 200 chars
             resp = await client.post(
                 f"{self.base_url}/audio/transcriptions",
                 files={"file": ("audio.wav", wav_data, "audio/wav")},
-                data={"model": "Belle-whisper-large-v3-zh", "language": "zh"},
+                data=form_data,
             )
             if resp.status_code == 200:
                 data = resp.json()
