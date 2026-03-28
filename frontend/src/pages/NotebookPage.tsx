@@ -1112,12 +1112,14 @@ export default function NotebookPage() {
           });
           const strip = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "");
           const fullKey = strip(el.textContent);
-          // Strip HTML tags, image markdown ![](url), and page markers before matching
-          const cleanExcerpt = excerpt!.replace(/<[^>]+>/g, "").replace(/!\[.*?\]\([^)]*\)/g, "").replace(/<!--[^>]*-->/g, "");
+          // Strip HTML tags, image markdown ![](url), page markers, and heading markers before matching
+          const cleanExcerpt = excerpt!.replace(/<[^>]+>/g, "").replace(/!\[.*?\]\([^)]*\)/g, "").replace(/<!--[^>]*-->/g, "").replace(/^#{1,6}\s+/gm, "");
           const excKey = strip(cleanExcerpt);
           let idx = -1;
-          for (const len of [excKey.length, 100, 70, 50, 30]) {
-            idx = fullKey.indexOf(len >= excKey.length ? excKey : excKey.slice(-len));
+          // Try full match first, then progressively shorter prefixes from the START
+          for (const len of [excKey.length, 200, 100, 70, 50, 30]) {
+            const needle = len >= excKey.length ? excKey : excKey.slice(0, len);
+            idx = fullKey.indexOf(needle);
             if (idx !== -1) break;
           }
           if (idx === -1) return;
@@ -1127,7 +1129,7 @@ export default function NotebookPage() {
           while (ri < raw.length && ki < idx) { if (isC(raw[ri])) ki++; ri++; }
           while (ri < raw.length && !isC(raw[ri])) ri++;
           let re = ri, ek = 0;
-          while (re < raw.length && ek < 200) { if (isC(raw[re])) ek++; re++; }
+          while (re < raw.length && ek < excKey.length) { if (isC(raw[re])) ek++; re++; }
           const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
           const nodes: { node: Text; start: number }[] = [];
           let full = ""; let tn: Text | null;
