@@ -1,5 +1,6 @@
 import base64
 import logging
+import re
 from typing import AsyncGenerator
 
 from openai import AsyncOpenAI
@@ -7,6 +8,18 @@ from openai import AsyncOpenAI
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Strip <think>...</think> blocks and "Thinking Process:" preamble from model output.
+# Qwen3.5 MoE models embed thinking in their generation weights — can't be disabled via API.
+_THINK_BLOCK_RE = re.compile(r'<think>.*?</think>\s*', re.DOTALL)
+_THINK_PREAMBLE_RE = re.compile(r'^Thinking Process:.*?(?=\n[A-Z]|\n\n)', re.DOTALL)
+
+
+def _strip_thinking(text: str) -> str:
+    """Remove thinking blocks from model output."""
+    text = _THINK_BLOCK_RE.sub('', text)
+    text = _THINK_PREAMBLE_RE.sub('', text)
+    return text.strip()
 
 IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "bmp"}
 
@@ -178,6 +191,10 @@ class QwenClient:
                 response = await client.chat.completions.create(**kwargs)
                 first_token_timeout = 120  # seconds
                 got_first_token = False
+                # Buffer to detect and skip <think>...</think> blocks at start
+                think_buffer = ""
+                in_think_block = False
+                think_done = False  # once we're past thinking, stop buffering
                 try:
                     it = response.__aiter__()
                     while True:
@@ -194,7 +211,29 @@ class QwenClient:
                             delta = chunk.choices[0].delta
                             if delta.content:
                                 got_first_token = True
-                                yield delta.content
+                                token = delta.content
+                                # Strip <think>...</think> blocks from stream
+                                if not think_done:
+                                    think_buffer += token
+                                    if not in_think_block and "<think>" in think_buffer:
+                                        in_think_block = True
+                                    if in_think_block:
+                                        if "</think>" in think_buffer:
+                                            # Thinking block complete — discard it, emit remainder
+                                            after = think_buffer.split("</think>", 1)[1].lstrip()
+                                            think_done = True
+                                            if after:
+                                                yield after
+                                        # else: still buffering think block
+                                    elif len(think_buffer) > 20:
+                                        # No <think> tag found — not a thinking model, flush buffer
+                                        think_done = True
+                                        yield think_buffer
+                                else:
+                                    yield token
+                    # Flush any remaining buffer (no </think> found — shouldn't happen)
+                    if not think_done and think_buffer and not in_think_block:
+                        yield think_buffer
                 finally:
                     await response.close()
                 return
@@ -273,7 +312,8 @@ class QwenClient:
         if extra:
             kwargs["extra_body"] = extra
         response = await client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content or ""
+        content = response.choices[0].message.content or ""
+        return _strip_thinking(content)
 
     async def analyze_image(self, image_path: str, filename: str) -> str:
         """Use Vision LLM to extract text and chart data from an image."""
