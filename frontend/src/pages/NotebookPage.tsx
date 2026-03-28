@@ -1206,11 +1206,23 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
-      // Use the full RAGFlow chunk text (parent chunk) for highlighting
-      // This is the exact text the LLM used to generate its answer
-      // Open parsed markdown content in left panel with chunk highlighted
+      // Extract the sentence before the citation badge from the AI response
+      // This is more precise than the RAGFlow chunk (which can be very large)
+      let highlightText: string | null = null;
+      const parentEl = badge.closest("li") || badge.closest("p") || badge.parentElement;
+      if (parentEl) {
+        const range = document.createRange();
+        range.setStart(parentEl, 0);
+        range.setEnd(badge, 0);
+        const text = range.toString().replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
+        if (text.length >= 15) {
+          highlightText = text.length > 150 ? text.slice(-150) : text;
+        }
+      }
+
+      // Open parsed markdown content in left panel with highlighted text
       if (id) {
-        setActiveSource(id, sourceId, citation.excerpt || null);
+        setActiveSource(id, sourceId, highlightText || citation.excerpt || null);
         setIsLeftCollapsed(false);
       }
     },
