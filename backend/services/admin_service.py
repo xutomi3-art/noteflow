@@ -138,7 +138,7 @@ async def _probe_chat_completion(base_url: str, model: str, api_key: str) -> dic
                 json={
                     "model": model,
                     "messages": [{"role": "user", "content": "hi"}],
-                    "max_tokens": 5,
+                    "max_tokens": 20,
                     "temperature": 0,
                 },
             )
@@ -146,6 +146,12 @@ async def _probe_chat_completion(base_url: str, model: str, api_key: str) -> dic
             if resp.status_code == 200:
                 data = resp.json()
                 text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                # Strip <think>...</think> blocks from probe display
+                import re as _re
+                text = _re.sub(r'<think>.*?</think>\s*', '', text, flags=_re.DOTALL)
+                text = _re.sub(r'^Thinking Process:.*?(?=\n[A-Z]|\n\n|$)', '', text, flags=_re.DOTALL).strip()
+                if not text:
+                    text = "(ok, thinking stripped)"
                 return {
                     "status": "ok",
                     "latency_ms": round(latency),
