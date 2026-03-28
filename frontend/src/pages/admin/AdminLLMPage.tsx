@@ -36,20 +36,20 @@ const MODEL_GROUPS: ModelGroup[] = [
     tiers: [
       {
         tier: 'primary',
-        label: 'Primary (Local GPU)',
+        label: 'Primary',
         fields: [
-          { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. http://10.200.0.102:8100/v1' },
-          { key: 'llm_model', label: 'Model', placeholder: 'e.g. Qwen3.5-35B' },
-          { key: 'qwen_api_key', label: 'API Key', secret: true, placeholder: 'not needed for local vLLM' },
+          { key: 'llm_base_url', label: 'Base URL', placeholder: 'e.g. https://dashscope.aliyuncs.com/compatible-mode/v1' },
+          { key: 'llm_model', label: 'Model', placeholder: 'e.g. qwen3.5-plus, gpt-4o, deepseek-chat' },
+          { key: 'qwen_api_key', label: 'API Key', secret: true },
           { key: 'llm_context_window', label: 'Context Window', placeholder: 'e.g. 32768' },
           { key: 'llm_max_output_tokens', label: 'Max Output Tokens', placeholder: 'e.g. 16384' },
         ],
       },
       {
         tier: 'secondary',
-        label: 'Secondary (Cloud Backup)',
+        label: 'Secondary (Backup)',
         fields: [
-          { key: 'llm_backup_enabled', label: 'Enable Fallback', toggle: true, placeholder: 'Auto-switch to cloud when local GPU is down' },
+          { key: 'llm_backup_enabled', label: 'Enable Fallback', toggle: true, placeholder: 'Auto-switch to secondary when primary is unreachable' },
           { key: 'llm_backup_base_url', label: 'Base URL', placeholder: 'e.g. https://dashscope.aliyuncs.com/compatible-mode/v1' },
           { key: 'llm_backup_model', label: 'Model', placeholder: 'e.g. qwen3.5-plus' },
           { key: 'llm_backup_api_key', label: 'API Key', secret: true },

@@ -30,17 +30,29 @@ def _is_connectivity_error(exc: Exception) -> bool:
     return any(kw in msg for kw in _CONNECTIVITY_ERROR_KEYWORDS)
 
 
-def _build_extra(model: str, context_window: int, enable_search: bool = False) -> dict:
-    """Build extra_body params based on model type."""
+def _is_local_vllm(base_url: str) -> bool:
+    """Check if the endpoint is a local vLLM server (not a cloud API)."""
+    return "dashscope" not in base_url and "bigmodel" not in base_url and "openai.com" not in base_url
+
+
+def _build_extra(model: str, context_window: int, base_url: str = "", enable_search: bool = False) -> dict:
+    """Build extra_body params based on model type and endpoint."""
     extra: dict = {}
     model_lower = model.lower()
-    # Disable built-in thinking for models that support it (Qwen cloud, GLM)
-    # Local vLLM and DeepSeek don't support this param
-    if "deepseek" not in model_lower and "35b" not in model_lower:
-        extra["enable_thinking"] = False
-    # Unlock full context window (Qwen cloud defaults to ~129K without this)
-    if "qwen" in model_lower and "35b" not in model_lower:
+    is_local = _is_local_vllm(base_url)
+
+    if "deepseek" not in model_lower:
+        if is_local:
+            # vLLM: disable thinking via chat_template_kwargs
+            extra["chat_template_kwargs"] = {"enable_thinking": False}
+        else:
+            # DashScope / cloud: top-level param
+            extra["enable_thinking"] = False
+
+    # Unlock full context window (DashScope Qwen defaults to ~129K without this)
+    if "qwen" in model_lower and not is_local:
         extra["max_input_tokens"] = context_window
+
     if enable_search:
         extra["enable_search"] = True
         extra["search_options"] = {"search_strategy": "agent"}
@@ -101,6 +113,7 @@ class QwenClient:
         try:
             async for token in self._stream_chat_with_client(
                 self.client, self.model, settings.LLM_CONTEXT_WINDOW,
+                settings.LLM_BASE_URL,
                 messages, temperature, max_tokens, enable_search,
             ):
                 yield token
@@ -125,6 +138,7 @@ class QwenClient:
                 async for token in self._stream_chat_with_client(
                     self._backup_client, self._backup_model,
                     settings.LLM_BACKUP_CONTEXT_WINDOW,
+                    settings.LLM_BACKUP_BASE_URL,
                     messages, temperature, max_tokens, enable_search,
                 ):
                     yield token
@@ -139,6 +153,7 @@ class QwenClient:
         client: AsyncOpenAI,
         model: str,
         context_window: int,
+        base_url: str,
         messages: list[dict],
         temperature: float,
         max_tokens: int | None,
@@ -150,7 +165,7 @@ class QwenClient:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                extra = _build_extra(model, context_window, enable_search)
+                extra = _build_extra(model, context_window, base_url, enable_search)
                 kwargs: dict = dict(
                     model=model,
                     messages=messages,  # type: ignore[arg-type]
@@ -213,6 +228,7 @@ class QwenClient:
         try:
             return await self._generate_with_client(
                 self.client, gen_model, settings.LLM_CONTEXT_WINDOW,
+                settings.LLM_BASE_URL,
                 messages, temperature, max_tokens,
             )
         except Exception as e:
@@ -228,6 +244,7 @@ class QwenClient:
             return await self._generate_with_client(
                 self._backup_client, backup_model,
                 settings.LLM_BACKUP_CONTEXT_WINDOW,
+                settings.LLM_BACKUP_BASE_URL,
                 messages, temperature, max_tokens,
             )
         except Exception as e2:
@@ -239,12 +256,13 @@ class QwenClient:
         client: AsyncOpenAI,
         model: str,
         context_window: int,
+        base_url: str,
         messages: list[dict],
         temperature: float,
         max_tokens: int,
     ) -> str:
         """Generate with a specific client. Raises on failure."""
-        extra = _build_extra(model, context_window)
+        extra = _build_extra(model, context_window, base_url)
         kwargs: dict = dict(
             model=model,
             messages=messages,  # type: ignore[arg-type]
