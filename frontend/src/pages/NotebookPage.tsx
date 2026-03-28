@@ -1201,21 +1201,12 @@ export default function NotebookPage() {
       let highlightText: string | null = null;
       const parentEl = badge.closest("li") || badge.closest("p") || badge.parentElement;
       if (parentEl) {
-        // Get the full text of the enclosing paragraph/list-item up to the badge
-        const fullText = parentEl.textContent || "";
-        // Find badge's text position by walking nodes
-        let beforeBadge = "";
-        const walk = document.createTreeWalker(parentEl, NodeFilter.SHOW_TEXT);
-        let tNode: Text | null;
-        while ((tNode = walk.nextNode() as Text | null)) {
-          // Stop if this text node is after the badge
-          if (badge.compareDocumentPosition(tNode) & Node.DOCUMENT_POSITION_PRECEDING) break;
-          beforeBadge += tNode.textContent || "";
-        }
-        // Clean up: remove other citation markers like [1][2], trim
-        let text = beforeBadge.replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
+        // Use Range to get all text from start of parent to the badge position
+        const range = document.createRange();
+        range.setStart(parentEl, 0);
+        range.setEnd(badge, 0);
+        let text = range.toString().replace(/\[\d+\]/g, "").replace(/\s+/g, " ").trim();
         if (text.length >= 15) {
-          // Take last 150 chars — longer text = more unique match
           highlightText = text.length > 150 ? text.slice(-150) : text;
         }
       }
