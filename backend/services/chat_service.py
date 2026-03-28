@@ -181,14 +181,18 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
         rewrite_messages = [
             {"role": "system", "content": (
                 "Extract 5-15 search keywords from the user question. Rules:\n"
-                "- If the question is NOT in English, first write a short English translation\n"
-                "- Then list keywords in both languages\n"
-                "- Add 2-3 synonyms for key terms\n"
+                "- ALWAYS output keywords in BOTH English AND Chinese, regardless of input language\n"
+                "- If input is Chinese: add English translation + English keywords\n"
+                "- If input is English: add Chinese translation + Chinese keywords\n"
+                "- Add 2-3 synonyms for key terms in both languages\n"
                 "- For dates with month/day, add format variations\n"
                 "- Output ONLY comma-separated keywords, nothing else\n"
                 "- Maximum 15 keywords total\n\n"
-                "Example: '上海美国学校成立于哪一年' → "
-                "When was Shanghai American School founded, 上海美国学校, SAS, 成立, founded, established, inception year"
+                "Examples:\n"
+                "'上海美国学校成立于哪一年' → "
+                "When was Shanghai American School founded, 上海美国学校, SAS, 成立, founded, established, inception year\n"
+                "'When was the Board last expanded?' → "
+                "Board expansion history, 董事会, 扩充, 扩大, expanded, enlarged, board members, 成员变动, 增加席位"
             )},
             {"role": "user", "content": message},
         ]
