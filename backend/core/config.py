@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # File Storage
     UPLOAD_DIR: str = "./uploads"
-    MAX_FILE_SIZE_MB: int = 50
+    MAX_FILE_SIZE_MB: int = 200
 
     # Alibaba Cloud TTS
     ALIBABA_TTS_APPKEY: str = os.getenv("ALIBABA_TTS_APPKEY", "")
