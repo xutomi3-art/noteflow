@@ -236,6 +236,60 @@ def _convert_to_pdf(file_path: str) -> str | None:
     return None
 
 
+async def _render_and_analyze_pages(pdf_path: str) -> list[str]:
+    """Render each PDF page as an image and analyze with Vision LLM.
+
+    Best for PPTX: captures tables/charts pasted as images that
+    PyMuPDF extract_image() misses.
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.warning("PyMuPDF not installed, skipping page rendering")
+        return []
+
+    descriptions: list[str] = []
+    try:
+        doc = fitz.open(pdf_path)
+        total_pages = len(doc)
+        logger.info("Rendering %d pages for vision analysis: %s", total_pages, pdf_path)
+
+        for page_num in range(total_pages):
+            page = doc[page_num]
+            # Render at 2x resolution for better OCR
+            mat = fitz.Matrix(2.0, 2.0)
+            pix = page.get_pixmap(matrix=mat)
+            temp_path = f"/tmp/page_render_{page_num}.png"
+
+            try:
+                pix.save(temp_path)
+                import time as _time
+                t_start = _time.time()
+                desc = await qwen_client.analyze_image(
+                    temp_path,
+                    f"slide_{page_num + 1}.png",
+                )
+                elapsed = round(_time.time() - t_start, 1)
+
+                if desc and len(desc.strip()) > 20 and "analysis failed" not in desc:
+                    descriptions.append(
+                        f"<!-- page:{page_num + 1} -->\n### Slide {page_num + 1}\n{desc}"
+                    )
+                    logger.info("Page %d/%d analyzed: %d chars (%.1fs)", page_num + 1, total_pages, len(desc), elapsed)
+            except Exception as e:
+                logger.warning("Failed to analyze page %d: %s", page_num + 1, e)
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+        doc.close()
+        logger.info("Page rendering complete: %d/%d pages analyzed", len(descriptions), total_pages)
+    except Exception as e:
+        logger.error("Page rendering failed: %s", e)
+
+    return descriptions
+
+
 async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
     """Extract images from PDF and analyze with Vision LLM.
 
@@ -425,9 +479,14 @@ async def process_document(
                     # Inject PDF page markers into markdown for accurate citation page numbers
                     content = _inject_pdf_page_markers(parsed, parse_path)
                     # Extract and analyze images from PDF with Vision LLM (if enabled)
+                    # For PPTX: render every page as image (catches tables/charts pasted as images)
+                    # For PDF/DOCX: extract embedded images only
                     image_texts = []
                     if settings.VISION_ENABLED:
-                        image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                        if file_type == "pptx":
+                            image_texts = await _render_and_analyze_pages(parse_path)
+                        else:
+                            image_texts = await _extract_and_analyze_pdf_images(parse_path)
                     if image_texts:
                         content += "\n\n" + "\n\n".join(image_texts)
                         logger.info("Added %d image descriptions to %s", len(image_texts), filename)
