@@ -298,7 +298,7 @@ export default function NotebookPage() {
   useEffect(() => {
     if (!id) return;
     fetch(`/api/notebooks/${id}/meetings/hotwords`, {
-      headers: { Authorization: `Bearer ${useAuthStore.getState().accessToken}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` },
     })
       .then((r) => r.json())
       .then((d) => setHotwords(d.words || []))
@@ -313,7 +313,7 @@ export default function NotebookPage() {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${useAuthStore.getState().accessToken}`,
+          Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
         },
         body: JSON.stringify({ words }),
       }).catch(() => {});
