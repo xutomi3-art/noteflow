@@ -651,7 +651,9 @@ export default function NotebookPage() {
     [handleSend, chatInput],
   );
 
-  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const [maxFileSizeMB, setMaxFileSizeMB] = useState(200);
+  useEffect(() => { fetch('/api/config').then(r => r.json()).then(d => setMaxFileSizeMB(d.max_file_size_mb || 200)).catch(() => {}); }, []);
+  const MAX_FILE_SIZE = maxFileSizeMB * 1024 * 1024;
   const ALLOWED_EXTENSIONS = new Set([
     'pdf', 'docx', 'pptx', 'txt', 'md',
     'xlsx', 'xls', 'csv',
@@ -680,7 +682,7 @@ export default function NotebookPage() {
         messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp`);
       }
       if (rejectedSize.length > 0) {
-        messages.push(`Exceeds 50 MB limit:\n${rejectedSize.join('\n')}`);
+        messages.push(`Exceeds ${maxFileSizeMB} MB limit:\n${rejectedSize.join('\n')}`);
       }
       if (messages.length > 0) {
         alert(messages.join('\n\n'));
@@ -771,7 +773,7 @@ export default function NotebookPage() {
       messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp`);
     }
     if (rejectedSize.length > 0) {
-      messages.push(`Exceeds 50 MB limit:\n${rejectedSize.join('\n')}`);
+      messages.push(`Exceeds ${maxFileSizeMB} MB limit:\n${rejectedSize.join('\n')}`);
     }
     if (messages.length > 0) alert(messages.join('\n\n'));
     if (accepted.length > 0) setModalFiles(prev => [...prev, ...accepted]);
@@ -1026,7 +1028,7 @@ export default function NotebookPage() {
           const file = item.getAsFile();
           if (file) {
             if (file.size > MAX_FILE_SIZE) {
-              alert(`Pasted image (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the 50 MB limit.`);
+              alert(`Pasted image (${(file.size / 1024 / 1024).toFixed(1)} MB) exceeds the ${maxFileSizeMB} MB limit.`);
               return;
             }
             const ext = file.type.split("/")[1] || "png";
@@ -2583,7 +2585,7 @@ export default function NotebookPage() {
                   : 'Upload Sources'}
               </button>
             </div>
-            <p className="text-center text-xs text-slate-400 mt-4">Up to 100 files, 50 MB each.</p>
+            <p className="text-center text-xs text-slate-400 mt-4">Up to 100 files, {maxFileSizeMB} MB each.</p>
           </div>
         </div>
       )}

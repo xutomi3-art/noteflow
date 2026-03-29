@@ -232,7 +232,9 @@ export default function DashboardPage() {
     navigate('/notebook/' + notebook.id);
   };
 
-  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const [maxFileSizeMB, setMaxFileSizeMB] = useState(200);
+  useEffect(() => { fetch('/api/config').then(r => r.json()).then(d => setMaxFileSizeMB(d.max_file_size_mb || 200)).catch(() => {}); }, []);
+  const MAX_FILE_SIZE = maxFileSizeMB * 1024 * 1024;
   const ALLOWED_EXTENSIONS = new Set([
     'pdf', 'docx', 'pptx', 'txt', 'md',
     'xlsx', 'xls', 'csv',
@@ -260,7 +262,7 @@ export default function DashboardPage() {
       messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp`);
     }
     if (rejectedSize.length > 0) {
-      messages.push(`Exceeds 50 MB limit:\n${rejectedSize.join('\n')}`);
+      messages.push(`Exceeds ${maxFileSizeMB} MB limit:\n${rejectedSize.join('\n')}`);
     }
     if (messages.length > 0) {
       alert(messages.join('\n\n'));
@@ -351,7 +353,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="Noteflow" className="w-10 h-10 rounded-xl" />
           <span className="text-2xl font-bold tracking-tight">Noteflow</span>
-          <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded-md">Beta</span>
+          <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-[#5b8c15]/10 text-[#5b8c15] rounded-md">Alpha</span>
         </div>
         <div className="flex items-center gap-4">
           <button
@@ -917,7 +919,7 @@ export default function DashboardPage() {
                     </button>
                   )}
                 </div>
-                <p className="text-center text-xs text-slate-400 mt-4">Up to 100 files, 50 MB each.</p>
+                <p className="text-center text-xs text-slate-400 mt-4">Up to 100 files, {maxFileSizeMB} MB each.</p>
               </>
           </div>
         </div>

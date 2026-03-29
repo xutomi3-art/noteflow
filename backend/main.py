@@ -104,3 +104,9 @@ app.include_router(meeting_router.router, prefix="/api")
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/config")
+async def public_config():
+    """Public config values needed by frontend (no auth required)."""
+    return {"max_file_size_mb": settings.MAX_FILE_SIZE_MB}
