@@ -229,7 +229,7 @@ async def websocket_audio(
                 async for utterance in asr_client.receive_results(meeting_id):
                     from datetime import datetime, timezone, timedelta
                     beijing_tz = timezone(timedelta(hours=8))
-                    wall_time = datetime.now(beijing_tz).strftime("%H:%M:%S")
+                    wall_time = datetime.now(beijing_tz).strftime("%H:%M")
                     await websocket.send_json({
                         "type": "utterance",
                         "provider": utterance.provider or "firered",

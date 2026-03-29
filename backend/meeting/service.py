@@ -177,19 +177,24 @@ async def end_meeting(
 
     transcript_md = "\n".join(lines)
 
-    # 6. Generate title via LLM
-    title = "Meeting Transcript"
+    # 6. Generate title via LLM — format: YYMMDD 主题
+    from datetime import timedelta as _td
+    beijing_tz = timezone(_td(hours=8))
+    date_prefix = datetime.now(beijing_tz).strftime("%y%m%d")
+    title = f"{date_prefix} Meeting Transcript"
     try:
         preview = transcript_md[:2000]
         title_prompt = (
-            "Generate a concise meeting title (max 60 chars, no quotes) "
-            "for this transcript:\n\n" + preview
+            "根据以下会议转录内容，用中文生成一个简短的主题词（2-6个字，不要日期，不要引号）。"
+            "例如：产品评审、锵锵三人行、周会纪要、技术方案讨论\n\n" + preview
         )
         generated = await qwen_client.generate(
             messages=[{"role": "user", "content": title_prompt}],
-            max_tokens=80,
+            max_tokens=30,
         )
-        title = generated.strip().strip('"').strip("'")[:60] or "Meeting Transcript"
+        topic = generated.strip().strip('"').strip("'").strip("《》")[:20]
+        if topic:
+            title = f"{date_prefix} {topic}"
     except Exception as e:
         logger.warning("Failed to generate meeting title: %s", e)
 
