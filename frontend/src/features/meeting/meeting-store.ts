@@ -14,6 +14,7 @@ export interface Utterance {
   is_final: boolean;
   sequence: number;
   provider?: string;
+  wall_time?: string;  // Beijing time HH:MM:SS
 }
 
 export const ASR_PROVIDERS = ['firered', 'coli', 'funasr'] as const;
@@ -157,6 +158,7 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
               is_final: msg.is_final,
               sequence: msg.sequence,
               provider: msg.provider || "firered",
+              wall_time: msg.wall_time || "",
             };
             set((s) => {
               const updated = [...s.utterances];

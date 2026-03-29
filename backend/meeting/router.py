@@ -227,6 +227,9 @@ async def websocket_audio(
         while reconnect_count <= max_reconnects:
             try:
                 async for utterance in asr_client.receive_results(meeting_id):
+                    from datetime import datetime, timezone, timedelta
+                    beijing_tz = timezone(timedelta(hours=8))
+                    wall_time = datetime.now(beijing_tz).strftime("%H:%M:%S")
                     await websocket.send_json({
                         "type": "utterance",
                         "provider": utterance.provider or "firered",
@@ -236,6 +239,7 @@ async def websocket_audio(
                         "end_time_ms": utterance.end_time_ms,
                         "is_final": utterance.is_final,
                         "sequence": utterance.sequence,
+                        "wall_time": wall_time,
                     })
 
                     if utterance.is_final:

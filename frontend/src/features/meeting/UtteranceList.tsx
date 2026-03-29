@@ -57,6 +57,9 @@ export function UtteranceList({ utterances, speakerMap, onRenameSpeaker, compact
           <div className="space-y-1">
             {group.items.map((u, j) => (
               <p key={j} className={`text-sm leading-relaxed ${u.is_final ? "text-gray-700" : "text-gray-400 italic"}`}>
+                <span className="text-[10px] text-gray-300 mr-1.5 font-mono">
+                  {u.wall_time || formatTime(u.start_time_ms)}
+                </span>
                 {u.text}
               </p>
             ))}
