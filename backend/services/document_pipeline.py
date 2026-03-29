@@ -498,9 +498,18 @@ async def process_document(
                     await _notify(notebook_id, source_id, "parsing", progress=0.40)
                     logger.info("MinerU parsed %s: %d chars", filename, len(content))
                 else:
-                    # MinerU failed — fall back to RAGFlow built-in parser
-                    logger.warning("MinerU failed for %s, falling back to RAGFlow parser", filename)
-                    content = None
+                    # MinerU failed — still try vision analysis on PDF images before falling back
+                    logger.warning("MinerU failed for %s, trying vision analysis then RAGFlow fallback", filename)
+                    if settings.VISION_ENABLED and parse_path and os.path.exists(parse_path):
+                        image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                        if image_texts:
+                            content = "\n\n".join(image_texts)
+                            _save_parsed_content(file_path, content)
+                            logger.info("Vision extracted %d images for %s (MinerU failed)", len(image_texts), filename)
+                        else:
+                            content = None
+                    else:
+                        content = None
             else:
                 # Unknown type — upload raw file to RAGFlow
                 logger.info("Using RAGFlow built-in parser for %s", filename)
