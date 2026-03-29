@@ -47,6 +47,30 @@ async def get_active_meeting(
     return _to_out(meeting)
 
 
+@router.get("/hotwords")
+async def get_notebook_hotwords(
+    notebook_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Get ASR hotwords for this notebook."""
+    return {"words": get_hotwords(notebook_id)}
+
+
+@router.put("/hotwords")
+async def set_notebook_hotwords(
+    notebook_id: str,
+    body: dict,
+    user: User = Depends(get_current_user),
+):
+    """Set ASR hotwords for this notebook."""
+    words = body.get("words", [])
+    if not isinstance(words, list):
+        raise HTTPException(status_code=400, detail="words must be a list")
+    clean = list(dict.fromkeys(w.strip() for w in words if isinstance(w, str) and w.strip()))
+    set_hotwords(notebook_id, clean)
+    return {"words": clean}
+
+
 @router.get("/{meeting_id}", response_model=MeetingOut)
 async def get_meeting(
     notebook_id: str,
@@ -124,31 +148,6 @@ async def end_meeting(
         "filename": source.filename,
         "status": source.status,
     }
-
-
-@router.get("/hotwords")
-async def get_notebook_hotwords(
-    notebook_id: str,
-    user: User = Depends(get_current_user),
-):
-    """Get ASR hotwords for this notebook."""
-    return {"words": get_hotwords(notebook_id)}
-
-
-@router.put("/hotwords")
-async def set_notebook_hotwords(
-    notebook_id: str,
-    body: dict,
-    user: User = Depends(get_current_user),
-):
-    """Set ASR hotwords for this notebook."""
-    words = body.get("words", [])
-    if not isinstance(words, list):
-        raise HTTPException(status_code=400, detail="words must be a list")
-    # Clean and dedupe
-    clean = list(dict.fromkeys(w.strip() for w in words if isinstance(w, str) and w.strip()))
-    set_hotwords(notebook_id, clean)
-    return {"words": clean}
 
 
 @router.get("/{meeting_id}/utterances", response_model=list[UtteranceOut])

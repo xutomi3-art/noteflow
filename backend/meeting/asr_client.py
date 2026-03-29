@@ -144,7 +144,7 @@ class VolcengineASRClient:
     def __init__(self) -> None:
         self._sessions: dict[str, MeetingSession] = {}
 
-    async def start_session(self, meeting_id: str) -> MeetingSession:
+    async def start_session(self, meeting_id: str, **kwargs: str) -> MeetingSession:
         connect_id = str(uuid.uuid4())
         headers = {
             "X-Api-App-Key": ASR_APP_ID,
@@ -302,10 +302,10 @@ class VolcengineASRClient:
 
 WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
 WHISPER_MAX_AUDIO_SECS = 55  # FireRedASR-AED supports up to 60s, leave 5s margin
-WHISPER_SILENCE_MS = 300  # silence duration (ms) to trigger sentence boundary (was 500)
-WHISPER_SILENCE_THRESHOLD = 350  # PCM RMS below this = silence (was 500, lowered for quiet speech)
-WHISPER_SPEECH_RATIO = 0.10  # at least 10% of samples must exceed peak threshold (was 0.15)
-WHISPER_PEAK_THRESHOLD = 600  # individual sample amplitude for speech detection (was 1000)
+WHISPER_SILENCE_MS = 400  # silence duration (ms) to trigger sentence boundary
+WHISPER_SILENCE_THRESHOLD = 300  # PCM RMS below this = silence
+WHISPER_SPEECH_RATIO = 0.08  # at least 8% of samples must exceed peak threshold
+WHISPER_PEAK_THRESHOLD = 500  # individual sample amplitude for speech detection
 WHISPER_SAMPLE_RATE = 16000
 WHISPER_SAMPLE_WIDTH = 2  # 16-bit
 WHISPER_CHECK_INTERVAL = 0.15  # check VAD every 150ms (was 200ms)
