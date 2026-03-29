@@ -297,11 +297,15 @@ class VolcengineASRClient:
 
 # ── Whisper ASR Client (local Belle-whisper via Xinference) ────────
 
-WHISPER_FLUSH_INTERVAL = 3  # seconds — FireRedASR is fast enough for 3s chunks
 WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
-WHISPER_SILENCE_THRESHOLD = 500  # PCM RMS below this = silence (raised from 200)
+WHISPER_MAX_AUDIO_SECS = 55  # FireRedASR-AED supports up to 60s, leave 5s margin
+WHISPER_SILENCE_MS = 500  # silence duration (ms) to trigger sentence boundary
+WHISPER_SILENCE_THRESHOLD = 500  # PCM RMS below this = silence
 WHISPER_SPEECH_RATIO = 0.15  # at least 15% of samples must exceed peak threshold
 WHISPER_PEAK_THRESHOLD = 1000  # individual sample amplitude for speech detection
+WHISPER_SAMPLE_RATE = 16000
+WHISPER_SAMPLE_WIDTH = 2  # 16-bit
+WHISPER_CHECK_INTERVAL = 0.2  # check VAD every 200ms
 WHISPER_SAMPLE_RATE = 16000
 WHISPER_SAMPLE_WIDTH = 2  # 16-bit
 
@@ -404,34 +408,100 @@ class WhisperASRClient:
             return
         session._audio_buffer.extend(pcm_data)
 
+    def _is_chunk_silent(self, pcm_chunk: bytes) -> bool:
+        """Check if a small PCM chunk (~200ms) is silence."""
+        if len(pcm_chunk) < 4:
+            return True
+        n = len(pcm_chunk) // 2
+        samples = struct.unpack(f"<{n}h", pcm_chunk[:n * 2])
+        rms = (sum(s * s for s in samples) / n) ** 0.5
+        return rms < WHISPER_SILENCE_THRESHOLD
+
     async def _flush_loop(self, meeting_id: str) -> None:
-        """Background task: every N seconds, send buffered audio to whisper."""
+        """VAD-based sentence segmentation: cut on silence, not fixed time.
+
+        - Accumulates audio in buffer
+        - Every 200ms, checks the latest chunk for silence
+        - If silence >= 500ms and buffer >= 1s → sentence boundary → send to ASR
+        - If buffer reaches 55s → force cut (FireRedASR max = 60s)
+        """
         session = self._sessions.get(meeting_id)
         if not session:
             return
 
+        bytes_per_sec = WHISPER_SAMPLE_RATE * WHISPER_SAMPLE_WIDTH
+        min_bytes = int(WHISPER_MIN_AUDIO_SECS * bytes_per_sec)
+        max_bytes = int(WHISPER_MAX_AUDIO_SECS * bytes_per_sec)
+        silence_bytes = int(WHISPER_SILENCE_MS / 1000 * bytes_per_sec)
+        check_bytes = int(WHISPER_CHECK_INTERVAL * bytes_per_sec)  # ~200ms worth
+
+        consecutive_silence_bytes = 0
+        speech_started = False
+
         while not session.is_ended:
-            await asyncio.sleep(WHISPER_FLUSH_INTERVAL)
+            await asyncio.sleep(WHISPER_CHECK_INTERVAL)
 
             if session.is_paused or session.is_ended:
+                consecutive_silence_bytes = 0
+                speech_started = False
                 continue
 
-            min_bytes = int(WHISPER_MIN_AUDIO_SECS * WHISPER_SAMPLE_RATE * WHISPER_SAMPLE_WIDTH)
-            if len(session._audio_buffer) < min_bytes:
+            buf_len = len(session._audio_buffer)
+            if buf_len < check_bytes:
                 continue
 
-            pcm_data = bytes(session._audio_buffer)
-            session._audio_buffer.clear()
+            # Check latest ~200ms for silence
+            latest_chunk = bytes(session._audio_buffer[-check_bytes:])
+            is_silent = self._is_chunk_silent(latest_chunk)
 
-            # Simple VAD: skip if audio is mostly silence
+            if is_silent:
+                consecutive_silence_bytes += check_bytes
+            else:
+                consecutive_silence_bytes = 0
+                if not speech_started and buf_len >= check_bytes:
+                    speech_started = True
+
+            # Decide whether to flush
+            should_flush = False
+
+            if speech_started and consecutive_silence_bytes >= silence_bytes and buf_len >= min_bytes:
+                # Sentence boundary: speech followed by 500ms silence
+                should_flush = True
+                logger.debug("VAD sentence boundary: %d bytes, silence=%dms",
+                             buf_len, consecutive_silence_bytes * 1000 // bytes_per_sec)
+
+            elif buf_len >= max_bytes:
+                # Safety: max 55s reached
+                should_flush = True
+                logger.info("VAD force cut at %ds", buf_len // bytes_per_sec)
+
+            if not should_flush:
+                continue
+
+            # Extract audio up to (but not including) the trailing silence
+            if consecutive_silence_bytes > 0 and buf_len > consecutive_silence_bytes:
+                speech_end = buf_len - consecutive_silence_bytes
+                pcm_data = bytes(session._audio_buffer[:speech_end])
+                # Keep trailing silence in buffer for next segment
+                remaining = bytes(session._audio_buffer[speech_end:])
+                session._audio_buffer.clear()
+                session._audio_buffer.extend(remaining)
+            else:
+                pcm_data = bytes(session._audio_buffer)
+                session._audio_buffer.clear()
+
+            consecutive_silence_bytes = 0
+            speech_started = False
+
+            # Skip if mostly silence
             if not _has_speech(pcm_data):
                 continue
 
             elapsed_ms = int((time.monotonic() - session.session_start) * 1000)
-            duration_ms = int(len(pcm_data) / (WHISPER_SAMPLE_RATE * WHISPER_SAMPLE_WIDTH) * 1000)
+            duration_ms = int(len(pcm_data) / bytes_per_sec * 1000)
             start_ms = max(0, elapsed_ms - duration_ms)
 
-            # Build prompt from last 2 utterances for context continuity
+            # Context from previous utterances
             prompt_parts = [u.text for u in session.utterances[-2:]]
             prompt = "".join(prompt_parts) if prompt_parts else ""
 
@@ -440,11 +510,8 @@ class WhisperASRClient:
                 text = await self._transcribe(wav_data, prompt=prompt)
                 text = (text or "").strip()
 
-                # Filter hallucinations
                 if not text or _is_hallucination(text):
                     continue
-
-                # Dedup: skip if identical to last utterance
                 if session.utterances and session.utterances[-1].text == text:
                     continue
 
@@ -461,7 +528,7 @@ class WhisperASRClient:
                 if session._result_queue:
                     await session._result_queue.put(utt)
             except Exception as e:
-                logger.error("Whisper transcription failed for meeting %s: %s", meeting_id, e)
+                logger.error("ASR transcription failed for meeting %s: %s", meeting_id, e)
 
     async def _transcribe(self, wav_data: bytes, prompt: str = "") -> str:
         """POST audio to whisper API and return text."""
