@@ -185,13 +185,12 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
               }
 
               if (!utt.is_final) {
-                // Non-final ASR result — append (keep existing finals, replace old non-finals)
-                const cleaned = updated.filter((u) => u.is_final || u.text === "...");
-                return { utterances: [...cleaned, utt] };
+                // Non-final ASR result — just append, keep everything
+                return { utterances: [...updated, utt] };
               }
 
-              // Regular final without sequence — just append
-              const cleaned = updated.filter((u) => u.is_final || u.text === "...");
+              // Regular final without sequence — remove "..." then append
+              const cleaned = updated.filter((u) => u.text !== "...");
               return { utterances: [...cleaned, utt] };
             });
 

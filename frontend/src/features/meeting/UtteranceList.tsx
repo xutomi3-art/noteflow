@@ -50,15 +50,11 @@ export function UtteranceList({ utterances, speakerMap, onRenameSpeaker, compact
         return (
         <div key={i} className="space-y-0.5">
           <div className="flex items-baseline gap-2">
-            {isPartialGroup ? (
-              <span className="text-sm font-medium text-gray-400 italic">Identifying speaker...</span>
-            ) : (
-              <SpeakerLabel
-                speakerId={group.speakerId}
-                name={speakerMap[group.speakerId] || group.speakerId}
-                onRename={onRenameSpeaker}
-              />
-            )}
+            <SpeakerLabel
+              speakerId={group.speakerId}
+              name={speakerMap[group.speakerId] || group.speakerId}
+              onRename={onRenameSpeaker}
+            />
             <span className="text-xs text-gray-400">
               {formatTime(group.items[0].start_time_ms)}
             </span>
