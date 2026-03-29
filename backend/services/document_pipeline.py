@@ -318,17 +318,21 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
             if page_area <= 0:
                 continue
 
-            # Build a map of image positions on this page
-            image_areas: dict[int, float] = {}  # img_number -> area_ratio
-            for img_info in page.get_image_info():
+            # Build a map of image xref -> max area ratio across all appearances
+            # get_image_info() includes xref in 'xref' field (PyMuPDF >= 1.24)
+            # Fallback: match by position order if xref not available
+            image_info_list = page.get_image_info(xrefs=True)
+            xref_areas: dict[int, float] = {}
+            for img_info in image_info_list:
                 bbox = img_info.get("bbox")
                 if not bbox:
                     continue
                 w = bbox[2] - bbox[0]
                 h = bbox[3] - bbox[1]
                 ratio = (w * h) / page_area
-                img_number = img_info.get("number", 0)
-                image_areas[img_number] = ratio
+                info_xref = img_info.get("xref", 0)
+                if info_xref:
+                    xref_areas[info_xref] = max(xref_areas.get(info_xref, 0), ratio)
 
             images = page.get_images(full=True)
             for img_idx, img in enumerate(images):
@@ -338,7 +342,7 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
                 seen_xrefs.add(xref)
 
                 # Check if this image is large enough on the page
-                area_ratio = image_areas.get(img_idx, 0)
+                area_ratio = xref_areas.get(xref, 0)
                 if area_ratio < MIN_PAGE_RATIO:
                     skipped_small += 1
                     logger.debug("PDF image p%d img%d skipped (%.1f%% of page, < %.0f%% threshold)",
