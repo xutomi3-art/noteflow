@@ -301,15 +301,30 @@ class VolcengineASRClient:
 
 WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
 WHISPER_MAX_AUDIO_SECS = 55  # FireRedASR-AED supports up to 60s, leave 5s margin
-WHISPER_SILENCE_MS = 500  # silence duration (ms) to trigger sentence boundary
-WHISPER_SILENCE_THRESHOLD = 500  # PCM RMS below this = silence
-WHISPER_SPEECH_RATIO = 0.15  # at least 15% of samples must exceed peak threshold
-WHISPER_PEAK_THRESHOLD = 1000  # individual sample amplitude for speech detection
+WHISPER_SILENCE_MS = 300  # silence duration (ms) to trigger sentence boundary (was 500)
+WHISPER_SILENCE_THRESHOLD = 350  # PCM RMS below this = silence (was 500, lowered for quiet speech)
+WHISPER_SPEECH_RATIO = 0.10  # at least 10% of samples must exceed peak threshold (was 0.15)
+WHISPER_PEAK_THRESHOLD = 600  # individual sample amplitude for speech detection (was 1000)
 WHISPER_SAMPLE_RATE = 16000
 WHISPER_SAMPLE_WIDTH = 2  # 16-bit
-WHISPER_CHECK_INTERVAL = 0.2  # check VAD every 200ms
-WHISPER_SAMPLE_RATE = 16000
-WHISPER_SAMPLE_WIDTH = 2  # 16-bit
+WHISPER_CHECK_INTERVAL = 0.15  # check VAD every 150ms (was 200ms)
+# Audio normalization target
+WHISPER_TARGET_RMS = 3000  # target RMS amplitude for normalization
+
+
+def _normalize_audio(pcm_data: bytes, target_rms: int = WHISPER_TARGET_RMS) -> bytes:
+    """Normalize PCM audio volume to target RMS. Prevents VAD instability from volume swings."""
+    if len(pcm_data) < 4:
+        return pcm_data
+    n = len(pcm_data) // 2
+    samples = list(struct.unpack(f"<{n}h", pcm_data[:n * 2]))
+    rms = (sum(s * s for s in samples) / n) ** 0.5
+    if rms < 10:  # near silence, don't amplify noise
+        return pcm_data
+    gain = target_rms / rms
+    gain = min(gain, 5.0)  # cap at 5x amplification to avoid distortion
+    normalized = [max(-32768, min(32767, int(s * gain))) for s in samples]
+    return struct.pack(f"<{n}h", *normalized)
 
 
 def _pcm_to_wav(pcm_data: bytes) -> bytes:
@@ -358,16 +373,27 @@ _HALLUCINATION_PATTERNS = [
 _HALLUCINATION_RE = re.compile('|'.join(_HALLUCINATION_PATTERNS), re.IGNORECASE)
 
 
+_VALID_SHORT_RESPONSES = {
+    "是", "对", "好", "嗯", "啊", "哦", "行", "没", "不", "有",
+    "是的", "好的", "对的", "嗯嗯", "好吧", "对吧", "没有", "不是",
+    "可以", "知道", "明白", "好啊", "对啊", "是啊",
+}
+
+
 def _is_hallucination(text: str) -> bool:
-    """Detect ASR hallucination: repetitive, too short, or known garbage patterns."""
+    """Detect ASR hallucination: repetitive or known garbage patterns."""
     text = text.strip()
     if not text:
         return True
-    # Single char or 2 chars — usually garbage
-    if len(text) <= 2:
+    # Allow valid short Chinese responses
+    if text in _VALID_SHORT_RESPONSES:
+        return False
+    # Single char — usually garbage (unless in whitelist above)
+    if len(text) == 1:
         return True
-    # Repeated single character
-    if len(set(text.replace(" ", "").replace("，", "").replace("。", ""))) <= 2:
+    # Single char repeated 4+ times: 嗯嗯嗯嗯
+    stripped = text.replace(" ", "").replace("，", "").replace("。", "")
+    if len(stripped) >= 4 and len(set(stripped)) == 1:
         return True
     # Short phrase repeats 3+ times
     for phrase_len in range(2, min(10, len(text) // 3 + 1)):
@@ -399,6 +425,13 @@ def _add_punctuation(text: str) -> str:
         '而且', '并且', '或者', '那么', '就是', '也就是说', '比如说', '比如',
         '另外', '同时', '而', '可是', '不然', '否则', '于是', '因此',
         '总之', '其实', '那', '就', '还有', '包括',
+        '首先', '最后', '此外', '接着', '其次', '再说', '何况', '况且',
+    )
+
+    # English clause markers
+    en_markers = (
+        ' but ', ' however ', ' so ', ' because ', ' although ',
+        ' therefore ', ' meanwhile ', ' and then ', ' moreover ',
     )
 
     result = text
@@ -410,11 +443,17 @@ def _add_punctuation(text: str) -> str:
             result,
         )
 
+    # English clause markers — add comma before
+    for marker in en_markers:
+        result = result.replace(marker, f',{marker.strip()} ')
+
     # Add period at end if missing
     if result and result[-1] not in '，。？！,.!?；：…':
-        # Guess: question if ends with 吗/呢/吧 or contains 什么/哪/怎么
+        # Question detection: scan full text, not just ending
         if re.search(r'[吗呢吧]$', result) or re.search(r'(什么|哪里|哪个|怎么|为什么|多少|是否|是不是)', result):
             result += '？'
+        elif re.search(r'\?$|^(how|what|when|where|who|why|is |are |do |does |can |will )', result, re.IGNORECASE):
+            result += '?'
         else:
             result += '。'
 
@@ -725,6 +764,7 @@ class ComparisonASRClient:
         session = self._sessions.get(meeting_id)
         if not session or session.is_paused or session.is_ended:
             return
+        pcm_data = _normalize_audio(pcm_data)
         session._audio_buffer.extend(pcm_data)
 
     def _is_chunk_silent(self, pcm_chunk: bytes) -> bool:
