@@ -378,6 +378,47 @@ def _is_hallucination(text: str) -> bool:
     return False
 
 
+def _add_punctuation(text: str) -> str:
+    """Add basic Chinese/English punctuation to unpunctuated ASR output.
+
+    FireRedASR-AED strips all punctuation. This restores sentence-ending
+    periods and mid-sentence commas using simple heuristics.
+    """
+    if not text or len(text) < 2:
+        return text
+
+    # If text already has punctuation, skip
+    if re.search(r'[，。？！,.!?；：]', text):
+        return text
+
+    # Chinese clause boundary markers — add comma before these
+    clause_markers = (
+        '但是', '但', '然后', '所以', '因为', '如果', '虽然', '不过',
+        '而且', '并且', '或者', '那么', '就是', '也就是说', '比如说', '比如',
+        '另外', '同时', '而', '可是', '不然', '否则', '于是', '因此',
+        '总之', '其实', '那', '就', '还有', '包括',
+    )
+
+    result = text
+    for marker in clause_markers:
+        # Add comma before clause marker (if not at start and no existing punctuation before it)
+        result = re.sub(
+            rf'(?<=[^\s，。,.])\s*({re.escape(marker)})',
+            rf'，\1',
+            result,
+        )
+
+    # Add period at end if missing
+    if result and result[-1] not in '，。？！,.!?；：…':
+        # Guess: question if ends with 吗/呢/吧 or contains 什么/哪/怎么
+        if re.search(r'[吗呢吧]$', result) or re.search(r'(什么|哪里|哪个|怎么|为什么|多少|是否|是不是)', result):
+            result += '？'
+        else:
+            result += '。'
+
+    return result
+
+
 class WhisperASRClient:
     """Local Whisper ASR via Xinference OpenAI-compatible API.
 
@@ -520,6 +561,10 @@ class WhisperASRClient:
 
                 if not text or _is_hallucination(text):
                     continue
+
+                # Add punctuation (FireRedASR-AED strips all punctuation)
+                text = _add_punctuation(text)
+
                 if session.utterances and session.utterances[-1].text == text:
                     continue
 
@@ -601,10 +646,11 @@ class WhisperASRClient:
                 wav_data = _pcm_to_wav(pcm_data)
                 text = await self._transcribe(wav_data)
                 if text and text.strip():
+                    text = _add_punctuation(text.strip())
                     elapsed_ms = int((time.monotonic() - session.session_start) * 1000)
                     session.sequence_counter += 1
                     session.utterances.append(Utterance(
-                        speaker_id="speaker_0", text=text.strip(),
+                        speaker_id="speaker_0", text=text,
                         start_time_ms=max(0, elapsed_ms - 3000), end_time_ms=elapsed_ms,
                         is_final=True, sequence=session.sequence_counter,
                     ))
