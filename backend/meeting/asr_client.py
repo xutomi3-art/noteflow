@@ -299,7 +299,9 @@ class VolcengineASRClient:
 
 WHISPER_FLUSH_INTERVAL = 5  # seconds — longer chunks = better accuracy
 WHISPER_MIN_AUDIO_SECS = 1.5  # skip chunks shorter than this
-WHISPER_SILENCE_THRESHOLD = 200  # PCM amplitude below this = silence
+WHISPER_SILENCE_THRESHOLD = 500  # PCM RMS below this = silence (raised from 200)
+WHISPER_SPEECH_RATIO = 0.15  # at least 15% of samples must exceed peak threshold
+WHISPER_PEAK_THRESHOLD = 1000  # individual sample amplitude for speech detection
 WHISPER_SAMPLE_RATE = 16000
 WHISPER_SAMPLE_WIDTH = 2  # 16-bit
 
@@ -315,29 +317,60 @@ def _pcm_to_wav(pcm_data: bytes) -> bytes:
     return buf.getvalue()
 
 
-def _has_speech(pcm_data: bytes, threshold: int = WHISPER_SILENCE_THRESHOLD) -> bool:
-    """Simple VAD: check if PCM audio has any samples above threshold."""
+def _has_speech(pcm_data: bytes) -> bool:
+    """Stricter VAD: check both RMS energy AND that enough samples exceed peak threshold.
+
+    This prevents sending near-silent audio that causes ASR hallucination.
+    """
     if len(pcm_data) < 4:
         return False
     n_samples = len(pcm_data) // 2
     samples = struct.unpack(f"<{n_samples}h", pcm_data[:n_samples * 2])
-    # Check RMS energy
+
+    # Check 1: RMS energy must exceed threshold
     rms = (sum(s * s for s in samples) / n_samples) ** 0.5
-    return rms > threshold
-
-
-def _is_repetitive(text: str) -> bool:
-    """Detect whisper hallucination: repeated phrases like '嗯嗯嗯嗯' or 'thank you thank you'."""
-    if len(text) < 4:
+    if rms < WHISPER_SILENCE_THRESHOLD:
         return False
-    # Check if a single char repeated
-    if len(set(text.replace(" ", ""))) <= 2:
+
+    # Check 2: at least SPEECH_RATIO of samples must be "loud" (above peak threshold)
+    loud_count = sum(1 for s in samples if abs(s) > WHISPER_PEAK_THRESHOLD)
+    ratio = loud_count / n_samples
+    if ratio < WHISPER_SPEECH_RATIO:
+        return False
+
+    return True
+
+
+# Common ASR hallucination patterns (FireRedASR + Whisper)
+_HALLUCINATION_PATTERNS = [
+    r'^.{0,2}$',                          # Too short (1-2 chars)
+    r'^(.)\1{3,}',                         # Single char repeated 4+ times: 嗯嗯嗯嗯
+    r'(基地|活动|列表|消息|会议).*(基地|活动|列表|消息|会议)',  # FireRedASR specific hallucination patterns
+    r'(谢谢|感谢|再见|拜拜|你好){2,}',      # Repeated greetings
+    r'(thank you|thanks|bye|hello){2,}',
+]
+_HALLUCINATION_RE = re.compile('|'.join(_HALLUCINATION_PATTERNS), re.IGNORECASE)
+
+
+def _is_hallucination(text: str) -> bool:
+    """Detect ASR hallucination: repetitive, too short, or known garbage patterns."""
+    text = text.strip()
+    if not text:
         return True
-    # Check if a short phrase repeats 3+ times
+    # Single char or 2 chars — usually garbage
+    if len(text) <= 2:
+        return True
+    # Repeated single character
+    if len(set(text.replace(" ", "").replace("，", "").replace("。", ""))) <= 2:
+        return True
+    # Short phrase repeats 3+ times
     for phrase_len in range(2, min(10, len(text) // 3 + 1)):
         phrase = text[:phrase_len]
         if text.count(phrase) >= 3:
             return True
+    # Known hallucination patterns
+    if _HALLUCINATION_RE.search(text):
+        return True
     return False
 
 
@@ -408,7 +441,7 @@ class WhisperASRClient:
                 text = (text or "").strip()
 
                 # Filter hallucinations
-                if not text or _is_repetitive(text):
+                if not text or _is_hallucination(text):
                     continue
 
                 # Dedup: skip if identical to last utterance
