@@ -838,7 +838,12 @@ class ComparisonASRClient:
 
             wav_data = _pcm_to_wav(pcm_data)
 
-            # Send to all 3 ASR providers in parallel
+            # Fire-and-forget: send to all 3 ASR providers without blocking the flush loop
+            asyncio.create_task(self._process_segment(session, wav_data, prompt, start_ms, elapsed_ms))
+
+    async def _process_segment(self, session: MeetingSession, wav_data: bytes, prompt: str, start_ms: int, elapsed_ms: int) -> None:
+        """Send one audio segment to all ASR providers in parallel, enqueue results."""
+        try:
             tasks = [self._transcribe_one(p, wav_data, prompt) for p in self._endpoints]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -849,9 +854,8 @@ class ComparisonASRClient:
                 if not text or _is_hallucination(text):
                     continue
 
-                # Add punctuation for firered (others may have their own)
-                if provider == "firered":
-                    text = _add_punctuation(text)
+                # Add punctuation for all providers that don't produce their own
+                text = _add_punctuation(text)
 
                 session.sequence_counter += 1
                 utt = Utterance(
@@ -866,6 +870,8 @@ class ComparisonASRClient:
                 session.utterances.append(utt)
                 if session._result_queue:
                     await session._result_queue.put(utt)
+        except Exception as e:
+            logger.error("ASR segment processing error: %s", e)
 
     async def receive_results(self, meeting_id: str):
         session = self._sessions.get(meeting_id)
