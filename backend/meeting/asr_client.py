@@ -300,6 +300,7 @@ class VolcengineASRClient:
 
 # ── Whisper ASR Client (local Belle-whisper via Xinference) ────────
 
+WHISPER_IDLE_TIMEOUT = 1800  # 30 minutes — auto-end meeting if no speech
 WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
 WHISPER_MAX_AUDIO_SECS = 55  # FireRedASR-AED supports up to 60s, leave 5s margin
 WHISPER_SILENCE_MS = 400  # silence duration (ms) to trigger sentence boundary
@@ -522,6 +523,7 @@ class WhisperASRClient:
 
         consecutive_silence_bytes = 0
         speech_started = False
+        last_speech_time = time.monotonic()
 
         while not session.is_ended:
             await asyncio.sleep(WHISPER_CHECK_INTERVAL)
@@ -530,6 +532,17 @@ class WhisperASRClient:
                 consecutive_silence_bytes = 0
                 speech_started = False
                 continue
+
+            # Idle timeout: auto-end if no speech for 30 minutes
+            if time.monotonic() - last_speech_time > WHISPER_IDLE_TIMEOUT:
+                logger.info("Meeting %s idle timeout (%ds), auto-ending", meeting_id, WHISPER_IDLE_TIMEOUT)
+                session.is_ended = True
+                if session._result_queue:
+                    await session._result_queue.put(Utterance(
+                        speaker_id="system", text="Meeting auto-ended due to 30 minutes of inactivity.",
+                        start_time_ms=0, end_time_ms=0, is_final=True, sequence=0,
+                    ))
+                break
 
             buf_len = len(session._audio_buffer)
             if buf_len < check_bytes:
@@ -543,6 +556,7 @@ class WhisperASRClient:
                 consecutive_silence_bytes += check_bytes
             else:
                 consecutive_silence_bytes = 0
+                last_speech_time = time.monotonic()  # reset idle timer
                 if not speech_started and buf_len >= check_bytes:
                     speech_started = True
                     # Send a partial "listening" indicator so user sees feedback

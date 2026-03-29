@@ -162,24 +162,36 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
               const updated = [...s.utterances];
 
               if (utt.is_final && utt.sequence > 0) {
-                // LLM rewrite arrived — replace the partial with same sequence
-                const idx = updated.findIndex((u) => u.sequence === utt.sequence && !u.is_final);
+                // LLM rewrite or ASR final — find by sequence and replace in-place
+                const idx = updated.findIndex((u) => u.sequence === utt.sequence);
                 if (idx >= 0) {
                   updated[idx] = utt;
                   return { utterances: updated };
                 }
-                // No matching partial — just append
+                // No existing entry — insert at correct position by sequence order
+                const insertIdx = updated.findIndex((u) => u.sequence > utt.sequence);
+                if (insertIdx >= 0) {
+                  updated.splice(insertIdx, 0, utt);
+                  return { utterances: updated };
+                }
                 return { utterances: [...updated, utt] };
               }
 
-              if (utt.is_final) {
-                // Regular final — remove "..." partials
-                const cleaned = updated.filter((u) => u.is_final || u.text !== "...");
+              if (!utt.is_final && utt.text === "...") {
+                // "..." indicator — replace existing "..." or append
+                const hasIndicator = updated.some((u) => !u.is_final && u.text === "...");
+                if (hasIndicator) return { utterances: updated };
+                return { utterances: [...updated, utt] };
+              }
+
+              if (!utt.is_final) {
+                // Non-final ASR result — append (keep existing finals, replace old non-finals)
+                const cleaned = updated.filter((u) => u.is_final || u.text === "...");
                 return { utterances: [...cleaned, utt] };
               }
 
-              // Non-final (partial or "..."): replace existing non-final
-              const cleaned = updated.filter((u) => u.is_final);
+              // Regular final without sequence — just append
+              const cleaned = updated.filter((u) => u.is_final || u.text === "...");
               return { utterances: [...cleaned, utt] };
             });
 
