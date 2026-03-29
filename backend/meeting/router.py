@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.auth import get_current_user
 from backend.core.database import get_db, async_session
-from backend.meeting.asr_client import asr_client
+from backend.meeting.asr_client import asr_client, set_hotwords, get_hotwords
 from backend.meeting.schemas import MeetingCreate, MeetingOut, SpeakerUpdate, UtteranceOut
 from backend.meeting import service
 from backend.models.user import User
@@ -126,6 +126,31 @@ async def end_meeting(
     }
 
 
+@router.get("/hotwords")
+async def get_notebook_hotwords(
+    notebook_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Get ASR hotwords for this notebook."""
+    return {"words": get_hotwords(notebook_id)}
+
+
+@router.put("/hotwords")
+async def set_notebook_hotwords(
+    notebook_id: str,
+    body: dict,
+    user: User = Depends(get_current_user),
+):
+    """Set ASR hotwords for this notebook."""
+    words = body.get("words", [])
+    if not isinstance(words, list):
+        raise HTTPException(status_code=400, detail="words must be a list")
+    # Clean and dedupe
+    clean = list(dict.fromkeys(w.strip() for w in words if isinstance(w, str) and w.strip()))
+    set_hotwords(notebook_id, clean)
+    return {"words": clean}
+
+
 @router.get("/{meeting_id}/utterances", response_model=list[UtteranceOut])
 async def list_utterances(
     notebook_id: str,
@@ -166,7 +191,7 @@ async def websocket_audio(
 
     # Start ASR session
     try:
-        session = await asr_client.start_session(meeting_id)
+        session = await asr_client.start_session(meeting_id, notebook_id=notebook_id)
     except Exception as e:
         logger.error("Failed to start ASR session: %s", e)
         await websocket.send_json({"type": "error", "message": str(e)})

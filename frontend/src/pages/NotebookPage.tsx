@@ -290,6 +290,36 @@ export default function NotebookPage() {
   const [pptModalOpen, setPptModalOpen] = useState(false);
   const [podcastLoading, setPodcastLoading] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [showHotwords, setShowHotwords] = useState(false);
+  const [hotwords, setHotwords] = useState<string[]>([]);
+  const [hotwordInput, setHotwordInput] = useState("");
+
+  // Load hotwords from API on mount
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/notebooks/${id}/meetings/hotwords`, {
+      headers: { Authorization: `Bearer ${useAuthStore.getState().accessToken}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setHotwords(d.words || []))
+      .catch(() => {});
+  }, [id]);
+
+  const saveHotwords = useCallback(
+    (words: string[]) => {
+      if (!id) return;
+      setHotwords(words);
+      fetch(`/api/notebooks/${id}/meetings/hotwords`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${useAuthStore.getState().accessToken}`,
+        },
+        body: JSON.stringify({ words }),
+      }).catch(() => {});
+    },
+    [id],
+  );
   const profileHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
@@ -1295,6 +1325,13 @@ export default function NotebookPage() {
             {isProfileMenuOpen && (
               <div className="absolute top-full right-0 pt-2 w-48 z-20">
                 <div className="bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 py-2">
+                  <button
+                    onClick={() => { setIsProfileMenuOpen(false); setShowHotwords(true); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 font-medium transition-colors"
+                  >
+                    <Mic className="w-4 h-4" />
+                    Hotwords
+                  </button>
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 font-medium transition-colors"
@@ -2553,6 +2590,72 @@ export default function NotebookPage() {
 
       {/* Feedback Modal */}
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+
+      {/* Hotwords Modal */}
+      {showHotwords && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowHotwords(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-[380px] max-h-[70vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="text-base font-semibold text-slate-900">ASR Hotwords</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Add proper nouns, brand names, or technical terms to improve transcription accuracy</p>
+            </div>
+            <div className="px-5 py-3 max-h-[40vh] overflow-y-auto">
+              {hotwords.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">No hotwords yet</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {hotwords.map((w) => (
+                    <span key={w} className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 rounded-lg text-sm text-slate-700">
+                      {w}
+                      <button
+                        onClick={() => saveHotwords(hotwords.filter((h) => h !== w))}
+                        className="text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const word = hotwordInput.trim();
+                  if (word && !hotwords.includes(word)) {
+                    saveHotwords([...hotwords, word]);
+                    setHotwordInput("");
+                  }
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={hotwordInput}
+                  onChange={(e) => setHotwordInput(e.target.value)}
+                  placeholder="e.g. Dify, JOTO, GPT-4o"
+                  className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-2 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors"
+                >
+                  Add
+                </button>
+              </form>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setShowHotwords(false)}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PDF Viewer Modal */}
       {pdfViewer && (
