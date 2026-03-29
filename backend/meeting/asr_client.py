@@ -461,15 +461,16 @@ def _add_punctuation(text: str) -> str:
 
 
 class WhisperASRClient:
-    """Local Whisper ASR via Xinference OpenAI-compatible API.
+    """Local ASR client (FunASR/Whisper) with LLM rewrite.
 
-    Buffers PCM audio and flushes to whisper every WHISPER_FLUSH_INTERVAL seconds.
-    No speaker diarization — all text attributed to speaker_0.
+    Buffers PCM audio, flushes on VAD sentence boundary.
+    Accumulates N raw sentences, then sends batch to LLM for polishing.
     """
 
-    def __init__(self, base_url: str = "http://10.200.0.102:8200/v1") -> None:
+    def __init__(self, base_url: str = "http://10.200.0.102:8202/v1") -> None:
         self._sessions: dict[str, MeetingSession] = {}
         self.base_url = base_url.rstrip("/")
+        self._pending_rewrite: dict[str, list[Utterance]] = {}  # meeting_id -> unrewritten utterances
 
     async def start_session(self, meeting_id: str) -> MeetingSession:
         session = MeetingSession(
@@ -615,20 +616,59 @@ class WhisperASRClient:
                     text=text,
                     start_time_ms=start_ms,
                     end_time_ms=elapsed_ms,
-                    is_final=True,
+                    is_final=False,  # show as partial until LLM rewrites
                     sequence=session.sequence_counter,
                 )
                 session.utterances.append(utt)
                 if session._result_queue:
                     await session._result_queue.put(utt)
+
+                # Accumulate for LLM rewrite batch
+                pending = self._pending_rewrite.setdefault(meeting_id, [])
+                pending.append(utt)
+                if len(pending) >= LLM_REWRITE_BATCH_SIZE:
+                    batch = list(pending)
+                    pending.clear()
+                    asyncio.create_task(self._rewrite_batch(session, batch))
             except Exception as e:
                 logger.error("ASR transcription failed for meeting %s: %s", meeting_id, e)
 
+    async def _rewrite_batch(self, session: MeetingSession, batch: list[Utterance]) -> None:
+        """Send batch of ASR utterances to LLM for polishing, then emit rewritten versions."""
+        try:
+            raw_texts = [u.text for u in batch]
+            rewritten = await _llm_rewrite(raw_texts)
+
+            for orig_utt, new_text in zip(batch, rewritten):
+                # Update the utterance in session history
+                orig_utt.text = new_text
+                orig_utt.is_final = True
+
+                # Send rewritten version to frontend (replaces the partial)
+                if session._result_queue:
+                    await session._result_queue.put(Utterance(
+                        speaker_id=orig_utt.speaker_id,
+                        text=new_text,
+                        start_time_ms=orig_utt.start_time_ms,
+                        end_time_ms=orig_utt.end_time_ms,
+                        is_final=True,
+                        sequence=orig_utt.sequence,
+                        provider=orig_utt.provider,
+                    ))
+            logger.info("LLM rewrite batch: %d sentences rewritten", len(batch))
+        except Exception as e:
+            logger.error("LLM rewrite batch failed: %s", e)
+            # Mark originals as final anyway
+            for utt in batch:
+                utt.is_final = True
+                if session._result_queue:
+                    await session._result_queue.put(utt)
+
     async def _transcribe(self, wav_data: bytes, prompt: str = "") -> str:
-        """POST audio to whisper API and return text."""
+        """POST audio to ASR API and return text."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             form_data: dict[str, str] = {
-                "model": "FireRedASR-AED-L",
+                "model": "FunASR-SenseVoiceSmall",
                 "language": "zh",
                 "temperature": "0",
                 "response_format": "json",
@@ -698,9 +738,23 @@ class WhisperASRClient:
             except Exception as e:
                 logger.error("Whisper final flush failed: %s", e)
 
+        # Flush remaining pending rewrite batch
+        pending = self._pending_rewrite.pop(meeting_id, [])
+        if pending:
+            try:
+                raw_texts = [u.text for u in pending]
+                rewritten = await _llm_rewrite(raw_texts)
+                for utt, new_text in zip(pending, rewritten):
+                    utt.text = new_text
+                    utt.is_final = True
+            except Exception as e:
+                logger.warning("Final LLM rewrite failed: %s", e)
+                for utt in pending:
+                    utt.is_final = True
+
         all_utterances = session.utterances
         self._sessions.pop(meeting_id, None)
-        logger.info("Whisper ASR session ended for meeting %s (%d utterances)", meeting_id, len(all_utterances))
+        logger.info("ASR session ended for meeting %s (%d utterances)", meeting_id, len(all_utterances))
         return all_utterances
 
     def pause_session(self, meeting_id: str) -> None:
@@ -967,13 +1021,68 @@ class ComparisonASRClient:
         return "\n".join(lines)
 
 
+# ── LLM Rewrite for ASR output ─────────────────────────────────────
+
+LLM_REWRITE_BATCH_SIZE = int(os.getenv("LLM_REWRITE_BATCH_SIZE", "4"))  # rewrite every N sentences
+
+_LLM_REWRITE_PROMPT = """你是语音转录润色助手。以下是语音识别的原始文本，可能有错字、缺标点、断句不自然。
+请润色修正，规则：
+1. 修正明显的语音识别错字（如"通俄文"→"通俄门"）
+2. 补充或修正标点符号，让断句自然
+3. 保持原意和说话风格不变，不要添加内容
+4. 不要改变说话人的语气和用词习惯
+5. 如果是口语（如"嗯""啊""就是"），保留不删
+6. 直接输出润色后的文本，不要解释
+
+原始文本：
+"""
+
+
+async def _llm_rewrite(texts: list[str]) -> list[str]:
+    """Send batch of ASR sentences to LLM for polishing."""
+    try:
+        from backend.services.qwen_client import qwen_client
+        combined = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+        messages = [
+            {"role": "system", "content": _LLM_REWRITE_PROMPT},
+            {"role": "user", "content": combined},
+        ]
+        result = await qwen_client.generate(messages, temperature=0.0, max_tokens=2000)
+        if not result or result.startswith("[Error"):
+            return texts  # fallback to original
+
+        # Parse numbered lines back
+        rewritten = []
+        for line in result.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Strip leading number: "1. text" or "1、text" or "1.text"
+            cleaned = re.sub(r'^\d+[\.\、\)\s]+', '', line).strip()
+            if cleaned:
+                rewritten.append(cleaned)
+
+        # If parsing failed or count mismatch, return originals
+        if len(rewritten) != len(texts):
+            logger.warning("LLM rewrite count mismatch: got %d, expected %d", len(rewritten), len(texts))
+            return texts
+        return rewritten
+    except Exception as e:
+        logger.warning("LLM rewrite failed: %s", e)
+        return texts
+
+
 # ── Singleton: select provider ─────────────────────────────────────
 
-_ASR_PROVIDER = os.getenv("ASR_PROVIDER", "comparison").lower()
+_ASR_PROVIDER = os.getenv("ASR_PROVIDER", "funasr").lower()
 
-if _ASR_PROVIDER == "comparison":
+if _ASR_PROVIDER == "funasr":
+    _funasr_url = os.getenv("FUNASR_ASR_URL", "http://10.200.0.102:8202/v1")
+    asr_client = WhisperASRClient(base_url=_funasr_url)
+    logger.info("ASR provider: FunASR at %s (with LLM rewrite)", _funasr_url)
+elif _ASR_PROVIDER == "comparison":
     asr_client = ComparisonASRClient()
-    logger.info("ASR provider: Comparison mode (3-way: FireRedASR + Coli + FunASR)")
+    logger.info("ASR provider: Comparison mode (3-way)")
 elif _ASR_PROVIDER == "whisper":
     _whisper_url = os.getenv("WHISPER_BASE_URL", "http://10.200.0.102:8200/v1")
     asr_client = WhisperASRClient(base_url=_whisper_url)

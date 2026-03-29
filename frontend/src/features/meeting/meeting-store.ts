@@ -159,17 +159,27 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
               provider: msg.provider || "firered",
             };
             set((s) => {
-              const provider = utt.provider || "firered";
               const updated = [...s.utterances];
 
+              if (utt.is_final && utt.sequence > 0) {
+                // LLM rewrite arrived — replace the partial with same sequence
+                const idx = updated.findIndex((u) => u.sequence === utt.sequence && !u.is_final);
+                if (idx >= 0) {
+                  updated[idx] = utt;
+                  return { utterances: updated };
+                }
+                // No matching partial — just append
+                return { utterances: [...updated, utt] };
+              }
+
               if (utt.is_final) {
-                // Remove partials for THIS provider only
-                const cleaned = updated.filter((u) => u.is_final || u.provider !== provider);
+                // Regular final — remove "..." partials
+                const cleaned = updated.filter((u) => u.is_final || u.text !== "...");
                 return { utterances: [...cleaned, utt] };
               }
 
-              // Non-final: replace existing partial for this provider
-              const cleaned = updated.filter((u) => u.is_final || u.provider !== provider);
+              // Non-final (partial or "..."): replace existing non-final
+              const cleaned = updated.filter((u) => u.is_final);
               return { utterances: [...cleaned, utt] };
             });
 
