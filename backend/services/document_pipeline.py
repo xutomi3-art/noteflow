@@ -304,6 +304,7 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
     descriptions: list[str] = []
     try:
         doc = fitz.open(pdf_path)
+        seen_xrefs: set[int] = set()  # deduplicate — same image can appear on multiple pages
         image_count = 0
 
         for page_num in range(len(doc)):
@@ -312,6 +313,11 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
 
             for img_idx, img in enumerate(images):
                 xref = img[0]
+                # Skip already-analyzed images (LibreOffice PPTX→PDF shares images across all pages)
+                if xref in seen_xrefs:
+                    continue
+                seen_xrefs.add(xref)
+
                 try:
                     base_image = doc.extract_image(xref)
                 except Exception:
@@ -340,11 +346,11 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
 
                     if desc and len(desc.strip()) > 20 and "analysis failed" not in desc:
                         descriptions.append(
-                            f"### Image from Page {page_num + 1}\n{desc}"
+                            f"<!-- page:{page_num + 1} -->\n### Image from Page {page_num + 1}\n{desc}"
                         )
                         logger.info(
-                            "PDF image p%d img%d analyzed: %d chars (%.1fs)",
-                            page_num + 1, img_idx + 1, len(desc), elapsed,
+                            "PDF image p%d img%d (xref=%d) analyzed: %d chars (%.1fs)",
+                            page_num + 1, img_idx + 1, xref, len(desc), elapsed,
                         )
                     else:
                         logger.info("PDF image p%d img%d skipped (empty/failed)", page_num + 1, img_idx + 1)
@@ -355,7 +361,8 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
                         os.remove(temp_path)
 
         doc.close()
-        logger.info("PDF image extraction complete: %d images found, %d analyzed", image_count, len(descriptions))
+        logger.info("PDF image extraction complete: %d unique images (from %d xrefs), %d analyzed",
+                     image_count, len(seen_xrefs), len(descriptions))
     except Exception as e:
         logger.error("PDF image extraction failed: %s", e)
 
@@ -483,10 +490,7 @@ async def process_document(
                     # For PDF/DOCX: extract embedded images only
                     image_texts = []
                     if settings.VISION_ENABLED:
-                        if file_type == "pptx":
-                            image_texts = await _render_and_analyze_pages(parse_path)
-                        else:
-                            image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                        image_texts = await _extract_and_analyze_pdf_images(parse_path)
                     if image_texts:
                         content += "\n\n" + "\n\n".join(image_texts)
                         logger.info("Added %d image descriptions to %s", len(image_texts), filename)
