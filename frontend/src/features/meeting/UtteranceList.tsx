@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { SpeakerLabel } from "./SpeakerLabel";
 import type { Utterance } from "./meeting-store";
 
 interface UtteranceListProps {
@@ -9,17 +8,9 @@ interface UtteranceListProps {
   compact?: boolean;
 }
 
-function formatTime(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
-}
-
 export function UtteranceList({ utterances, speakerMap, onRenameSpeaker, compact }: UtteranceListProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new utterances
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [utterances.length]);
@@ -32,41 +23,16 @@ export function UtteranceList({ utterances, speakerMap, onRenameSpeaker, compact
     );
   }
 
-  // Group consecutive utterances by speaker
-  const groups: { speakerId: string; items: Utterance[] }[] = [];
-  for (const u of utterances) {
-    const last = groups[groups.length - 1];
-    if (last && last.speakerId === u.speaker_id) {
-      last.items.push(u);
-    } else {
-      groups.push({ speakerId: u.speaker_id, items: [u] });
-    }
-  }
-
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3">
-      {groups.map((group, i) => {
-        const isPartialGroup = group.items.every((u) => !u.is_final);
-        return (
-        <div key={i} className="space-y-0.5">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs text-gray-400">
-              {formatTime(group.items[0].start_time_ms)}
-            </span>
-          </div>
-          <div className="space-y-1">
-            {group.items.map((u, j) => (
-              <p key={j} className={`text-sm leading-relaxed ${u.is_final ? "text-gray-700" : "text-gray-400 italic"}`}>
-                <span className="text-[10px] text-gray-300 mr-1.5 font-mono">
-                  {u.wall_time || formatTime(u.start_time_ms)}
-                </span>
-                {u.text}
-              </p>
-            ))}
-          </div>
-        </div>
-        );
-      })}
+    <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+      {utterances.map((u, i) => (
+        <p key={i} className={`text-sm leading-relaxed ${u.is_final ? "text-gray-700" : "text-gray-400 italic"}`}>
+          {u.wall_time && (
+            <span className="text-[10px] text-gray-300 mr-1.5 font-mono">{u.wall_time}</span>
+          )}
+          {u.text}
+        </p>
+      ))}
       <div ref={endRef} />
     </div>
   );
