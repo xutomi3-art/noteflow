@@ -460,6 +460,14 @@ class WhisperASRClient:
                 consecutive_silence_bytes = 0
                 if not speech_started and buf_len >= check_bytes:
                     speech_started = True
+                    # Send a partial "listening" indicator so user sees feedback
+                    elapsed_ms = int((time.monotonic() - session.session_start) * 1000)
+                    if session._result_queue:
+                        await session._result_queue.put(Utterance(
+                            speaker_id="speaker_0", text="...",
+                            start_time_ms=elapsed_ms, end_time_ms=elapsed_ms,
+                            is_final=False, sequence=0,
+                        ))
 
             # Decide whether to flush
             should_flush = False
