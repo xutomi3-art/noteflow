@@ -297,8 +297,8 @@ class VolcengineASRClient:
 
 # ── Whisper ASR Client (local Belle-whisper via Xinference) ────────
 
-WHISPER_FLUSH_INTERVAL = 5  # seconds — longer chunks = better accuracy
-WHISPER_MIN_AUDIO_SECS = 1.5  # skip chunks shorter than this
+WHISPER_FLUSH_INTERVAL = 3  # seconds — FireRedASR is fast enough for 3s chunks
+WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
 WHISPER_SILENCE_THRESHOLD = 500  # PCM RMS below this = silence (raised from 200)
 WHISPER_SPEECH_RATIO = 0.15  # at least 15% of samples must exceed peak threshold
 WHISPER_PEAK_THRESHOLD = 1000  # individual sample amplitude for speech detection
