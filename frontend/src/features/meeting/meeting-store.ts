@@ -13,7 +13,15 @@ export interface Utterance {
   end_time_ms: number;
   is_final: boolean;
   sequence: number;
+  provider?: string;
 }
+
+export const ASR_PROVIDERS = ['firered', 'coli', 'funasr'] as const;
+export const ASR_LABELS: Record<string, string> = {
+  firered: 'FireRedASR',
+  coli: 'Coli (SenseVoice)',
+  funasr: 'FunASR-Nano',
+};
 
 export interface Meeting {
   id: string;
@@ -148,18 +156,20 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
               end_time_ms: msg.end_time_ms,
               is_final: msg.is_final,
               sequence: msg.sequence,
+              provider: msg.provider || "firered",
             };
             set((s) => {
+              const provider = utt.provider || "firered";
               const updated = [...s.utterances];
 
               if (utt.is_final) {
-                // Remove any partial (non-final) entries — they're replaced by this final
-                const cleaned = updated.filter((u) => u.is_final);
+                // Remove partials for THIS provider only
+                const cleaned = updated.filter((u) => u.is_final || u.provider !== provider);
                 return { utterances: [...cleaned, utt] };
               }
 
-              // Non-final (partial): replace existing partial or append as the one active partial
-              const cleaned = updated.filter((u) => u.is_final);
+              // Non-final: replace existing partial for this provider
+              const cleaned = updated.filter((u) => u.is_final || u.provider !== provider);
               return { utterances: [...cleaned, utt] };
             });
 

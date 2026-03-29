@@ -6,6 +6,7 @@ interface UtteranceListProps {
   utterances: Utterance[];
   speakerMap: Record<string, string>;
   onRenameSpeaker: (speakerId: string, name: string) => void;
+  compact?: boolean;
 }
 
 function formatTime(ms: number): string {
@@ -15,7 +16,7 @@ function formatTime(ms: number): string {
   return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
 }
 
-export function UtteranceList({ utterances, speakerMap, onRenameSpeaker }: UtteranceListProps) {
+export function UtteranceList({ utterances, speakerMap, onRenameSpeaker, compact }: UtteranceListProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new utterances

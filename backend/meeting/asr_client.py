@@ -34,6 +34,7 @@ class Utterance:
     end_time_ms: int
     is_final: bool
     sequence: int = 0
+    provider: str = ""  # ASR provider name for comparison mode
 
 
 @dataclass
@@ -686,14 +687,250 @@ class WhisperASRClient:
         return "\n".join(lines)
 
 
+# ── Comparison ASR Client (3-way parallel) ─────────────────────────
+
+ASR_ENDPOINTS = {
+    "firered": os.environ.get("FIRERED_ASR_URL", "http://10.200.0.102:8200/v1"),
+    "coli": os.environ.get("COLI_ASR_URL", "http://10.200.0.112:8201/v1"),
+    "funasr": os.environ.get("FUNASR_ASR_URL", "http://10.200.0.102:8202/v1"),
+}
+
+ASR_MODELS = {
+    "firered": "FireRedASR-AED-L",
+    "coli": "sensevoice",
+    "funasr": "FunASR-SenseVoiceSmall",
+}
+
+
+class ComparisonASRClient:
+    """Sends same audio to 3 ASR backends in parallel, tags results with provider."""
+
+    def __init__(self) -> None:
+        self._sessions: dict[str, MeetingSession] = {}
+        self._endpoints = ASR_ENDPOINTS.copy()
+
+    async def start_session(self, meeting_id: str) -> MeetingSession:
+        session = MeetingSession(
+            meeting_id=meeting_id,
+            session_start=time.monotonic(),
+            _result_queue=asyncio.Queue(),
+        )
+        self._sessions[meeting_id] = session
+        session._flush_task = asyncio.create_task(self._flush_loop(meeting_id))
+        logger.info("Comparison ASR session started for meeting %s (%d providers)", meeting_id, len(self._endpoints))
+        return session
+
+    async def send_audio(self, meeting_id: str, pcm_data: bytes) -> None:
+        session = self._sessions.get(meeting_id)
+        if not session or session.is_paused or session.is_ended:
+            return
+        session._audio_buffer.extend(pcm_data)
+
+    def _is_chunk_silent(self, pcm_chunk: bytes) -> bool:
+        if len(pcm_chunk) < 4:
+            return True
+        n = len(pcm_chunk) // 2
+        samples = struct.unpack(f"<{n}h", pcm_chunk[:n * 2])
+        rms = (sum(s * s for s in samples) / n) ** 0.5
+        return rms < WHISPER_SILENCE_THRESHOLD
+
+    async def _transcribe_one(self, provider: str, wav_data: bytes, prompt: str = "") -> tuple[str, str]:
+        """Transcribe with one provider. Returns (provider, text)."""
+        url = self._endpoints[provider]
+        model = ASR_MODELS[provider]
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                form_data: dict[str, str] = {"model": model, "language": "zh"}
+                if provider == "firered":
+                    form_data["temperature"] = "0"
+                if prompt and provider == "firered":
+                    form_data["initial_prompt"] = prompt[-200:]
+                resp = await client.post(
+                    f"{url.rstrip('/')}/audio/transcriptions",
+                    files={"file": ("audio.wav", wav_data, "audio/wav")},
+                    data=form_data,
+                )
+                if resp.status_code == 200:
+                    text = resp.json().get("text", "")
+                    return provider, text.strip()
+                else:
+                    logger.warning("%s ASR returned %d", provider, resp.status_code)
+                    return provider, ""
+        except Exception as e:
+            logger.warning("%s ASR error: %s", provider, str(e)[:80])
+            return provider, ""
+
+    async def _flush_loop(self, meeting_id: str) -> None:
+        """VAD-based flush, sends same audio segment to all 3 ASR providers."""
+        session = self._sessions.get(meeting_id)
+        if not session:
+            return
+
+        bytes_per_sec = WHISPER_SAMPLE_RATE * WHISPER_SAMPLE_WIDTH
+        min_bytes = int(WHISPER_MIN_AUDIO_SECS * bytes_per_sec)
+        max_bytes = int(WHISPER_MAX_AUDIO_SECS * bytes_per_sec)
+        silence_bytes = int(WHISPER_SILENCE_MS / 1000 * bytes_per_sec)
+        check_bytes = int(WHISPER_CHECK_INTERVAL * bytes_per_sec)
+
+        consecutive_silence_bytes = 0
+        speech_started = False
+
+        while not session.is_ended:
+            await asyncio.sleep(WHISPER_CHECK_INTERVAL)
+            if session.is_paused or session.is_ended:
+                consecutive_silence_bytes = 0
+                speech_started = False
+                continue
+
+            buf_len = len(session._audio_buffer)
+            if buf_len < check_bytes:
+                continue
+
+            latest_chunk = bytes(session._audio_buffer[-check_bytes:])
+            is_silent = self._is_chunk_silent(latest_chunk)
+
+            if is_silent:
+                consecutive_silence_bytes += check_bytes
+            else:
+                consecutive_silence_bytes = 0
+                if not speech_started and buf_len >= check_bytes:
+                    speech_started = True
+                    elapsed_ms = int((time.monotonic() - session.session_start) * 1000)
+                    if session._result_queue:
+                        await session._result_queue.put(Utterance(
+                            speaker_id="speaker_0", text="...",
+                            start_time_ms=elapsed_ms, end_time_ms=elapsed_ms,
+                            is_final=False, sequence=0, provider="firered",
+                        ))
+
+            should_flush = False
+            if speech_started and consecutive_silence_bytes >= silence_bytes and buf_len >= min_bytes:
+                should_flush = True
+            elif buf_len >= max_bytes:
+                should_flush = True
+
+            if not should_flush:
+                continue
+
+            if consecutive_silence_bytes > 0 and buf_len > consecutive_silence_bytes:
+                speech_end = buf_len - consecutive_silence_bytes
+                pcm_data = bytes(session._audio_buffer[:speech_end])
+                remaining = bytes(session._audio_buffer[speech_end:])
+                session._audio_buffer.clear()
+                session._audio_buffer.extend(remaining)
+            else:
+                pcm_data = bytes(session._audio_buffer)
+                session._audio_buffer.clear()
+
+            consecutive_silence_bytes = 0
+            speech_started = False
+
+            if not _has_speech(pcm_data):
+                continue
+
+            elapsed_ms = int((time.monotonic() - session.session_start) * 1000)
+            duration_ms = int(len(pcm_data) / bytes_per_sec * 1000)
+            start_ms = max(0, elapsed_ms - duration_ms)
+
+            prompt_parts = [u.text for u in session.utterances[-2:] if u.provider == "firered"]
+            prompt = "".join(prompt_parts) if prompt_parts else ""
+
+            wav_data = _pcm_to_wav(pcm_data)
+
+            # Send to all 3 ASR providers in parallel
+            tasks = [self._transcribe_one(p, wav_data, prompt) for p in self._endpoints]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for result in results:
+                if isinstance(result, Exception):
+                    continue
+                provider, text = result
+                if not text or _is_hallucination(text):
+                    continue
+
+                # Add punctuation for firered (others may have their own)
+                if provider == "firered":
+                    text = _add_punctuation(text)
+
+                session.sequence_counter += 1
+                utt = Utterance(
+                    speaker_id="speaker_0",
+                    text=text,
+                    start_time_ms=start_ms,
+                    end_time_ms=elapsed_ms,
+                    is_final=True,
+                    sequence=session.sequence_counter,
+                    provider=provider,
+                )
+                session.utterances.append(utt)
+                if session._result_queue:
+                    await session._result_queue.put(utt)
+
+    async def receive_results(self, meeting_id: str):
+        session = self._sessions.get(meeting_id)
+        if not session or not session._result_queue:
+            return
+        logger.info("Comparison receive_results started for meeting %s", meeting_id)
+        while not session.is_ended:
+            try:
+                utt = await asyncio.wait_for(session._result_queue.get(), timeout=1.0)
+                yield utt
+            except asyncio.TimeoutError:
+                continue
+
+    async def end_session(self, meeting_id: str) -> list[Utterance]:
+        session = self._sessions.get(meeting_id)
+        if not session:
+            return []
+        session.is_ended = True
+        if session._flush_task:
+            session._flush_task.cancel()
+            try:
+                await session._flush_task
+            except asyncio.CancelledError:
+                pass
+        all_utterances = session.utterances
+        self._sessions.pop(meeting_id, None)
+        logger.info("Comparison ASR session ended for meeting %s (%d utterances)", meeting_id, len(all_utterances))
+        return all_utterances
+
+    def pause_session(self, meeting_id: str) -> None:
+        session = self._sessions.get(meeting_id)
+        if session:
+            session.is_paused = True
+
+    def resume_session(self, meeting_id: str) -> None:
+        session = self._sessions.get(meeting_id)
+        if session:
+            session.is_paused = False
+
+    def get_session(self, meeting_id: str) -> MeetingSession | None:
+        return self._sessions.get(meeting_id)
+
+    def get_live_transcript(self, meeting_id: str) -> str:
+        session = self._sessions.get(meeting_id)
+        if not session:
+            return ""
+        lines = []
+        for u in session.utterances:
+            if u.provider != "firered":
+                continue
+            ts = f"{u.start_time_ms // 60000:02d}:{(u.start_time_ms // 1000) % 60:02d}"
+            lines.append(f"[{u.speaker_id}] ({ts}) {u.text}")
+        return "\n".join(lines)
+
+
 # ── Singleton: select provider ─────────────────────────────────────
 
 import os
 
-_ASR_PROVIDER = os.getenv("ASR_PROVIDER", "whisper").lower()
+_ASR_PROVIDER = os.getenv("ASR_PROVIDER", "comparison").lower()
 
-if _ASR_PROVIDER == "whisper":
-    _whisper_url = os.getenv("WHISPER_BASE_URL", "http://10.200.0.102:9997/v1")
+if _ASR_PROVIDER == "comparison":
+    asr_client = ComparisonASRClient()
+    logger.info("ASR provider: Comparison mode (3-way: FireRedASR + Coli + FunASR)")
+elif _ASR_PROVIDER == "whisper":
+    _whisper_url = os.getenv("WHISPER_BASE_URL", "http://10.200.0.102:8200/v1")
     asr_client = WhisperASRClient(base_url=_whisper_url)
     logger.info("ASR provider: Whisper (local) at %s", _whisper_url)
 else:

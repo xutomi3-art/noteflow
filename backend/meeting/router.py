@@ -205,6 +205,7 @@ async def websocket_audio(
                 async for utterance in asr_client.receive_results(meeting_id):
                     await websocket.send_json({
                         "type": "utterance",
+                        "provider": utterance.provider or "firered",
                         "speaker_id": utterance.speaker_id,
                         "text": utterance.text,
                         "start_time_ms": utterance.start_time_ms,
