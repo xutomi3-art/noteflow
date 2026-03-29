@@ -11,6 +11,7 @@ import gzip
 import io
 import json
 import logging
+import os
 import re
 import struct
 import time
@@ -921,8 +922,6 @@ class ComparisonASRClient:
 
 
 # ── Singleton: select provider ─────────────────────────────────────
-
-import os
 
 _ASR_PROVIDER = os.getenv("ASR_PROVIDER", "comparison").lower()
 
