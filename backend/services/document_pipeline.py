@@ -565,7 +565,7 @@ async def process_document(
                     image_texts = []
                     if settings.VISION_ENABLED:
                         image_texts = await _extract_and_analyze_pdf_images(
-                            parse_path, progress_callback=_img_progress, max_images=10,
+                            parse_path, progress_callback=_img_progress,
                         )
                     if image_texts:
                         content += "\n\n" + "\n\n".join(image_texts)
