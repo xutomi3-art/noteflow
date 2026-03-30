@@ -549,13 +549,7 @@ async def process_document(
                 if parsed:
                     # Inject PDF page markers into markdown for accurate citation page numbers
                     content = _inject_pdf_page_markers(parsed, parse_path)
-                    # Extract and analyze images from PDF with Vision LLM (if enabled)
-                    image_texts = []
-                    if settings.VISION_ENABLED:
-                        image_texts = await _extract_and_analyze_pdf_images(parse_path, progress_callback=_img_progress)
-                    if image_texts:
-                        content += "\n\n" + "\n\n".join(image_texts)
-                        logger.info("Added %d image descriptions to %s", len(image_texts), filename)
+                    # MinerU succeeded — skip Vision image analysis (MinerU already handles images)
                     _save_parsed_content(file_path, content)
                     await update_source_status(db, sid, "parsing", progress=40.0)
                     await _notify(notebook_id, source_id, "parsing", progress=0.40)
