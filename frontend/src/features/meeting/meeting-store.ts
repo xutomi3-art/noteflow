@@ -17,11 +17,10 @@ export interface Utterance {
   wall_time?: string;  // Beijing time HH:MM:SS
 }
 
-export const ASR_PROVIDERS = ['firered', 'coli', 'funasr'] as const;
+export const ASR_PROVIDERS = ['coli', 'funasr'] as const;
 export const ASR_LABELS: Record<string, string> = {
-  firered: 'FireRedASR',
   coli: 'Coli (SenseVoice)',
-  funasr: 'FunASR-Nano',
+  funasr: 'FunASR',
 };
 
 export interface Meeting {
