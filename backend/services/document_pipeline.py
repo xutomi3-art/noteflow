@@ -539,6 +539,8 @@ async def process_document(
                 else:
                     # MinerU returned empty — extract text + analyze large images from PDF
                     logger.warning("MinerU returned empty for %s", filename)
+                    await update_source_status(db, sid, "parsing", progress=32.0)
+                    await _notify(notebook_id, source_id, "parsing", progress=0.32)
                     parts = []
 
                     # Extract text from PDF (titles, headings, etc.)
@@ -546,6 +548,9 @@ async def process_document(
                         pdf_text = _extract_pdf_text(parse_path)
                         if pdf_text:
                             parts.append(pdf_text)
+
+                    await update_source_status(db, sid, "parsing", progress=35.0)
+                    await _notify(notebook_id, source_id, "parsing", progress=0.35)
 
                     # Analyze large visible images with vision LLM
                     if settings.VISION_ENABLED and parse_path and os.path.exists(parse_path):
