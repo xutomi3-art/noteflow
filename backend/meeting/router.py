@@ -4,12 +4,13 @@ import json
 import logging
 import uuid
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.auth import get_current_user
 from backend.core.database import get_db, async_session
-from backend.meeting.asr_client import asr_client, set_hotwords, get_hotwords
+from backend.meeting.asr_client import asr_client, set_hotwords, get_hotwords, load_hotwords_from_db
 from backend.meeting.schemas import MeetingCreate, MeetingOut, SpeakerUpdate, UtteranceOut
 from backend.meeting import service
 from backend.models.user import User
@@ -51,9 +52,11 @@ async def get_active_meeting(
 async def get_notebook_hotwords(
     notebook_id: str,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get ASR hotwords for this notebook."""
-    return {"words": get_hotwords(notebook_id)}
+    words = await load_hotwords_from_db(db, notebook_id)
+    return {"words": words}
 
 
 @router.put("/hotwords")
@@ -61,12 +64,26 @@ async def set_notebook_hotwords(
     notebook_id: str,
     body: dict,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Set ASR hotwords for this notebook."""
+    """Set ASR hotwords for this notebook (persisted to DB)."""
     words = body.get("words", [])
     if not isinstance(words, list):
         raise HTTPException(status_code=400, detail="words must be a list")
     clean = list(dict.fromkeys(w.strip() for w in words if isinstance(w, str) and w.strip()))
+
+    # Persist to DB
+    from backend.models.notebook import Notebook
+    result = await db.execute(
+        sa.select(Notebook).where(Notebook.id == uuid.UUID(notebook_id))
+    )
+    notebook = result.scalar_one_or_none()
+    if not notebook:
+        raise HTTPException(status_code=404, detail="Notebook not found")
+    notebook.hotwords = clean
+    await db.commit()
+
+    # Update in-memory cache
     set_hotwords(notebook_id, clean)
     return {"words": clean}
 
@@ -187,6 +204,13 @@ async def websocket_audio(
     """
     await websocket.accept()
     logger.info("Meeting WS connected: %s", meeting_id)
+
+    # Pre-load hotwords from DB into cache before starting ASR
+    try:
+        async with async_session() as db:
+            await load_hotwords_from_db(db, notebook_id)
+    except Exception as e:
+        logger.warning("Failed to load hotwords from DB: %s", e)
 
     # Start ASR session
     try:

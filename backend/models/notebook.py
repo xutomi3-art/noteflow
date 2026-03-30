@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from sqlalchemy import String, Boolean, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.core.database import Base
@@ -22,4 +22,5 @@ class Notebook(Base):
     overview_cache: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     overview_source_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    hotwords: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
