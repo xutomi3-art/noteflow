@@ -313,6 +313,7 @@ def _extract_pdf_text(pdf_path: str) -> str:
 async def _extract_and_analyze_pdf_images(
     pdf_path: str,
     progress_callback=None,
+    max_images: int = 0,
 ) -> list[str]:
     """Extract large VISIBLE images from PDF and analyze with Vision LLM.
 
@@ -321,6 +322,7 @@ async def _extract_and_analyze_pdf_images(
     Same xref analyzed at most once (dedup across pages).
 
     progress_callback: async callable(fraction) where fraction is 0.0-1.0 of image analysis progress.
+    max_images: stop after analyzing this many images (0 = unlimited).
     """
     try:
         import fitz
@@ -337,7 +339,10 @@ async def _extract_and_analyze_pdf_images(
         skipped_small = 0
         total_visible = 0
 
+        hit_limit = False
         for page_num in range(len(doc)):
+            if hit_limit:
+                break
             page = doc[page_num]
             page_area = page.rect.width * page.rect.height
             if page_area <= 0:
@@ -371,6 +376,12 @@ async def _extract_and_analyze_pdf_images(
                 if len(image_bytes) < 5000:
                     skipped_small += 1
                     continue
+
+                # Stop if max_images reached
+                if max_images and len(analyzed_xrefs) >= max_images:
+                    logger.info("Reached max_images=%d, stopping image analysis", max_images)
+                    hit_limit = True
+                    break
 
                 analyzed_xrefs.add(info_xref)
                 analyzed_count = len(analyzed_xrefs)
@@ -549,7 +560,16 @@ async def process_document(
                 if parsed:
                     # Inject PDF page markers into markdown for accurate citation page numbers
                     content = _inject_pdf_page_markers(parsed, parse_path)
-                    # MinerU succeeded — skip Vision image analysis (MinerU already handles images)
+                    # Analyze large images with Vision LLM (MinerU extracts text but can't understand charts/diagrams)
+                    # Cap at 10 images to avoid 30+ min delays on image-heavy docs
+                    image_texts = []
+                    if settings.VISION_ENABLED:
+                        image_texts = await _extract_and_analyze_pdf_images(
+                            parse_path, progress_callback=_img_progress, max_images=10,
+                        )
+                    if image_texts:
+                        content += "\n\n" + "\n\n".join(image_texts)
+                        logger.info("Added %d image descriptions to %s", len(image_texts), filename)
                     _save_parsed_content(file_path, content)
                     await update_source_status(db, sid, "parsing", progress=40.0)
                     await _notify(notebook_id, source_id, "parsing", progress=0.40)
