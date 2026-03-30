@@ -166,6 +166,112 @@ def _color(value: float, threshold: int) -> str:
     return "color:#dc2626;font-weight:600" if value >= threshold else ""
 
 
+async def send_resource_recovery_email(
+    to_email: str,
+    recovered: list[str],
+    host: dict,
+    containers: list[dict],
+) -> None:
+    """Send an email when resource metrics return to normal."""
+    subject = f"[Noteflow Resolved] {len(recovered)} resource(s) recovered"
+
+    recovered_rows = ""
+    for desc in recovered:
+        recovered_rows += f"""<tr>
+          <td style="padding:8px 12px;border:1px solid #e5e7eb;color:#16a34a;font-weight:600">{desc}</td>
+        </tr>"""
+
+    # Host overview
+    host_section = f"""
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:0 0 16px">
+      <tr style="background:#f9fafb">
+        <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left" colspan="2">Host Resources</th>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;border:1px solid #e5e7eb">CPU</td>
+        <td style="padding:8px 12px;border:1px solid #e5e7eb">{host['cpu_percent']}%</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;border:1px solid #e5e7eb">Memory</td>
+        <td style="padding:8px 12px;border:1px solid #e5e7eb">{host['memory_used_gb']}GB / {host['memory_total_gb']}GB ({host['memory_percent']}%)</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 12px;border:1px solid #e5e7eb">Disk</td>
+        <td style="padding:8px 12px;border:1px solid #e5e7eb">{host['disk_used_gb']}GB / {host['disk_total_gb']}GB ({host['disk_percent']}%)</td>
+      </tr>
+    </table>"""
+
+    # Container table
+    container_rows = ""
+    for c in containers:
+        container_rows += f"""<tr>
+          <td style="padding:6px 12px;border:1px solid #e5e7eb">{c['name']}</td>
+          <td style="padding:6px 12px;border:1px solid #e5e7eb">{c['cpu_percent']}%</td>
+          <td style="padding:6px 12px;border:1px solid #e5e7eb">{c['memory_mb']}MB ({c['memory_percent']}%)</td>
+        </tr>"""
+
+    container_section = f"""
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:0 0 24px">
+      <tr style="background:#f9fafb">
+        <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">Container</th>
+        <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">CPU</th>
+        <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">Memory</th>
+      </tr>
+      {container_rows}
+    </table>""" if containers else ""
+
+    html = f"""\
+<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:580px;margin:0 auto;padding:32px">
+  <h2 style="font-size:18px;margin:0 0 16px;color:#16a34a">Resource Recovered</h2>
+  <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 16px">
+    The following resource(s) have returned to normal:
+  </p>
+  <table style="border-collapse:collapse;width:100%;font-size:13px;margin:0 0 16px">
+    <tr style="background:#f0fdf4">
+      <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">Recovered</th>
+    </tr>
+    {recovered_rows}
+  </table>
+  {host_section}
+  {container_section}
+  <p style="color:#888;font-size:12px;margin:0">
+    Checked at {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+  </p>
+</div>"""
+    await _send(to_email, subject, html)
+
+
+async def send_service_recovery_email(to_email: str, recovered: list[str]) -> None:
+    """Send an email when previously-down services recover."""
+    subject = f"[Noteflow Resolved] {len(recovered)} service(s) recovered"
+
+    rows = ""
+    for name in recovered:
+        rows += f"""<tr>
+          <td style="padding:8px 12px;border:1px solid #e5e7eb;color:#16a34a;font-weight:600">{name}</td>
+          <td style="padding:8px 12px;border:1px solid #e5e7eb;color:#16a34a">OK</td>
+        </tr>"""
+
+    html = f"""\
+<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:32px">
+  <h2 style="font-size:18px;margin:0 0 16px;color:#16a34a">Service Recovered</h2>
+  <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 16px">
+    The following service(s) are back online:
+  </p>
+  <table style="border-collapse:collapse;width:100%;font-size:13px;margin:0 0 24px">
+    <tr style="background:#f0fdf4">
+      <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">Service</th>
+      <th style="padding:8px 12px;border:1px solid #e5e7eb;text-align:left">Status</th>
+    </tr>
+    {rows}
+  </table>
+  <p style="color:#888;font-size:12px;margin:0">
+    Checked at {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+  </p>
+</div>"""
+    await _send(to_email, subject, html)
+
+
 async def send_password_reset_email(to_email: str, reset_url: str) -> None:
     subject = "Reset your Noteflow password"
     html = f"""\

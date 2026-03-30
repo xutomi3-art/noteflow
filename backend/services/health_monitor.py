@@ -2,10 +2,16 @@
 
 Also monitors host CPU/memory and per-container resource usage, alerting when
 thresholds are exceeded for consecutive checks.
+
+Alert behavior:
+- First alert after 2 consecutive breaches (ALERT_THRESHOLD).
+- Repeat alert every REPEAT_INTERVAL_SECONDS (default 12 h) while still breached.
+- Recovery email when metric/service returns to normal.
 """
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 
 from backend.core.database import async_session
@@ -14,6 +20,8 @@ from backend.services.email_service import (
     is_email_configured,
     send_health_alert_email,
     send_resource_alert_email,
+    send_resource_recovery_email,
+    send_service_recovery_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,12 +30,19 @@ logger = logging.getLogger(__name__)
 _failure_counts: dict[str, int] = {}
 # Track which services we already alerted on (don't spam)
 _alerted: set[str] = set()
+# Track last alert time per service for repeat alerts
+_service_last_alert: dict[str, float] = {}
 
 # Resource monitoring state
 _resource_breach_counts: dict[str, int] = {}
 _resource_alerted: set[str] = set()
+# Track last alert time per resource metric for repeat alerts
+_resource_last_alert: dict[str, float] = {}
+# Track human-readable description for recovery emails
+_resource_descriptions: dict[str, str] = {}
 
 ALERT_THRESHOLD = 2  # consecutive failures before sending alert
+REPEAT_INTERVAL_SECONDS = 12 * 60 * 60  # 12 hours
 
 # Default resource thresholds (can be overridden via admin settings)
 DEFAULT_CPU_THRESHOLD = 90  # percent
@@ -104,6 +119,9 @@ async def _check_resources(alert_email: str) -> None:
     if breaches:
         try:
             await send_resource_alert_email(alert_email, breaches, host, containers)
+            now = time.monotonic()
+            for b in breaches:
+                _resource_last_alert[b["_key"]] = now
             logger.warning(
                 "Resource alert sent to %s: %s",
                 alert_email,
@@ -112,30 +130,60 @@ async def _check_resources(alert_email: str) -> None:
         except Exception as e:
             logger.error("Failed to send resource alert: %s", e)
 
-    # Log recoveries
-    recovered = [
-        k for k in list(_resource_alerted)
-        if k not in {b.get("_key") for b in breaches}
-        and _resource_breach_counts.get(k, 0) == 0
-    ]
-    for k in recovered:
-        _resource_alerted.discard(k)
-        logger.info("Resource recovered: %s", k)
+    # Check for recoveries and send recovery emails
+    recovered_keys = []
+    for k in list(_resource_descriptions):
+        if k not in _resource_alerted and k not in {b.get("_key") for b in breaches}:
+            # Was previously alerted but now back to normal
+            recovered_keys.append(k)
+
+    if recovered_keys:
+        recovered_descs = [_resource_descriptions.pop(k) for k in recovered_keys]
+        for k in recovered_keys:
+            _resource_last_alert.pop(k, None)
+        try:
+            await send_resource_recovery_email(alert_email, recovered_descs, host, containers)
+            logger.info("Resource recovery sent to %s: %s", alert_email, recovered_keys)
+        except Exception as e:
+            logger.error("Failed to send resource recovery email: %s", e)
 
 
 def _check_metric(
     key: str, value: float, threshold: int, description: str, breaches: list[dict]
 ) -> None:
-    """Track consecutive breaches for a resource metric."""
+    """Track consecutive breaches for a resource metric.
+
+    - First alert after ALERT_THRESHOLD consecutive breaches.
+    - Repeat alert every REPEAT_INTERVAL_SECONDS while still breached.
+    - On recovery, mark for recovery notification.
+    """
+    now = time.monotonic()
+
     if value >= threshold:
         _resource_breach_counts[key] = _resource_breach_counts.get(key, 0) + 1
-        if _resource_breach_counts[key] >= ALERT_THRESHOLD and key not in _resource_alerted:
-            breaches.append({"metric": key, "description": description, "_key": key})
-            _resource_alerted.add(key)
+        _resource_descriptions[key] = description
+
+        if _resource_breach_counts[key] >= ALERT_THRESHOLD:
+            if key not in _resource_alerted:
+                # First time crossing threshold — send alert
+                breaches.append({"metric": key, "description": description, "_key": key})
+                _resource_alerted.add(key)
+            else:
+                # Already alerted — check if repeat interval has passed
+                last = _resource_last_alert.get(key, 0)
+                if now - last >= REPEAT_INTERVAL_SECONDS:
+                    breaches.append({"metric": key, "description": description, "_key": key})
     else:
-        if key in _resource_alerted:
-            _resource_alerted.discard(key)
+        # Value dropped below threshold
+        was_alerted = key in _resource_alerted
+        _resource_alerted.discard(key)
         _resource_breach_counts[key] = 0
+        if not was_alerted:
+            # Was never alerted, clean up description tracking
+            _resource_descriptions.pop(key, None)
+            _resource_last_alert.pop(key, None)
+        # If was_alerted, keep _resource_descriptions entry so _check_resources
+        # can detect recovery and send the recovery email.
 
 
 async def _run_check() -> None:
@@ -146,23 +194,35 @@ async def _run_check() -> None:
     if not alert_email or not is_email_configured():
         return
 
-    # Service health checks (existing)
+    # Service health checks
     async with async_session() as db:
         services = await admin_service.check_service_health(db)
 
+    now = time.monotonic()
     newly_failed: list[dict] = []
     recovered: list[str] = []
 
     for name, info in services.items():
         if info["status"] == "error":
             _failure_counts[name] = _failure_counts.get(name, 0) + 1
-            if _failure_counts[name] >= ALERT_THRESHOLD and name not in _alerted:
-                newly_failed.append({"name": name, "message": info.get("message", "unreachable")})
-                _alerted.add(name)
+
+            if _failure_counts[name] >= ALERT_THRESHOLD:
+                if name not in _alerted:
+                    # First alert
+                    newly_failed.append({"name": name, "message": info.get("message", "unreachable")})
+                    _alerted.add(name)
+                    _service_last_alert[name] = now
+                else:
+                    # Repeat alert if interval passed
+                    last = _service_last_alert.get(name, 0)
+                    if now - last >= REPEAT_INTERVAL_SECONDS:
+                        newly_failed.append({"name": name, "message": info.get("message", "unreachable")})
+                        _service_last_alert[name] = now
         else:
             if name in _alerted:
                 recovered.append(name)
                 _alerted.discard(name)
+                _service_last_alert.pop(name, None)
             _failure_counts[name] = 0
 
     if newly_failed:
@@ -173,9 +233,13 @@ async def _run_check() -> None:
             logger.error("Failed to send health alert: %s", e)
 
     if recovered:
-        logger.info("Services recovered: %s", recovered)
+        try:
+            await send_service_recovery_email(alert_email, recovered)
+            logger.info("Service recovery sent to %s: %s", alert_email, recovered)
+        except Exception as e:
+            logger.error("Failed to send service recovery email: %s", e)
 
-    # Resource checks (new)
+    # Resource checks
     try:
         await _check_resources(alert_email)
     except Exception as e:
