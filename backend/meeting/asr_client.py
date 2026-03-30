@@ -817,11 +817,12 @@ class ComparisonASRClient:
         self._sessions: dict[str, MeetingSession] = {}
         self._endpoints = ASR_ENDPOINTS.copy()
 
-    async def start_session(self, meeting_id: str) -> MeetingSession:
+    async def start_session(self, meeting_id: str, notebook_id: str = "", **kwargs: str) -> MeetingSession:
         session = MeetingSession(
             meeting_id=meeting_id,
             session_start=time.monotonic(),
             _result_queue=asyncio.Queue(),
+            notebook_id=notebook_id,
         )
         self._sessions[meeting_id] = session
         session._flush_task = asyncio.create_task(self._flush_loop(meeting_id))
