@@ -310,12 +310,17 @@ def _extract_pdf_text(pdf_path: str) -> str:
         return ""
 
 
-async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
+async def _extract_and_analyze_pdf_images(
+    pdf_path: str,
+    progress_callback=None,
+) -> list[str]:
     """Extract large VISIBLE images from PDF and analyze with Vision LLM.
 
     Uses get_image_info(xrefs=True) to find only VISIBLE images on each page.
     Only images covering >10% of the page are sent to vision LLM.
     Same xref analyzed at most once (dedup across pages).
+
+    progress_callback: async callable(fraction) where fraction is 0.0-1.0 of image analysis progress.
     """
     try:
         import fitz
@@ -368,6 +373,7 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
                     continue
 
                 analyzed_xrefs.add(info_xref)
+                analyzed_count = len(analyzed_xrefs)
                 ext = base_image.get("ext", "png")
                 temp_path = f"/tmp/pdf_img_{page_num}_{info_xref}.{ext}"
 
@@ -393,6 +399,16 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
                         )
                     else:
                         logger.info("PDF image p%d xref=%d skipped (empty/failed)", page_num + 1, info_xref)
+
+                    # Report progress per image analyzed
+                    if progress_callback:
+                        # Estimate total eligible images as 2x analyzed so far (rough upper bound)
+                        # This gives monotonically increasing progress
+                        frac = min(analyzed_count / max(analyzed_count + 5, 10), 0.95)
+                        try:
+                            await progress_callback(frac)
+                        except Exception:
+                            pass
                 except Exception as e:
                     logger.warning("Failed to analyze PDF image p%d xref=%d: %s", page_num + 1, info_xref, e)
                 finally:
@@ -517,23 +533,31 @@ async def process_document(
 
                 # Use MinerU for high-quality document parsing
                 logger.info("Parsing %s via MinerU...", filename)
+                await update_source_status(db, sid, "parsing", progress=10.0)
                 await _notify(notebook_id, source_id, "parsing", progress=0.10)
                 parse_name = os.path.splitext(filename)[0] + ".pdf" if parse_path != file_path else filename
                 parsed = await mineru_client.parse_document(parse_path, parse_name)
+                await update_source_status(db, sid, "parsing", progress=30.0)
                 await _notify(notebook_id, source_id, "parsing", progress=0.30)
+
+                # Progress callback for image analysis (maps image progress to 30%-40% range)
+                async def _img_progress(frac: float) -> None:
+                    pct = 30.0 + frac * 10.0  # 30% -> 40%
+                    await update_source_status(db, sid, "parsing", progress=pct)
+                    await _notify(notebook_id, source_id, "parsing", progress=pct / 100.0)
+
                 if parsed:
                     # Inject PDF page markers into markdown for accurate citation page numbers
                     content = _inject_pdf_page_markers(parsed, parse_path)
                     # Extract and analyze images from PDF with Vision LLM (if enabled)
-                    # For PPTX: render every page as image (catches tables/charts pasted as images)
-                    # For PDF/DOCX: extract embedded images only
                     image_texts = []
                     if settings.VISION_ENABLED:
-                        image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                        image_texts = await _extract_and_analyze_pdf_images(parse_path, progress_callback=_img_progress)
                     if image_texts:
                         content += "\n\n" + "\n\n".join(image_texts)
                         logger.info("Added %d image descriptions to %s", len(image_texts), filename)
                     _save_parsed_content(file_path, content)
+                    await update_source_status(db, sid, "parsing", progress=40.0)
                     await _notify(notebook_id, source_id, "parsing", progress=0.40)
                     logger.info("MinerU parsed %s: %d chars", filename, len(content))
                 else:
@@ -552,9 +576,15 @@ async def process_document(
                     await update_source_status(db, sid, "parsing", progress=35.0)
                     await _notify(notebook_id, source_id, "parsing", progress=0.35)
 
+                    # Progress callback for fallback image analysis (maps to 35%-40% range)
+                    async def _fallback_img_progress(frac: float) -> None:
+                        pct = 35.0 + frac * 5.0  # 35% -> 40%
+                        await update_source_status(db, sid, "parsing", progress=pct)
+                        await _notify(notebook_id, source_id, "parsing", progress=pct / 100.0)
+
                     # Analyze large visible images with vision LLM
                     if settings.VISION_ENABLED and parse_path and os.path.exists(parse_path):
-                        image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                        image_texts = await _extract_and_analyze_pdf_images(parse_path, progress_callback=_fallback_img_progress)
                         if image_texts:
                             parts.extend(image_texts)
                             logger.info("Vision extracted %d images for %s", len(image_texts), filename)
