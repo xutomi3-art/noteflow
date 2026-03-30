@@ -290,27 +290,47 @@ async def _render_and_analyze_pages(pdf_path: str) -> list[str]:
     return descriptions
 
 
-async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
-    """Extract large images from PDF and analyze with Vision LLM.
+def _extract_pdf_text(pdf_path: str) -> str:
+    """Extract text from PDF using PyMuPDF (fallback when MinerU fails)."""
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        parts = []
+        for page_num in range(len(doc)):
+            text = doc[page_num].get_text().strip()
+            if text:
+                parts.append(f"<!-- page:{page_num + 1} -->\n{text}")
+        doc.close()
+        result = "\n\n".join(parts)
+        if result:
+            logger.info("PyMuPDF extracted %d chars of text from %s", len(result), pdf_path)
+        return result
+    except Exception as e:
+        logger.warning("PyMuPDF text extraction failed: %s", e)
+        return ""
 
-    Only analyzes images that occupy > 10% of the page area (charts, tables,
-    screenshots). Skips small images (logos, icons, decorations).
-    Deduplicates by xref to avoid re-analyzing shared images across pages.
+
+async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
+    """Extract large VISIBLE images from PDF and analyze with Vision LLM.
+
+    Uses get_image_info(xrefs=True) to find only VISIBLE images on each page.
+    Only images covering >10% of the page are sent to vision LLM.
+    Same xref analyzed at most once (dedup across pages).
     """
     try:
-        import fitz  # PyMuPDF
+        import fitz
     except ImportError:
         logger.warning("PyMuPDF not installed, skipping PDF image extraction")
         return []
 
-    MIN_PAGE_RATIO = 0.10  # image must cover > 10% of page to be worth analyzing
+    MIN_PAGE_RATIO = 0.10
 
     descriptions: list[str] = []
     try:
         doc = fitz.open(pdf_path)
-        seen_xrefs: set[int] = set()
-        image_count = 0
+        analyzed_xrefs: set[int] = set()
         skipped_small = 0
+        total_visible = 0
 
         for page_num in range(len(doc)):
             page = doc[page_num]
@@ -318,39 +338,27 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
             if page_area <= 0:
                 continue
 
-            # Build a map of image xref -> max area ratio across all appearances
-            # get_image_info() includes xref in 'xref' field (PyMuPDF >= 1.24)
-            # Fallback: match by position order if xref not available
-            image_info_list = page.get_image_info(xrefs=True)
-            xref_areas: dict[int, float] = {}
-            for img_info in image_info_list:
+            # get_image_info(xrefs=True) returns ONLY VISIBLE images with bbox + xref
+            for img_info in page.get_image_info(xrefs=True):
                 bbox = img_info.get("bbox")
-                if not bbox:
+                info_xref = img_info.get("xref", 0)
+                if not bbox or not info_xref:
                     continue
+
+                total_visible += 1
+
+                if info_xref in analyzed_xrefs:
+                    continue
+
                 w = bbox[2] - bbox[0]
                 h = bbox[3] - bbox[1]
                 ratio = (w * h) / page_area
-                info_xref = img_info.get("xref", 0)
-                if info_xref:
-                    xref_areas[info_xref] = max(xref_areas.get(info_xref, 0), ratio)
-
-            images = page.get_images(full=True)
-            for img_idx, img in enumerate(images):
-                xref = img[0]
-                if xref in seen_xrefs:
-                    continue
-                seen_xrefs.add(xref)
-
-                # Check if this image is large enough on the page
-                area_ratio = xref_areas.get(xref, 0)
-                if area_ratio < MIN_PAGE_RATIO:
+                if ratio < MIN_PAGE_RATIO:
                     skipped_small += 1
-                    logger.debug("PDF image p%d img%d skipped (%.1f%% of page, < %.0f%% threshold)",
-                                 page_num + 1, img_idx + 1, area_ratio * 100, MIN_PAGE_RATIO * 100)
                     continue
 
                 try:
-                    base_image = doc.extract_image(xref)
+                    base_image = doc.extract_image(info_xref)
                 except Exception:
                     continue
 
@@ -359,9 +367,9 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
                     skipped_small += 1
                     continue
 
-                image_count += 1
+                analyzed_xrefs.add(info_xref)
                 ext = base_image.get("ext", "png")
-                temp_path = f"/tmp/pdf_img_{page_num}_{img_idx}.{ext}"
+                temp_path = f"/tmp/pdf_img_{page_num}_{info_xref}.{ext}"
 
                 try:
                     with open(temp_path, "wb") as f:
@@ -371,7 +379,7 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
                     t_start = _time.time()
                     desc = await qwen_client.analyze_image(
                         temp_path,
-                        f"page{page_num + 1}_img{img_idx + 1}.{ext}",
+                        f"page{page_num + 1}_img{info_xref}.{ext}",
                     )
                     elapsed = round(_time.time() - t_start, 1)
 
@@ -380,20 +388,20 @@ async def _extract_and_analyze_pdf_images(pdf_path: str) -> list[str]:
                             f"<!-- page:{page_num + 1} -->\n### Image from Page {page_num + 1}\n{desc}"
                         )
                         logger.info(
-                            "PDF image p%d img%d (xref=%d, %.0f%% of page) analyzed: %d chars (%.1fs)",
-                            page_num + 1, img_idx + 1, xref, area_ratio * 100, len(desc), elapsed,
+                            "PDF image p%d xref=%d (%.0f%% of page) analyzed: %d chars (%.1fs)",
+                            page_num + 1, info_xref, ratio * 100, len(desc), elapsed,
                         )
                     else:
-                        logger.info("PDF image p%d img%d skipped (empty/failed)", page_num + 1, img_idx + 1)
+                        logger.info("PDF image p%d xref=%d skipped (empty/failed)", page_num + 1, info_xref)
                 except Exception as e:
-                    logger.warning("Failed to analyze PDF image p%d img%d: %s", page_num + 1, img_idx + 1, e)
+                    logger.warning("Failed to analyze PDF image p%d xref=%d: %s", page_num + 1, info_xref, e)
                 finally:
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
 
         doc.close()
-        logger.info("PDF image extraction: %d analyzed, %d skipped (small/logo), %d total xrefs",
-                     len(descriptions), skipped_small, len(seen_xrefs))
+        logger.info("PDF image extraction: %d analyzed, %d skipped (small), %d visible total",
+                     len(descriptions), skipped_small, total_visible)
     except Exception as e:
         logger.error("PDF image extraction failed: %s", e)
 
@@ -529,38 +537,29 @@ async def process_document(
                     await _notify(notebook_id, source_id, "parsing", progress=0.40)
                     logger.info("MinerU parsed %s: %d chars", filename, len(content))
                 else:
-                    # MinerU returned empty — try vision on large images if PDF exists
+                    # MinerU returned empty — extract text + analyze large images from PDF
                     logger.warning("MinerU returned empty for %s", filename)
-                    content = None
-                    if settings.VISION_ENABLED and parse_path and os.path.exists(parse_path):
-                        try:
-                            import fitz as _fitz
-                            _doc = _fitz.open(parse_path)
-                            has_large_images = False
-                            for _p in range(len(_doc)):
-                                _page = _doc[_p]
-                                _page_area = _page.rect.width * _page.rect.height
-                                for _info in _page.get_image_info():
-                                    _bbox = _info.get("bbox", (0, 0, 0, 0))
-                                    _ratio = ((_bbox[2] - _bbox[0]) * (_bbox[3] - _bbox[1])) / max(_page_area, 1)
-                                    if _ratio > 0.10:
-                                        has_large_images = True
-                                        break
-                                if has_large_images:
-                                    break
-                            _doc.close()
+                    parts = []
 
-                            if has_large_images:
-                                logger.info("PDF has large images, running vision analysis for %s", filename)
-                                image_texts = await _extract_and_analyze_pdf_images(parse_path)
-                                if image_texts:
-                                    content = "\n\n".join(image_texts)
-                                    _save_parsed_content(file_path, content)
-                                    logger.info("Vision extracted %d images for %s", len(image_texts), filename)
-                            else:
-                                logger.info("No large images in PDF, skipping vision for %s", filename)
-                        except Exception as e:
-                            logger.warning("Vision fallback check failed for %s: %s", filename, e)
+                    # Extract text from PDF (titles, headings, etc.)
+                    if parse_path and os.path.exists(parse_path):
+                        pdf_text = _extract_pdf_text(parse_path)
+                        if pdf_text:
+                            parts.append(pdf_text)
+
+                    # Analyze large visible images with vision LLM
+                    if settings.VISION_ENABLED and parse_path and os.path.exists(parse_path):
+                        image_texts = await _extract_and_analyze_pdf_images(parse_path)
+                        if image_texts:
+                            parts.extend(image_texts)
+                            logger.info("Vision extracted %d images for %s", len(image_texts), filename)
+
+                    if parts:
+                        content = "\n\n".join(parts)
+                        _save_parsed_content(file_path, content)
+                        logger.info("Fallback extracted %d chars for %s (text + vision)", len(content), filename)
+                    else:
+                        content = None
             else:
                 # Unknown type — upload raw file to RAGFlow
                 logger.info("Using RAGFlow built-in parser for %s", filename)
