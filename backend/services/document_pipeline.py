@@ -561,12 +561,13 @@ async def process_document(
                 await _notify(notebook_id, source_id, "parsing", progress=0.10)
                 parse_name = os.path.splitext(filename)[0] + ".pdf" if parse_path != file_path else filename
                 parsed = await mineru_client.parse_document(parse_path, parse_name)
-                await update_source_status(db, sid, "parsing", progress=30.0)
-                await _notify(notebook_id, source_id, "parsing", progress=0.30)
+                await update_source_status(db, sid, "parsing", progress=15.0)
+                await _notify(notebook_id, source_id, "parsing", progress=0.15)
 
-                # Progress callback for image analysis (maps image progress to 30%-40% range)
+                # Progress callback for image analysis (maps image progress to 15%-85% range)
+                # Image analysis is the slowest step, give it most of the progress bar
                 async def _img_progress(frac: float) -> None:
-                    pct = 30.0 + frac * 10.0  # 30% -> 40%
+                    pct = 15.0 + frac * 70.0  # 15% -> 85%
                     await update_source_status(db, sid, "parsing", progress=pct)
                     await _notify(notebook_id, source_id, "parsing", progress=pct / 100.0)
 
@@ -584,8 +585,8 @@ async def process_document(
                         content += "\n\n" + "\n\n".join(image_texts)
                         logger.info("Added %d image descriptions to %s", len(image_texts), filename)
                     _save_parsed_content(file_path, content)
-                    await update_source_status(db, sid, "parsing", progress=40.0)
-                    await _notify(notebook_id, source_id, "parsing", progress=0.40)
+                    await update_source_status(db, sid, "parsing", progress=85.0)
+                    await _notify(notebook_id, source_id, "parsing", progress=0.85)
                     logger.info("MinerU parsed %s: %d chars", filename, len(content))
                 else:
                     # MinerU returned empty — extract text + analyze large images from PDF
@@ -628,8 +629,8 @@ async def process_document(
                 content = None
 
             # Step 4: Upload to RAGFlow
-            await update_source_status(db, sid, "vectorizing", progress=45.0)
-            await _notify(notebook_id, source_id, "vectorizing", progress=0.45)
+            await update_source_status(db, sid, "vectorizing", progress=88.0)
+            await _notify(notebook_id, source_id, "vectorizing", progress=0.88)
 
             dataset_id = await _ensure_dataset(db, nid)
             if dataset_id is None:
@@ -692,10 +693,10 @@ async def process_document(
                     chunks = doc_status.get("chunk_count", 0)
                     progress = doc_status.get("progress", 0)
                     # Send progress update if changed (avoid spamming)
-                    # Scale RAGFlow 0-1 to overall 0.45-1.0 range
+                    # Scale RAGFlow 0-1 to overall 0.88-1.0 range
                     if isinstance(progress, (int, float)) and progress != last_progress:
                         last_progress = progress
-                        overall = 0.45 + progress * 0.55
+                        overall = 0.88 + progress * 0.12
                         await _notify(notebook_id, source_id, "vectorizing", progress=overall)
                     if run in ("DONE", "SUCCEEDED") or chunks > 0:
                         logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
