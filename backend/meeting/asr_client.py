@@ -303,8 +303,8 @@ class VolcengineASRClient:
 WHISPER_IDLE_TIMEOUT = 1800  # 30 minutes — auto-end meeting if no speech
 WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
 WHISPER_MAX_AUDIO_SECS = 55  # FireRedASR-AED supports up to 60s, leave 5s margin
-WHISPER_SILENCE_MS = 400  # silence duration (ms) to trigger sentence boundary
-WHISPER_SILENCE_THRESHOLD = 400  # PCM RMS below this = silence (raised to reduce hallucinations)
+WHISPER_SILENCE_MS = 700  # silence duration (ms) to trigger sentence boundary (longer = less fragmentation)
+WHISPER_SILENCE_THRESHOLD = 400  # PCM RMS below this = silence
 WHISPER_SPEECH_RATIO = 0.12  # at least 12% of samples must exceed peak threshold
 WHISPER_PEAK_THRESHOLD = 800  # individual sample amplitude for speech detection
 WHISPER_SAMPLE_RATE = 16000
