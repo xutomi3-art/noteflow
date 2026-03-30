@@ -334,21 +334,23 @@ async def _extract_and_analyze_pdf_images(
 
     descriptions: list[str] = []
     try:
+        import asyncio
+        import time as _time
+
         doc = fitz.open(pdf_path)
         analyzed_xrefs: set[int] = set()
         skipped_small = 0
         total_visible = 0
 
-        hit_limit = False
+        # Phase 1: Collect all eligible images (fast, no API calls)
+        pending: list[tuple[int, int, float, str]] = []  # (page_num, xref, ratio, temp_path)
+
         for page_num in range(len(doc)):
-            if hit_limit:
-                break
             page = doc[page_num]
             page_area = page.rect.width * page.rect.height
             if page_area <= 0:
                 continue
 
-            # get_image_info(xrefs=True) returns ONLY VISIBLE images with bbox + xref
             for img_info in page.get_image_info(xrefs=True):
                 bbox = img_info.get("bbox")
                 info_xref = img_info.get("xref", 0)
@@ -373,60 +375,71 @@ async def _extract_and_analyze_pdf_images(
                     continue
 
                 image_bytes = base_image["image"]
-                if len(image_bytes) < 50000:  # Skip images < 50KB (icons, logos)
+                if len(image_bytes) < 50000:
                     skipped_small += 1
                     continue
 
-                # Stop if max_images reached
                 if max_images and len(analyzed_xrefs) >= max_images:
-                    logger.info("Reached max_images=%d, stopping image analysis", max_images)
-                    hit_limit = True
+                    logger.info("Reached max_images=%d, stopping collection", max_images)
                     break
 
                 analyzed_xrefs.add(info_xref)
-                analyzed_count = len(analyzed_xrefs)
                 ext = base_image.get("ext", "png")
                 temp_path = f"/tmp/pdf_img_{page_num}_{info_xref}.{ext}"
+                with open(temp_path, "wb") as f:
+                    f.write(image_bytes)
+                pending.append((page_num, info_xref, ratio, temp_path))
 
-                try:
-                    with open(temp_path, "wb") as f:
-                        f.write(image_bytes)
-
-                    import time as _time
-                    t_start = _time.time()
-                    desc = await qwen_client.analyze_image(
-                        temp_path,
-                        f"page{page_num + 1}_img{info_xref}.{ext}",
-                    )
-                    elapsed = round(_time.time() - t_start, 1)
-
-                    if desc and len(desc.strip()) > 20 and "analysis failed" not in desc:
-                        descriptions.append(
-                            f"<!-- page:{page_num + 1} -->\n### Image from Page {page_num + 1}\n{desc}"
-                        )
-                        logger.info(
-                            "PDF image p%d xref=%d (%.0f%% of page) analyzed: %d chars (%.1fs)",
-                            page_num + 1, info_xref, ratio * 100, len(desc), elapsed,
-                        )
-                    else:
-                        logger.info("PDF image p%d xref=%d skipped (empty/failed)", page_num + 1, info_xref)
-
-                    # Report progress per image analyzed
-                    if progress_callback:
-                        # Estimate total eligible images as 2x analyzed so far (rough upper bound)
-                        # This gives monotonically increasing progress
-                        frac = min(analyzed_count / max(analyzed_count + 5, 10), 0.95)
-                        try:
-                            await progress_callback(frac)
-                        except Exception:
-                            pass
-                except Exception as e:
-                    logger.warning("Failed to analyze PDF image p%d xref=%d: %s", page_num + 1, info_xref, e)
-                finally:
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
+            if max_images and len(analyzed_xrefs) >= max_images:
+                break
 
         doc.close()
+        logger.info("PDF image collection: %d to analyze, %d skipped, %d visible total",
+                     len(pending), skipped_small, total_visible)
+
+        # Phase 2: Analyze images concurrently (5 at a time)
+        CONCURRENCY = 5
+        completed = 0
+
+        async def _analyze_one(page_num: int, xref: int, ratio: float, temp_path: str) -> str | None:
+            nonlocal completed
+            try:
+                t_start = _time.time()
+                desc = await qwen_client.analyze_image(
+                    temp_path, f"page{page_num + 1}_img{xref}.{ext}",
+                )
+                elapsed = round(_time.time() - t_start, 1)
+
+                if desc and len(desc.strip()) > 20 and "analysis failed" not in desc:
+                    logger.info("PDF image p%d xref=%d (%.0f%% of page) analyzed: %d chars (%.1fs)",
+                                page_num + 1, xref, ratio * 100, len(desc), elapsed)
+                    return f"<!-- page:{page_num + 1} -->\n### Image from Page {page_num + 1}\n{desc}"
+                else:
+                    logger.info("PDF image p%d xref=%d skipped (empty/failed)", page_num + 1, xref)
+                    return None
+            except Exception as e:
+                logger.warning("Failed to analyze PDF image p%d xref=%d: %s", page_num + 1, xref, e)
+                return None
+            finally:
+                completed += 1
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+        # Process in batches of CONCURRENCY
+        for i in range(0, len(pending), CONCURRENCY):
+            batch = pending[i:i + CONCURRENCY]
+            results = await asyncio.gather(*[_analyze_one(*item) for item in batch])
+            for r in results:
+                if r:
+                    descriptions.append(r)
+
+            if progress_callback:
+                frac = min(completed / len(pending), 0.95) if pending else 0
+                try:
+                    await progress_callback(frac)
+                except Exception:
+                    pass
+
         logger.info("PDF image extraction: %d analyzed, %d skipped (small), %d visible total",
                      len(descriptions), skipped_small, total_visible)
     except Exception as e:
