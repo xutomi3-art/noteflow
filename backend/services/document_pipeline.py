@@ -824,11 +824,23 @@ async def recover_stuck_sources() -> None:
         for source in stuck:
             try:
                 if not source.ragflow_dataset_id or not source.ragflow_doc_id:
-                    # No RAGFlow IDs — was stuck before reaching RAGFlow, mark failed
-                    await update_source_status(
-                        db, source.id, "failed", error_message="Interrupted during processing"
-                    )
-                    logger.info("Marked %s as failed (no RAGFlow IDs)", source.filename)
+                    # No RAGFlow IDs — was stuck before reaching RAGFlow
+                    # Re-trigger processing instead of marking failed
+                    if source.storage_url and os.path.exists(source.storage_url):
+                        await update_source_status(db, source.id, "uploading", error_message=None, progress=0)
+                        logger.info("Re-triggering pipeline for %s (interrupted before RAGFlow)", source.filename)
+                        asyncio.create_task(process_document(
+                            source_id=str(source.id),
+                            notebook_id=str(source.notebook_id),
+                            file_path=source.storage_url,
+                            filename=source.filename,
+                            file_type=source.file_type,
+                        ))
+                    else:
+                        await update_source_status(
+                            db, source.id, "failed", error_message="File missing after restart"
+                        )
+                        logger.info("Marked %s as failed (file missing)", source.filename)
                     continue
 
                 doc_status = await ragflow_client.get_document_status(
