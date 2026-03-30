@@ -816,6 +816,7 @@ class ComparisonASRClient:
     def __init__(self) -> None:
         self._sessions: dict[str, MeetingSession] = {}
         self._endpoints = ASR_ENDPOINTS.copy()
+        self._pending_rewrite: dict[str, list[Utterance]] = {}
 
     async def start_session(self, meeting_id: str, notebook_id: str = "", **kwargs: str) -> MeetingSession:
         session = MeetingSession(
@@ -910,7 +911,7 @@ class ComparisonASRClient:
                         await session._result_queue.put(Utterance(
                             speaker_id="speaker_0", text="...",
                             start_time_ms=elapsed_ms, end_time_ms=elapsed_ms,
-                            is_final=False, sequence=0, provider="firered",
+                            is_final=False, sequence=0, provider="funasr",
                         ))
 
             should_flush = False
@@ -951,7 +952,7 @@ class ComparisonASRClient:
             asyncio.create_task(self._process_segment(session, wav_data, prompt, start_ms, elapsed_ms))
 
     async def _process_segment(self, session: MeetingSession, wav_data: bytes, prompt: str, start_ms: int, elapsed_ms: int) -> None:
-        """Send one audio segment to all ASR providers in parallel, enqueue results."""
+        """Send one audio segment to all ASR providers in parallel, enqueue results, trigger LLM rewrite."""
         try:
             tasks = [self._transcribe_one(p, wav_data, prompt) for p in self._endpoints]
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -963,7 +964,6 @@ class ComparisonASRClient:
                 if not text or _is_hallucination(text):
                     continue
 
-                # Add punctuation for all providers that don't produce their own
                 text = _add_punctuation(text)
 
                 session.sequence_counter += 1
@@ -972,15 +972,46 @@ class ComparisonASRClient:
                     text=text,
                     start_time_ms=start_ms,
                     end_time_ms=elapsed_ms,
-                    is_final=True,
+                    is_final=False,  # partial until LLM rewrites
                     sequence=session.sequence_counter,
                     provider=provider,
                 )
                 session.utterances.append(utt)
                 if session._result_queue:
                     await session._result_queue.put(utt)
+
+                # Accumulate for LLM rewrite per provider
+                pending_key = f"{session.meeting_id}_{provider}"
+                pending = self._pending_rewrite.setdefault(pending_key, [])
+                pending.append(utt)
+                if len(pending) >= LLM_REWRITE_BATCH_SIZE:
+                    batch = list(pending)
+                    pending.clear()
+                    asyncio.create_task(self._rewrite_batch(session, batch))
         except Exception as e:
             logger.error("ASR segment processing error: %s", e)
+
+    async def _rewrite_batch(self, session: MeetingSession, batch: list[Utterance]) -> None:
+        """Send batch of ASR utterances to LLM for polishing."""
+        try:
+            raw_texts = [u.text for u in batch]
+            rewritten = await _llm_rewrite(raw_texts, notebook_id=session.notebook_id)
+            for orig_utt, new_text in zip(batch, rewritten):
+                orig_utt.text = new_text
+                orig_utt.is_final = True
+                if session._result_queue:
+                    await session._result_queue.put(Utterance(
+                        speaker_id=orig_utt.speaker_id, text=new_text,
+                        start_time_ms=orig_utt.start_time_ms, end_time_ms=orig_utt.end_time_ms,
+                        is_final=True, sequence=orig_utt.sequence, provider=orig_utt.provider,
+                    ))
+            logger.info("LLM rewrite batch: %d sentences rewritten", len(batch))
+        except Exception as e:
+            logger.error("LLM rewrite batch failed: %s", e)
+            for utt in batch:
+                utt.is_final = True
+                if session._result_queue:
+                    await session._result_queue.put(utt)
 
     async def receive_results(self, meeting_id: str):
         session = self._sessions.get(meeting_id)
@@ -1005,6 +1036,21 @@ class ComparisonASRClient:
                 await session._flush_task
             except asyncio.CancelledError:
                 pass
+        # Flush remaining pending rewrite batches
+        for key in list(self._pending_rewrite):
+            if key.startswith(meeting_id):
+                batch = self._pending_rewrite.pop(key, [])
+                if batch:
+                    try:
+                        raw_texts = [u.text for u in batch]
+                        rewritten = await _llm_rewrite(raw_texts, notebook_id=session.notebook_id)
+                        for utt, new_text in zip(batch, rewritten):
+                            utt.text = new_text
+                            utt.is_final = True
+                    except Exception:
+                        for utt in batch:
+                            utt.is_final = True
+
         all_utterances = session.utterances
         self._sessions.pop(meeting_id, None)
         logger.info("Comparison ASR session ended for meeting %s (%d utterances)", meeting_id, len(all_utterances))
