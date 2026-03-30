@@ -330,7 +330,7 @@ async def _extract_and_analyze_pdf_images(
         logger.warning("PyMuPDF not installed, skipping PDF image extraction")
         return []
 
-    MIN_PAGE_RATIO = 0.10
+    MIN_PAGE_RATIO = 0.25  # Only analyze images covering >25% of page (charts, diagrams, not icons)
 
     descriptions: list[str] = []
     try:
@@ -373,7 +373,7 @@ async def _extract_and_analyze_pdf_images(
                     continue
 
                 image_bytes = base_image["image"]
-                if len(image_bytes) < 5000:
+                if len(image_bytes) < 50000:  # Skip images < 50KB (icons, logos)
                     skipped_small += 1
                     continue
 
