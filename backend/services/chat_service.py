@@ -358,6 +358,7 @@ async def stream_chat(
                     {"role": "user", "content": f"Question: {message}"},
                 ]
                 react_answer = None
+                react_notes = ""  # Accumulated notes from ReAct rounds
 
                 for round_num in range(1, REACT_MAX_ROUNDS + 1):
                     # Get LLM thought + action
@@ -371,6 +372,10 @@ async def stream_chat(
                             logger.info("ReAct round %d: no queries, forcing search from thought", round_num)
                             search_queries = [thought[:100] if thought else message]
                         answer = None
+
+                    # Track latest notes for final context injection
+                    if notes:
+                        react_notes = notes
 
                     # Stream notes + thinking step to user
                     if notes:
@@ -403,12 +408,19 @@ async def stream_chat(
                     retrieval_results = await asyncio.gather(*[_retrieve_one(q) for q in search_queries[:3]])
 
                     # Merge and deduplicate
+                    import hashlib
                     round_total = 0
                     new_count = 0
                     for result_chunks in retrieval_results:
                         round_total += len(result_chunks)
                         for chunk in result_chunks:
                             chunk_id = chunk.get("id", chunk.get("chunk_id", ""))
+                            # Generate unique ID if missing (e.g. Dify-compatible APIs return no id)
+                            if not chunk_id:
+                                doc_id = chunk.get("doc_id", chunk.get("document_id", ""))
+                                content = chunk.get("content_with_weight", chunk.get("content", ""))
+                                chunk_id = hashlib.md5(f"{doc_id}:{content}".encode()).hexdigest()
+                                chunk["id"] = chunk_id
                             if chunk_id not in all_chunks:
                                 all_chunks[chunk_id] = chunk
                                 new_count += 1
@@ -448,8 +460,22 @@ async def stream_chat(
 
                 # Collect all unique chunks sorted by similarity, take top-15
                 chunks = sorted(all_chunks.values(), key=lambda c: c.get("similarity", 0), reverse=True)[:15]
-                logger.info("ReAct complete: %d rounds, %d total unique chunks -> top %d",
-                            len(react_steps), len(all_chunks), len(chunks))
+
+                # Inject ReAct accumulated notes as a synthetic chunk so LLM sees key findings
+                # that may have been in lower-similarity chunks dropped by top-15
+                if react_notes:
+                    notes_chunk = {
+                        "id": "_react_notes",
+                        "content_with_weight": f"[Research Notes]\n{react_notes}",
+                        "content": react_notes,
+                        "similarity": 1.0,  # Highest priority
+                        "document_keyword": "Research Summary",
+                        "docnm_kwd": "Research Summary",
+                    }
+                    chunks.insert(0, notes_chunk)
+
+                logger.info("ReAct complete: %d rounds, %d total unique chunks -> top %d (notes=%s)",
+                            len(react_steps), len(all_chunks), len(chunks), bool(react_notes))
             else:
                 chunks = await ragflow_client.retrieve(
                     dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
