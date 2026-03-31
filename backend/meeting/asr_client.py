@@ -803,13 +803,13 @@ class WhisperASRClient:
 
 ASR_ENDPOINTS = {
     "coli": os.environ.get("COLI_ASR_URL", "http://10.200.0.112:8201/v1"),
-    "funasr": os.environ.get("FUNASR_ASR_URL", "http://10.200.0.102:8202/v1"),
+    "firered2s": os.environ.get("FIRERED2S_ASR_URL", "http://10.200.0.102:8203/v1"),
     "qwen3": os.environ.get("QWEN3_ASR_URL", "http://10.200.0.102:9997/v1"),
 }
 
 ASR_MODELS = {
     "coli": "sensevoice",
-    "funasr": "FunASR-SenseVoiceSmall",
+    "firered2s": "FireRedASR2S",
     "qwen3": "Qwen3-ASR-1.7B",
 }
 
@@ -975,7 +975,9 @@ class ComparisonASRClient:
                         logger.info("ASR filtered as hallucination: [%s]", text[:100])
                     continue
 
-                text = _add_punctuation(text)
+                # FireRedASR2S and Qwen3 have built-in punctuation; only add for coli
+                if provider == "coli":
+                    text = _add_punctuation(text)
 
                 session.sequence_counter += 1
                 utt = Utterance(

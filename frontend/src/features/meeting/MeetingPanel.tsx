@@ -15,7 +15,7 @@ function formatDuration(seconds: number): string {
 
 const PROVIDER_COLORS: Record<string, string> = {
   coli: "bg-emerald-500",
-  funasr: "bg-blue-500",
+  firered2s: "bg-red-500",
   qwen3: "bg-purple-500",
 };
 
@@ -135,7 +135,7 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
       {/* Footer */}
       <div className="px-3 py-2 border-t border-slate-100 text-[10px] text-slate-400 text-center">
         <Mic className="w-3 h-3 inline mr-1" />
-        Comparing Coli vs FunASR vs Qwen3-ASR
+        Comparing Coli vs FireRedASR2S vs Qwen3-ASR
       </div>
     </div>
   );
