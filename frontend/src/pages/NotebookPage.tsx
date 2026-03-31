@@ -297,17 +297,6 @@ export default function NotebookPage() {
   const [renamingSourceId, setRenamingSourceId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  const handleRenameSource = useCallback(async (sourceId: string, newName: string) => {
-    if (!id || !newName.trim()) return;
-    try {
-      await api.renameSource(id, sourceId, newName.trim());
-      fetchSources(id);
-    } catch (e) {
-      console.error("Rename failed:", e);
-    }
-    setRenamingSourceId(null);
-  }, [id, fetchSources]);
-
   // Load hotwords from API on mount
   useEffect(() => {
     if (!id) return;
@@ -452,6 +441,17 @@ export default function NotebookPage() {
   // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleRenameSource = useCallback(async (sourceId: string, newName: string) => {
+    if (!id || !newName.trim()) return;
+    try {
+      await api.renameSource(id, sourceId, newName.trim());
+      fetchSources(id);
+    } catch (e) {
+      console.error("Rename failed:", e);
+    }
+    setRenamingSourceId(null);
+  }, [id, fetchSources]);
 
   // Derived
   const readySources = sources.filter((s) => s.status === "ready");
