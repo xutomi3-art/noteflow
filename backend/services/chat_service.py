@@ -518,7 +518,9 @@ async def stream_chat(
                         ragflow_client.retrieve(dataset_ids, retrieval_q2, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids),
                     )
                     merged = _merge_and_dedup_chunks(chunks_q1, chunks_q2)
-                    chunks = sorted(merged, key=lambda c: c.get("similarity", 0), reverse=True)[:settings.RAG_TOP_K]
+                    # Take more chunks from dual retrieval (1.5x) to avoid losing cross-language hits
+                    dual_top_k = min(int(settings.RAG_TOP_K * 1.5), len(merged))
+                    chunks = sorted(merged, key=lambda c: c.get("similarity", 0), reverse=True)[:dual_top_k]
                     logger.info("Dual retrieval: q1=%d, q2=%d, merged=%d, final=%d",
                                 len(chunks_q1), len(chunks_q2), len(merged), len(chunks))
                 else:
