@@ -964,9 +964,13 @@ class ComparisonASRClient:
 
             for result in results:
                 if isinstance(result, Exception):
+                    logger.warning("ASR task exception: %s", result)
                     continue
                 provider, text = result
+                logger.info("ASR raw result: provider=%s text=[%s]", provider, text[:100] if text else "EMPTY")
                 if not text or _is_hallucination(text):
+                    if text:
+                        logger.info("ASR filtered as hallucination: [%s]", text[:100])
                     continue
 
                 text = _add_punctuation(text)
