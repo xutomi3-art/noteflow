@@ -393,9 +393,39 @@ async def _extract_and_analyze_pdf_images(
             if max_images and len(analyzed_xrefs) >= max_images:
                 break
 
+        # Phase 1b: Detect pages with vector charts (little text, no embedded images)
+        # These pages likely contain charts/graphs drawn as vector paths — render as image
+        pages_with_images = {p[0] for p in pending}  # pages already covered by embedded images
+        rendered_pages = 0
+        for page_num in range(len(doc)):
+            if page_num in pages_with_images:
+                continue
+            page = doc[page_num]
+            text = page.get_text("text").strip()
+            # Skip pages with substantial text (>200 chars = mostly text content)
+            # or completely empty pages
+            if len(text) > 200 or len(text) < 10:
+                continue
+            # This page has very little text — likely a chart/diagram page
+            # Render page as image at 150 DPI for Vision analysis
+            try:
+                pix = page.get_pixmap(dpi=150)
+                temp_path = f"/tmp/pdf_page_{page_num}_rendered.png"
+                pix.save(temp_path)
+                if os.path.getsize(temp_path) > 20000:  # Skip tiny renders
+                    pending.append((page_num, 0, 1.0, temp_path))
+                    rendered_pages += 1
+                else:
+                    os.remove(temp_path)
+            except Exception as e:
+                logger.warning("Failed to render page %d: %s", page_num + 1, e)
+
+        if rendered_pages:
+            logger.info("Rendered %d chart-likely pages as images for Vision analysis", rendered_pages)
+
         doc.close()
-        logger.info("PDF image collection: %d to analyze, %d skipped, %d visible total",
-                     len(pending), skipped_small, total_visible)
+        logger.info("PDF image collection: %d to analyze (%d rendered pages), %d skipped, %d visible total",
+                     len(pending), rendered_pages, skipped_small, total_visible)
 
         # Phase 2: Analyze images concurrently (5 at a time)
         CONCURRENCY = 5
