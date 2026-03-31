@@ -1,3 +1,5 @@
+import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -171,55 +173,91 @@ async def _get_source_dataset_ids(
     return dataset_ids, document_ids, sources_map
 
 
-async def _rewrite_query_for_retrieval(message: str) -> str:
-    """Extract keywords from query for better RAG retrieval.
+def _merge_and_dedup_chunks(chunks_a: list[dict], chunks_b: list[dict]) -> list[dict]:
+    """Merge chunks from dual retrieval, dedup by chunk_id, keep highest similarity."""
+    seen: dict[str, dict] = {}
+    for chunk in chunks_a + chunks_b:
+        chunk_id = chunk.get("id", chunk.get("chunk_id", ""))
+        if not chunk_id:
+            doc_id = chunk.get("doc_id", chunk.get("document_id", ""))
+            content = chunk.get("content_with_weight", chunk.get("content", ""))
+            chunk_id = hashlib.md5(f"{doc_id}:{content}".encode()).hexdigest()
+            chunk["id"] = chunk_id
+        if chunk_id not in seen or chunk.get("similarity", 0) > seen[chunk_id].get("similarity", 0):
+            seen[chunk_id] = chunk
+    return list(seen.values())
 
-    Follows RAGFlow's keyword extraction approach: extract important
-    keywords/phrases and append them to the original query.
+
+async def _rewrite_query_for_retrieval(message: str) -> tuple[str, str]:
+    """Rewrite query for dual-path retrieval (bilingual).
+
+    Returns (q1, q2):
+      q1 = original message + same-language keywords
+      q2 = translation + target-language keywords
     """
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "Extract 5-15 search keywords from the user question. Rules:\n"
-                "- ALWAYS output keywords in BOTH English AND Chinese, regardless of input language\n"
-                "- If input is Chinese: add English translation + English keywords\n"
-                "- If input is English: add Chinese translation + Chinese keywords\n"
-                "- Add 2-3 synonyms for key terms in both languages\n"
-                "- For dates with month/day, add format variations\n"
-                "- Output ONLY comma-separated keywords, nothing else\n"
-                "- Maximum 15 keywords total\n\n"
+                "You are a search query optimizer. Given a user question, output EXACTLY 3 lines:\n"
+                "Line 1: Translate the question to the OTHER language (Chinese→English or English→Chinese). Expand abbreviations to full names.\n"
+                "Line 2: 3-5 English search keywords/synonyms (comma-separated)\n"
+                "Line 3: 3-5 Chinese search keywords/synonyms (comma-separated)\n\n"
+                "Rules:\n"
+                "- Output ONLY 3 lines, no labels, no numbering, no extra text\n"
+                "- Expand abbreviations: SAS→Shanghai American School, BOT→Board of Trustees\n"
+                "- Include synonyms: founded→established, created, inception\n\n"
                 "Examples:\n"
-                "'上海美国学校成立于哪一年' → "
-                "When was Shanghai American School founded, 上海美国学校, SAS, 成立, founded, established, inception year\n"
-                "'When was the Board last expanded?' → "
-                "Board expansion history, 董事会, 扩充, 扩大, expanded, enlarged, board members, 成员变动, 增加席位"
+                "Input: 美校成立时间\n"
+                "When was Shanghai American School established?\n"
+                "established, founding, creation, inception date\n"
+                "成立, 创办, 创立, 建校时间\n\n"
+                "Input: When was the Board last expanded?\n"
+                "董事会最近一次扩充是什么时候？\n"
+                "Board expansion, enlarged, added members, board size\n"
+                "董事会, 扩充, 扩大, 增加席位, 成员变动\n\n"
+                "Input: Tell me about tuition\n"
+                "介绍一下学费情况\n"
+                "tuition, fees, cost, annual tuition, school fees\n"
+                "学费, 费用, 收费, 年度学费"
             )},
             {"role": "user", "content": message},
         ]
-        rewrite_model = settings.RAG_REWRITE_MODEL or None  # None = use default
-        rewritten = await qwen_client.generate(
+        rewrite_model = settings.RAG_REWRITE_MODEL or None
+        result = await qwen_client.generate(
             rewrite_messages,
             model=rewrite_model,
             temperature=0.0,
-            max_tokens=150,
+            max_tokens=200,
         )
-        rewritten = rewritten.strip().strip('"').strip("'")
-        if rewritten and not rewritten.startswith("[Error"):
-            # Deduplicate and limit keywords
-            parts = [p.strip() for p in rewritten.split(",") if p.strip()]
-            seen: set[str] = set()
-            unique: list[str] = []
-            for p in parts:
-                key = p.lower()
-                if key not in seen:
-                    seen.add(key)
-                    unique.append(p)
-            rewritten = ", ".join(unique[:20])  # hard cap at 20 keywords
-            logger.info("Query rewrite: [%s] -> [%s]", message, rewritten)
-            return rewritten
+        result = result.strip().strip('"').strip("'")
+        if not result or result.startswith("[Error"):
+            return message, message
+
+        lines = [l.strip() for l in result.split("\n") if l.strip()]
+        if len(lines) < 3:
+            logger.warning("Query rewrite returned %d lines (expected 3), fallback", len(lines))
+            return message, message
+
+        translation = lines[0]
+        en_keywords = lines[1]
+        zh_keywords = lines[2]
+
+        # Detect input language (simple heuristic: has CJK chars = Chinese)
+        is_chinese = any('\u4e00' <= c <= '\u9fff' for c in message)
+
+        if is_chinese:
+            q1 = f"{message}\n{zh_keywords}"
+            q2 = f"{translation}\n{en_keywords}"
+        else:
+            q1 = f"{message}\n{en_keywords}"
+            q2 = f"{translation}\n{zh_keywords}"
+
+        logger.info("Dual rewrite: q1=[%s] q2=[%s]", q1.replace('\n', ' | '), q2.replace('\n', ' | '))
+        return q1, q2
+
     except Exception as e:
         logger.warning("Query rewrite failed, using original: %s", e)
-    return message
+    return message, message
 
 
 REACT_SYSTEM_PROMPT = """You are a research assistant. You answer questions by searching through documents in multiple rounds.
@@ -333,14 +371,13 @@ async def stream_chat(
         # Retrieve from RAGFlow
         dataset_ids, document_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
-        # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
-        # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
-        retrieval_query = message
+        # Step 2a: Query rewrite — dual-path bilingual retrieval
+        # Generates two queries: original language + translated language, each with keywords
+        retrieval_q1 = message
+        retrieval_q2 = ""
         t_rewrite_start = time.time()
-        if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message) > 5:
-            rewritten = await _rewrite_query_for_retrieval(message)
-            if rewritten != message:
-                retrieval_query = f"{message}\n{rewritten}"
+        if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message) > 2:
+            retrieval_q1, retrieval_q2 = await _rewrite_query_for_retrieval(message)
         t_rewrite_duration = time.time() - t_rewrite_start
 
         # Step 2b: RAGFlow retrieval — find relevant chunks across all sources
@@ -398,8 +435,6 @@ async def stream_chat(
                     yield f"data: {json.dumps({'type': 'searching', 'step': round_num, 'query': query_display})}\n\n"
 
                     # Execute concurrent retrieval for all queries
-                    import asyncio
-
                     async def _retrieve_one(q: str) -> list[dict]:
                         return await ragflow_client.retrieve(
                             dataset_ids, q, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
@@ -408,7 +443,6 @@ async def stream_chat(
                     retrieval_results = await asyncio.gather(*[_retrieve_one(q) for q in search_queries[:3]])
 
                     # Merge and deduplicate
-                    import hashlib
                     round_total = 0
                     new_count = 0
                     for result_chunks in retrieval_results:
@@ -477,9 +511,20 @@ async def stream_chat(
                 logger.info("ReAct complete: %d rounds, %d total unique chunks -> top %d (notes=%s)",
                             len(react_steps), len(all_chunks), len(chunks), bool(react_notes))
             else:
-                chunks = await ragflow_client.retrieve(
-                    dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
-                )
+                # Dual-path retrieval: two queries in parallel, merge and dedup
+                if retrieval_q2 and retrieval_q2 != retrieval_q1:
+                    chunks_q1, chunks_q2 = await asyncio.gather(
+                        ragflow_client.retrieve(dataset_ids, retrieval_q1, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids),
+                        ragflow_client.retrieve(dataset_ids, retrieval_q2, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids),
+                    )
+                    merged = _merge_and_dedup_chunks(chunks_q1, chunks_q2)
+                    chunks = sorted(merged, key=lambda c: c.get("similarity", 0), reverse=True)[:settings.RAG_TOP_K]
+                    logger.info("Dual retrieval: q1=%d, q2=%d, merged=%d, final=%d",
+                                len(chunks_q1), len(chunks_q2), len(merged), len(chunks))
+                else:
+                    chunks = await ragflow_client.retrieve(
+                        dataset_ids, retrieval_q1, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
+                    )
         t_ragflow_end = time.time()
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
