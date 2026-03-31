@@ -802,11 +802,13 @@ class WhisperASRClient:
 ASR_ENDPOINTS = {
     "coli": os.environ.get("COLI_ASR_URL", "http://10.200.0.112:8201/v1"),
     "funasr": os.environ.get("FUNASR_ASR_URL", "http://10.200.0.102:8202/v1"),
+    "qwen3": os.environ.get("QWEN3_ASR_URL", "http://10.200.0.102:9997/v1"),
 }
 
 ASR_MODELS = {
     "coli": "sensevoice",
     "funasr": "FunASR-SenseVoiceSmall",
+    "qwen3": "Qwen3-ASR-1.7B",
 }
 
 
