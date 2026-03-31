@@ -1169,13 +1169,9 @@ export default function NotebookPage() {
       }
       if (!sourceId) return;
 
-      // For PDF files, open PDF modal viewer; for others, open source content in left panel
-      const source = sources.find((s) => s.id === sourceId);
-      const isPdf = source?.file_type === "pdf" || citation.file_type === "pdf" || citation.filename?.toLowerCase().endsWith(".pdf");
-      if (isPdf && id) {
-        const page = citation.location?.page ?? 1;
-        openPdf(sourceId, source?.filename || citation.filename || "Document", page);
-      } else if (id) {
+      // Always open parsed content in left panel markdown viewer (including PDFs,
+      // since they are parsed to markdown by MinerU). The excerpt is highlighted.
+      if (id) {
         setActiveSource(id, sourceId, citation.excerpt || null);
         setIsLeftCollapsed(false);
       }

@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import re
 import time
 import uuid
@@ -16,31 +15,23 @@ from backend.models.source import Source
 from backend.core.config import settings
 from backend.services.ragflow_client import ragflow_client
 from backend.services.qwen_client import qwen_client
-from backend.services.asr_service import AUDIO_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an AI knowledge assistant for a document-based Q&A system.
-
-First, determine the type of the user's question:
-
-**Type A — Factual / Source questions**: The user is asking WHAT the documents say — facts, data, summaries, quotes, timelines, decisions recorded in the documents.
-→ Answer STRICTLY from the provided context. Do NOT add your own opinions or outside knowledge. Cite with [1], [2], etc.
-
-**Type B — Open-ended / Analytical questions**: The user is asking for YOUR analysis, opinion, suggestions, strategy, evaluation, comparison, or "what do you think" style questions.
-→ First present the relevant facts from the documents (cited with [1], [2]), then clearly provide your own analysis and recommendations in a separate section marked as **My Analysis** or **我的分析**. You may use your own knowledge to supplement.
-
-How to distinguish:
-- Type A signals: "什么内容", "说了什么", "讨论了什么", "有哪些", "列出", "summarize", "what was discussed", "what did they decide", factual who/what/when/where questions
-- Type B signals: "你怎么看", "你觉得", "建议", "怎么改进", "有什么想法", "what do you think", "how would you", "suggest", "recommend", "analyze", "evaluate", "pros and cons", "should we"
-
-General rules:
-1. Use inline citation markers [1], [2], etc. for all document-sourced facts.
-2. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state so.
-3. Be thorough — draw from all relevant context, not just the most obvious match.
-   When the question asks about a specific date, scan ALL chunks for that date in any format.
-4. CRITICAL: Always respond in the SAME LANGUAGE as the user's question.
-5. Format with Markdown (lists, bold, headers, tables) when appropriate."""
+SYSTEM_PROMPT = """You are an AI assistant that answers questions STRICTLY based on the provided source documents.
+Follow these rules strictly:
+1. ONLY answer based on the provided context. NEVER use your general knowledge or training data.
+2. If the context does not directly answer the question, DO NOT simply say "not found". Instead:
+   - Present any related or indirect information from the context that is relevant to the topic.
+   - Synthesize and connect the related information to address the question as thoroughly as possible.
+   - Only if there is truly NO related content at all, state that the documents do not contain this information.
+3. Use inline citation markers like [1], [2], etc. to reference the source chunks.
+4. Each citation number corresponds to a chunk from the context provided below.
+5. Be thorough — provide comprehensive answers that draw from all relevant context, not just the most obvious match.
+   When the question asks about a specific date, carefully scan ALL chunks for that exact date (in any format: YYYY/MM/DD, DD/MM/YYYY, Month DD YYYY, etc.) and prioritize chunks containing that date.
+6. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
+7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
+8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
 
 
 _PAGE_MARKER_RE = re.compile(r"<!--\s*page:(\d+)\s*-->")
@@ -151,22 +142,14 @@ def _build_context_prompt(chunks: list[dict], sources_map: dict) -> tuple[str, l
     return context, citations
 
 
-# File types that can be read as full text directly from disk
-_FULLTEXT_FILE_TYPES = {"txt", "md"} | AUDIO_EXTENSIONS
-# Max total chars for all full-text sources combined (~50K chars ≈ 25K tokens)
-_FULLTEXT_MAX_TOTAL_CHARS = 50000
-
-
 async def _get_source_dataset_ids(
     db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None
-) -> tuple[list[str], list[str], dict, list[Source]]:
-    """Get RAGFlow dataset IDs, document IDs, source info, and full-text sources.
+) -> tuple[list[str], list[str], dict]:
+    """Get RAGFlow dataset IDs, document IDs, and source info for retrieval.
 
     Returns:
-        (dataset_ids, document_ids, sources_map, fulltext_sources) where:
-        - document_ids are RAGFlow doc IDs to scope retrieval
-        - fulltext_sources are Source objects whose full content should be
-          injected directly (txt, md, audio transcripts) instead of using RAG
+        (dataset_ids, document_ids, sources_map) where document_ids are the
+        RAGFlow doc IDs used to scope retrieval to selected sources only.
     """
     query = select(Source).where(
         Source.notebook_id == notebook_id,
@@ -178,53 +161,14 @@ async def _get_source_dataset_ids(
     result = await db.execute(query)
     sources = list(result.scalars().all())
 
-    # Small text-readable files (md, txt, audio transcripts) get full-text injection.
-    # Large documents (pdf, docx, pptx, xlsx) always use RAG.
-    fulltext_sources = [s for s in sources if s.file_type in _FULLTEXT_FILE_TYPES]
-    rag_sources = [s for s in sources if s.file_type not in _FULLTEXT_FILE_TYPES]
-
-    logger.info(
-        "Source routing: %d total, %d fulltext (%s), %d RAG (%s)",
-        len(sources),
-        len(fulltext_sources),
-        [(s.filename, s.file_type) for s in fulltext_sources],
-        len(rag_sources),
-        [(s.filename, s.file_type) for s in rag_sources],
-    )
-
-    dataset_ids = list(set(s.ragflow_dataset_id for s in rag_sources if s.ragflow_dataset_id))
-    document_ids = [s.ragflow_doc_id for s in rag_sources if s.ragflow_doc_id]
+    dataset_ids = list(set(s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id))
+    document_ids = [s.ragflow_doc_id for s in sources if s.ragflow_doc_id]
     sources_map = {
         str(s.id): {"filename": s.filename, "file_type": s.file_type}
         for s in sources
     }
 
-    return dataset_ids, document_ids, sources_map, fulltext_sources
-
-
-def _read_source_fulltext(source: Source) -> str | None:
-    """Read full text content from a source file on disk.
-
-    For txt/md: read the file directly.
-    For audio: read the .md transcript file (same path stem).
-    Returns the full text, or None if not found.
-    """
-    if not source.storage_url:
-        return None
-
-    # For audio files, the transcript is saved as .md alongside the audio
-    if source.file_type in AUDIO_EXTENSIONS:
-        md_path = source.storage_url.rsplit(".", 1)[0] + ".md"
-        if os.path.isfile(md_path):
-            with open(md_path, "r", encoding="utf-8", errors="replace") as f:
-                return f.read()
-        return None
-
-    # For txt/md, read directly
-    if os.path.isfile(source.storage_url):
-        with open(source.storage_url, "r", encoding="utf-8", errors="replace") as f:
-            return f.read()
-    return None
+    return dataset_ids, document_ids, sources_map
 
 
 async def _rewrite_query_for_retrieval(message: str) -> str:
@@ -236,18 +180,14 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a search query optimizer for cross-language document retrieval.\n"
-                "Given a user question, output TWO lines:\n"
-                "Line 1: A natural full-sentence translation of the question into the OTHER language "
-                "(Chinese→English or English→Chinese). If the question is already in English, translate to Chinese.\n"
-                "Line 2: 10-15 bilingual keywords (English first, then the question's language), comma-delimited.\n"
-                "Include synonyms (e.g. tuition → fees, cost; founded → established).\n"
-                "For FULL dates, output format variations: YYYY/MM/DD, Month DD YYYY, etc. "
-                "For year-only mentions, keep just the year.\n\n"
+                "You are a search query translator for cross-language document retrieval.\n"
+                "Given a user question, translate it into the OTHER language:\n"
+                "- Chinese → English\n"
+                "- English → Chinese\n"
+                "Output ONLY the translated question, nothing else. No keywords, no extra text.\n"
+                "Keep it as a natural question, not keywords.\n\n"
                 "Example input: 上海美国学校的学费与其他学校相比如何？\n"
-                "Example output:\n"
-                "How does SAS tuition compare to other schools in the Shanghai market?\n"
-                "SAS, tuition, fees, compare, Shanghai, international schools, 学费, 对比, 上海, 国际学校"
+                "Example output: How does SAS tuition compare to other schools in the Shanghai market?"
             )},
             {"role": "user", "content": message},
         ]
@@ -267,29 +207,40 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     return message
 
 
-REACT_SYSTEM_PROMPT = """You are a research assistant. You answer questions by searching through documents in multiple rounds.
+REACT_SYSTEM_PROMPT = """You are an expert research analyst. You answer complex questions by systematically searching through documents in multiple rounds, building a comprehensive analysis.
 
 FORMAT — follow exactly:
 
-Notes: [running summary: what you KNOW so far, what you still NEED to find]
-Thought: [your plan for this round of searching]
-Search: [query 1 — concise keywords]
-Search: [query 2 — different angle]
-Search: [query 3 — yet another angle]
+Notes:
+- KNOWN: [bullet list of facts found so far with source references]
+- GAPS: [bullet list of what you still NEED to find]
+- SUB-QUESTIONS: [break the main question into 2-4 specific sub-questions that would fully answer it]
 
-When you have enough evidence:
+Thought: [your reasoning — which gaps are most important, what search strategy to use next, what angles haven't been explored]
 
-Notes: [complete summary of all findings]
-Thought: [how you connect the evidence to reach your conclusion]
-Answer: [your answer with [1][2] citations]
+Search: [query 1 — target a specific sub-question or gap]
+Search: [query 2 — different angle or sub-question]
+Search: [query 3 — yet another dimension]
+
+When you have enough evidence (usually after 3+ rounds):
+
+Notes:
+- KNOWN: [complete bullet list of all findings]
+- SYNTHESIS: [how the pieces connect to form a complete answer]
+
+Thought: [your analytical reasoning connecting evidence across sources]
+Answer: [comprehensive answer with [1][2] citations, organized with headers and bullet points]
 
 RULES:
-1. Always output Notes first. Notes accumulate — never discard earlier findings.
-2. Output exactly 3 Search queries per round. Each must seek DIFFERENT information.
-3. If you cannot find the answer directly, reason about what evidence WOULD help and search for that instead.
-4. Respond in the SAME LANGUAGE as the user's question.
-5. In your Answer, cite sources with [1], [2] etc. Use Markdown formatting.
-6. State your confidence level. If uncertain, explain what evidence is missing."""
+1. DECOMPOSE the question into sub-questions first. A question like "How does X compare to Y?" needs: (a) what metrics exist, (b) X's values, (c) Y's values, (d) qualitative differences.
+2. Notes accumulate — NEVER discard earlier findings. Each round ADDS to Notes.
+3. Output exactly 3 Search queries per round. Each MUST target DIFFERENT sub-questions or gaps.
+4. VARY your search terms aggressively: use synonyms, related concepts, specific names, numbers, table headers. If "benchmark" doesn't work, try "comparison", "peer", "ranking", "versus", specific school names.
+5. Search for SPECIFIC data: numbers, percentages, names, dates. Vague queries get vague results.
+6. If a search returns no new info, CHANGE your approach completely — try different keywords, search for table/chart descriptions, or search for the specific document that would contain the data.
+7. Respond in the SAME LANGUAGE as the user's question.
+8. In your Answer, cite sources with [1], [2] etc. Use Markdown with headers, tables, and bullet points.
+9. Provide a confidence assessment and note any gaps in the available evidence."""
 
 REACT_MAX_ROUNDS = settings.RAG_THINK_ROUNDS or 5
 
@@ -301,7 +252,7 @@ async def _react_step(messages: list[dict], model: str | None = None) -> str:
         messages,
         model=decompose_model,
         temperature=0.0,
-        max_tokens=500,
+        max_tokens=1000,
     )
 
 
@@ -375,8 +326,8 @@ async def stream_chat(
         # 2. Send heartbeat before slow RAGFlow retrieval
         yield ": keepalive\n\n"
 
-        # Retrieve from RAGFlow (audio transcripts returned separately for full-text injection)
-        dataset_ids, document_ids, sources_map, fulltext_sources = await _get_source_dataset_ids(db, notebook_id, source_ids)
+        # Retrieve from RAGFlow
+        dataset_ids, document_ids, sources_map = await _get_source_dataset_ids(db, notebook_id, source_ids)
 
         # Step 2a: Query rewrite — convert conversational queries to keyword-focused for better retrieval
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
@@ -465,8 +416,8 @@ async def stream_chat(
                     # Sort by similarity, take top excerpts
                     all_round.sort(key=lambda c: c.get("similarity", 0), reverse=True)
                     obs_parts = []
-                    for idx, c in enumerate(all_round[:8], 1):
-                        text = c.get("content_with_weight", c.get("content", ""))[:500]
+                    for idx, c in enumerate(all_round[:12], 1):
+                        text = c.get("content_with_weight", c.get("content", ""))[:800]
                         doc = c.get("document_keyword", c.get("docnm_kwd", "unknown"))
                         obs_parts.append(f"  [{idx}] ({doc}): {text}")
                     observation = f"Found {round_total} results from {len(search_queries)} queries ({new_count} new unique). Top excerpts:\n" + "\n".join(obs_parts)
@@ -483,19 +434,51 @@ async def stream_chat(
 
                     # Feed observation back to LLM with escalating strategy guidance
                     react_messages.append({"role": "assistant", "content": step_output})
-                    if round_num <= 2:
-                        guidance = "Update Notes. Search for what's still missing. Do NOT Answer yet."
+                    if round_num == 1:
+                        guidance = "Update Notes with KNOWN facts and remaining GAPS. Identify sub-questions. Search for what's still missing. Do NOT Answer yet."
+                    elif round_num == 2:
+                        guidance = "Update Notes. Check: have you found SPECIFIC data (numbers, names, dates) for each sub-question? If not, try DIFFERENT search terms — synonyms, specific names, table headers. Do NOT Answer yet."
                     elif round_num < REACT_MAX_ROUNDS:
-                        guidance = "Update Notes. Answer if you can reason from your evidence, otherwise keep searching."
+                        guidance = "Update Notes. You should have substantial evidence by now. If key gaps remain, search with very specific terms (exact names, numbers). If you have enough evidence for most sub-questions, you may Answer with what you have."
                     else:
-                        guidance = "Final round. Answer from your accumulated Notes. Show your reasoning."
+                        guidance = "Final round. Synthesize ALL your accumulated Notes into a comprehensive Answer. Organize by theme/sub-question. Include specific data points. Acknowledge any remaining gaps."
                     react_messages.append({"role": "user", "content": f"Observation: {observation}\n\n{guidance}"})
 
                 # Collect all unique chunks sorted by similarity, take top-15
                 chunks = sorted(all_chunks.values(), key=lambda c: c.get("similarity", 0), reverse=True)[:15]
                 logger.info("ReAct complete: %d rounds, %d total unique chunks -> top %d",
                             len(react_steps), len(all_chunks), len(chunks))
+
+                # If ReAct accumulated Notes with findings but didn't produce
+                # a final Answer, inject the Notes as a synthetic "research
+                # summary" chunk so the LLM sees the consolidated evidence
+                # (the observations contain data that may not survive the
+                # top-15 similarity filter).
+                if not react_answer and react_steps:
+                    # Extract the last Notes from the ReAct conversation
+                    last_notes = ""
+                    for msg in reversed(react_messages):
+                        if msg.get("role") == "assistant" and "Notes:" in msg.get("content", ""):
+                            content = msg["content"]
+                            notes_start = content.find("Notes:")
+                            if notes_start >= 0:
+                                last_notes = content[notes_start:]
+                            break
+                    if last_notes and len(last_notes) > 100:
+                        chunks.insert(0, {
+                            "id": "react_research_summary",
+                            "chunk_id": "react_research_summary",
+                            "content": f"[Research Summary from deep analysis]\n{last_notes}",
+                            "content_with_weight": f"[Research Summary from deep analysis]\n{last_notes}",
+                            "similarity": 1.0,
+                            "document_keyword": "Deep Thinking Research Notes",
+                            "docnm_kwd": "Deep Thinking Research Notes",
+                        })
+                        logger.info("ReAct: injected research summary (%d chars) as top chunk", len(last_notes))
             else:
+                # Use original + translated query for retrieval.
+                # The rewrite is now translation-only (no keywords), so it helps
+                # cross-language matching without polluting BM25 scores.
                 chunks = await ragflow_client.retrieve(
                     dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
                 )
@@ -503,51 +486,29 @@ async def stream_chat(
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
 
-        # 2c. Inject full-text sources (md, txt, audio transcripts)
-        # These bypass RAG — the entire file is included so the AI sees full content
-        fulltext_parts: list[str] = []
-        fulltext_total_chars = 0
-        for ft_source in fulltext_sources:
-            content = _read_source_fulltext(ft_source)
-            if content:
-                if fulltext_total_chars + len(content) > _FULLTEXT_MAX_TOTAL_CHARS:
-                    logger.warning("Full-text budget exceeded, skipping %s (%d chars)",
-                                   ft_source.filename, len(content))
-                    continue
-                fulltext_parts.append(
-                    f"=== Full Document: {ft_source.filename} ===\n{content}"
-                )
-                fulltext_total_chars += len(content)
-                logger.info("Injected full text: %s (%d chars, total=%d)",
-                            ft_source.filename, len(content), fulltext_total_chars)
-
-        fulltext_context = "\n\n".join(fulltext_parts) if fulltext_parts else ""
+        # DEBUG: check if 1912 is in retrieved chunks/context
+        _has_1912_chunks = any("1912" in c.get("content", "") for c in chunks)
+        _has_1912_context = "1912" in context if context else False
+        logger.info("DEBUG 1912 check: in_chunks=%s, in_context=%s, num_chunks=%d, context_len=%d",
+                     _has_1912_chunks, _has_1912_context, len(chunks), len(context) if context else 0)
 
         # 3. Build messages for Qwen
-        has_rag = bool(context) or bool(fulltext_context)
+        has_rag = bool(context)
 
-        # Combine: full transcripts first, then RAG chunks
-        if fulltext_context and context:
-            combined_context = f"{fulltext_context}\n\n---\nAdditional relevant excerpts from other documents:\n{context}"
-        elif fulltext_context:
-            combined_context = fulltext_context
-        else:
-            combined_context = context
-
-        if combined_context and web_search:
+        if context and web_search:
             user_content = f"""Context from source documents:
-{combined_context}
+{context}
 
 Question: {message}
 
 Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer."""
-        elif combined_context:
+        elif context:
             user_content = f"""Context from source documents:
-{combined_context}
+{context}
 
 Question: {message}
 
-Determine if this is a factual question (Type A) or an analytical/open-ended question (Type B), then answer accordingly per the system instructions."""
+Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible."""
         elif web_search:
             user_content = f"""Question: {message}
 

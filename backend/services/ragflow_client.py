@@ -152,53 +152,68 @@ class RAGFlowClient:
     ) -> list[dict]:
         """Retrieve relevant chunks from RAGFlow datasets.
 
-        Uses optimized settings for English-primary, Chinese-secondary content:
-        - top_k=80: ES KNN candidate pool (just above RERANK_LIMIT=75)
-        - size=top_k: final number of chunks returned after reranking
-        - vector_similarity_weight from settings (default 0.6, higher = more semantic)
-        - similarity_threshold from settings (default 0.0, filtering disabled)
-        - keyword=True for BM25 hybrid search
-        - rerank_id=gte-rerank for result reranking
+        Uses the dify-compatible retrieval endpoint which correctly resolves
+        the embedding model from dataset config for hybrid (vector + BM25) search.
+        Queries each dataset separately and merges results sorted by score.
         """
+        all_chunks: list[dict] = []
         try:
             async with httpx.AsyncClient(timeout=RETRIEVAL_TIMEOUT, limits=_POOL_LIMITS) as client:
-                payload: dict = {
-                    "question": question,
-                    "dataset_ids": dataset_ids,
-                    "similarity_threshold": settings.RAG_SIMILARITY_THRESHOLD,
-                    "vector_similarity_weight": settings.RAG_VECTOR_WEIGHT,
-                    "top_k": 15,
-                    "size": top_k,
-                    "keyword": True,
-                    "rerank_id": settings.RAG_RERANK_ID,
-                }
-                if document_ids:
-                    payload["document_ids"] = document_ids
-                resp = await client.post(
-                    f"{self.base_url}/api/v1/retrieval",
-                    headers=self._headers,
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                if data.get("code") == 0:
-                    chunks = data.get("data", {}).get("chunks", [])
-                    # RAGFlow's enable_children may return far more chunks than
-                    # requested `size` (parent chunks are appended). Apply our
-                    # own similarity filter and size limit to keep prompts tight.
-                    threshold = settings.RAG_SIMILARITY_THRESHOLD
-                    if threshold > 0 and chunks:
-                        before = len(chunks)
-                        chunks = [c for c in chunks if c.get("similarity", 0) >= threshold]
-                        if len(chunks) < before:
-                            logger.info("Similarity filter: %d → %d chunks (threshold=%.2f)",
-                                        before, len(chunks), threshold)
-                    if len(chunks) > top_k:
-                        logger.info("Trimming chunks from %d to %d (top_k limit)", len(chunks), top_k)
-                        chunks = chunks[:top_k]
-                    return chunks
-                logger.error("RAGFlow retrieve error: %s", data)
-                return []
+                for ds_id in dataset_ids:
+                    # Request 2x top_k from RAGFlow because enable_children
+                    # may collapse child chunks into parents, changing ranks.
+                    payload: dict = {
+                        "knowledge_id": ds_id,
+                        "query": question,
+                        "retrieval_setting": {
+                            "top_k": top_k * 2,
+                            "score_threshold": settings.RAG_SIMILARITY_THRESHOLD,
+                        },
+                    }
+                    resp = await client.post(
+                        f"{self.base_url}/api/v1/dify/retrieval",
+                        headers=self._headers,
+                        json=payload,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    records = data.get("records", [])
+                    # Convert dify format to standard chunk format
+                    meta = {}
+                    for idx, r in enumerate(records):
+                        meta = r.get("metadata", {})
+                        # Generate a unique chunk ID from doc_id + content hash
+                        doc_id = meta.get("doc_id", meta.get("document_id", ""))
+                        chunk_id = f"{doc_id}_{hash(r.get('content', '')) % 2**32:08x}"
+                        all_chunks.append({
+                            "id": chunk_id,
+                            "chunk_id": chunk_id,
+                            "content": r.get("content", ""),
+                            "content_with_weight": r.get("content", ""),
+                            "similarity": r.get("score", 0),
+                            "document_id": doc_id,
+                            "doc_id": doc_id,
+                            "document_keyword": r.get("title", ""),
+                            "docnm_kwd": r.get("title", ""),
+                            "dataset_id": ds_id,
+                            "kb_id": ds_id,
+                            "image_id": meta.get("image_id", meta.get("img_id", "")),
+                            "img_id": meta.get("image_id", meta.get("img_id", "")),
+                            "positions": meta.get("positions", meta.get("position_int", [])),
+                            "position_int": meta.get("positions", meta.get("position_int", [])),
+                        })
+
+            # Sort by score descending and limit
+            all_chunks.sort(key=lambda c: c.get("similarity", 0), reverse=True)
+            # DEBUG: log 1912 presence before/after trim
+            _has_1912 = any("1912" in c.get("content", "") for c in all_chunks)
+            logger.info("RAGFlow retrieve: %d chunks, has_1912=%s, top_scores=%s",
+                        len(all_chunks), _has_1912,
+                        [round(c.get("similarity", 0), 3) for c in all_chunks[:5]])
+            if len(all_chunks) > top_k:
+                logger.info("Trimming chunks from %d to %d (top_k limit)", len(all_chunks), top_k)
+                all_chunks = all_chunks[:top_k]
+            return all_chunks
         except Exception as e:
             logger.error("RAGFlow retrieve failed: %s", e)
             return []
