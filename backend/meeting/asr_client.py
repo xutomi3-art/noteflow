@@ -1058,6 +1058,12 @@ class ComparisonASRClient:
                         for utt, new_text in zip(batch, rewritten):
                             utt.text = new_text
                             utt.is_final = True
+                            if session._result_queue:
+                                await session._result_queue.put(Utterance(
+                                    speaker_id=utt.speaker_id, text=new_text,
+                                    start_time_ms=utt.start_time_ms, end_time_ms=utt.end_time_ms,
+                                    is_final=True, sequence=utt.sequence, provider=utt.provider,
+                                ))
                     except Exception:
                         for utt in batch:
                             utt.is_final = True
