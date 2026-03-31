@@ -853,7 +853,10 @@ class ComparisonASRClient:
         model = ASR_MODELS[provider]
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                form_data: dict[str, str] = {"model": model, "language": "zh"}
+                form_data: dict[str, str] = {"model": model}
+                # Qwen3-ASR auto-detects language; others need explicit "zh"
+                if provider != "qwen3":
+                    form_data["language"] = "zh"
                 if provider == "firered":
                     form_data["temperature"] = "0"
                 if prompt and provider == "firered":
