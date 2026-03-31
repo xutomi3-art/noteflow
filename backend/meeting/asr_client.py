@@ -397,11 +397,13 @@ def _is_hallucination(text: str) -> bool:
     stripped = text.replace(" ", "").replace("，", "").replace("。", "")
     if len(stripped) >= 4 and len(set(stripped)) == 1:
         return True
-    # Short phrase repeats 3+ times
-    for phrase_len in range(2, min(10, len(text) // 3 + 1)):
-        phrase = text[:phrase_len]
-        if text.count(phrase) >= 3:
-            return True
+    # Short phrase repeats — only check short texts (< 30 chars)
+    # Long texts with repeated words (e.g. "要有...要有...要有...") are normal speech
+    if len(text) < 30:
+        for phrase_len in range(2, min(10, len(text) // 3 + 1)):
+            phrase = text[:phrase_len]
+            if text.count(phrase) >= 4:
+                return True
     # Known hallucination patterns
     if _HALLUCINATION_RE.search(text):
         return True
