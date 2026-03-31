@@ -37,6 +37,7 @@ import {
   ChevronRight,
   ChevronUp,
   Bug,
+  Shield,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -1327,6 +1328,15 @@ export default function NotebookPage() {
             {isProfileMenuOpen && (
               <div className="absolute top-full right-0 pt-2 w-48 z-20">
                 <div className="bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 py-2">
+                  {user?.is_admin && (
+                    <button
+                      onClick={() => { setIsProfileMenuOpen(false); navigate('/admin'); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Admin
+                    </button>
+                  )}
                   <button
                     onClick={() => { setIsProfileMenuOpen(false); setShowHotwords(true); }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 font-medium transition-colors"
