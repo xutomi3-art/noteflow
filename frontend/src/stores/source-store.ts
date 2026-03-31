@@ -52,7 +52,16 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         );
         set({ sources, selectedIds: readyIds });
       } else {
-        set({ sources });
+        // Auto-select newly ready sources (e.g. meeting recordings, uploads that just finished)
+        const prevIds = new Set(get().sources.filter((s) => s.status === "ready").map((s) => s.id));
+        const newReady = sources.filter((s) => s.status === "ready" && !prevIds.has(s.id));
+        if (newReady.length > 0) {
+          const updated = new Set(currentSelected);
+          newReady.forEach((s) => updated.add(s.id));
+          set({ sources, selectedIds: updated });
+        } else {
+          set({ sources });
+        }
       }
     } finally {
       set({ isLoading: false });

@@ -183,6 +183,13 @@ class ApiClient {
     await this.request(`/notebooks/${notebookId}/sources/${sourceId}`, { method: "DELETE" });
   }
 
+  async renameSource(notebookId: string, sourceId: string, filename: string): Promise<void> {
+    await this.request(`/notebooks/${notebookId}/sources/${sourceId}/rename`, {
+      method: "PATCH",
+      body: JSON.stringify({ filename }),
+    });
+  }
+
   async getSourceContent(notebookId: string, sourceId: string): Promise<{ content: string | null; filename?: string; file_type?: string; message?: string }> {
     return this.request(`/notebooks/${notebookId}/sources/${sourceId}/content`);
   }

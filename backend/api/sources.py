@@ -260,6 +260,31 @@ async def delete_source(
     return {'data': {'message': 'Source deleted'}}
 
 
+@router.patch('/{source_id}/rename')
+async def rename_source(
+    notebook_id: str,
+    source_id: str,
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Rename a source file."""
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'upload'):
+        raise HTTPException(status_code=403, detail='No permission')
+
+    new_name = body.get('filename', '').strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail='Filename is required')
+
+    source = await source_service.get_source(db, uuid.UUID(source_id))
+    if source is None or str(source.notebook_id) != notebook_id:
+        raise HTTPException(status_code=404, detail='Source not found')
+
+    source.filename = new_name
+    await db.commit()
+    return {'data': {'id': str(source.id), 'filename': new_name}}
+
+
 @router.post('/{source_id}/retry')
 async def retry_source(
     notebook_id: str,

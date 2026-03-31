@@ -294,6 +294,19 @@ export default function NotebookPage() {
   const [showHotwords, setShowHotwords] = useState(false);
   const [hotwords, setHotwords] = useState<string[]>([]);
   const [hotwordInput, setHotwordInput] = useState("");
+  const [renamingSourceId, setRenamingSourceId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  const handleRenameSource = useCallback(async (sourceId: string, newName: string) => {
+    if (!id || !newName.trim()) return;
+    try {
+      await api.renameSource(id, sourceId, newName.trim());
+      fetchSources(id);
+    } catch (e) {
+      console.error("Rename failed:", e);
+    }
+    setRenamingSourceId(null);
+  }, [id, fetchSources]);
 
   // Load hotwords from API on mount
   useEffect(() => {
@@ -1660,11 +1673,31 @@ export default function NotebookPage() {
                       }
                     }}
                   >
-                    <p
-                      className={`text-[13px] truncate ${isProcessingStatus(source.status) ? "text-slate-400 italic" : source.status === "failed" ? "text-red-500" : "text-slate-700 hover:text-[#5b8c15]"}`}
-                    >
-                      {source.filename}
-                    </p>
+                    {renamingSourceId === source.id ? (
+                      <input
+                        autoFocus
+                        className="text-[13px] w-full bg-white border border-[#5b8c15] rounded px-1 py-0.5 outline-none"
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => handleRenameSource(source.id, renameValue)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleRenameSource(source.id, renameValue);
+                          if (e.key === "Escape") setRenamingSourceId(null);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <p
+                        className={`text-[13px] truncate ${isProcessingStatus(source.status) ? "text-slate-400 italic" : source.status === "failed" ? "text-red-500" : "text-slate-700 hover:text-[#5b8c15]"}`}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setRenamingSourceId(source.id);
+                          setRenameValue(source.filename);
+                        }}
+                      >
+                        {source.filename}
+                      </p>
+                    )}
                     {isProcessingStatus(source.status) && (
                       <span className="text-[10px] text-amber-500 font-medium">
                         {statusLabel(source.status, source.progress)}
