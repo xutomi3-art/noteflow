@@ -180,14 +180,31 @@ async def _rewrite_query_for_retrieval(message: str) -> str:
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a search query translator for cross-language document retrieval.\n"
-                "Given a user question, translate it into the OTHER language:\n"
-                "- Chinese → English\n"
-                "- English → Chinese\n"
-                "Output ONLY the translated question, nothing else. No keywords, no extra text.\n"
-                "Keep it as a natural question, not keywords.\n\n"
-                "Example input: 上海美国学校的学费与其他学校相比如何？\n"
-                "Example output: How does SAS tuition compare to other schools in the Shanghai market?"
+                "You are a search query optimizer for cross-language document retrieval.\n"
+                "Given a user question, output exactly THREE lines:\n"
+                "Line 1: Translate the question into the OTHER language (Chinese→English, English→Chinese).\n"
+                "Line 2: 3-5 English synonyms/related terms, comma-separated.\n"
+                "Line 3: 3-5 Chinese synonyms/related terms, comma-separated.\n\n"
+                "RULES:\n"
+                "- If input is Chinese, Line 1 MUST be in English. If input is English, Line 1 MUST be in Chinese.\n"
+                "- Line 2 is ALWAYS English keywords only.\n"
+                "- Line 3 is ALWAYS Chinese keywords only.\n"
+                "- Keep Line 1 as a natural sentence.\n"
+                "- If the input contains abbreviations, slang, or informal terms, expand them to their full form in the translation.\n"
+                "- ALWAYS output all 3 lines, even if unsure. Best-effort translation is better than nothing.\n"
+                "- Output NOTHING else.\n\n"
+                "Example 1:\n"
+                "Input: 上海美国学校的学费与其他学校相比如何？\n"
+                "Output:\n"
+                "How does SAS tuition compare to other schools in the Shanghai market?\n"
+                "tuition, fees, cost, comparison, schools\n"
+                "学费, 费用, 对比, 学校, 国际学校\n\n"
+                "Example 2:\n"
+                "Input: When was SAS founded?\n"
+                "Output:\n"
+                "上海美国学校是什么时候成立的？\n"
+                "founded, established, establishment, year\n"
+                "成立, 创办, 创立, 建校"
             )},
             {"role": "user", "content": message},
         ]
@@ -333,7 +350,7 @@ async def stream_chat(
         # Combine original question (for vector/semantic search) with rewritten keywords (for BM25)
         retrieval_query = message
         t_rewrite_start = time.time()
-        if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message.strip()) > 6:
+        if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message.strip()) > 2:
             rewritten = await _rewrite_query_for_retrieval(message)
             if rewritten != message:
                 retrieval_query = f"{message}\n{rewritten}"
@@ -476,12 +493,60 @@ async def stream_chat(
                         })
                         logger.info("ReAct: injected research summary (%d chars) as top chunk", len(last_notes))
             else:
-                # Use original + translated query for retrieval.
-                # The rewrite is now translation-only (no keywords), so it helps
-                # cross-language matching without polluting BM25 scores.
-                chunks = await ragflow_client.retrieve(
-                    dataset_ids, retrieval_query, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
-                )
+                # Dual retrieval: search with original message AND translated
+                # query separately, then merge. Concatenating them into one query
+                # causes the Chinese text to interfere with English BM25 scoring.
+                import asyncio as _aio
+
+                async def _retrieve(q: str) -> list[dict]:
+                    return await ragflow_client.retrieve(
+                        dataset_ids, q, top_k=settings.RAG_TOP_K, document_ids=filter_doc_ids
+                    )
+
+                # Parse rewrite output: line 1 = translation, line 2 = EN keywords, line 3 = CN keywords
+                rewrite_text = retrieval_query.replace(message + "\n", "").strip() if retrieval_query != message else ""
+                rewrite_lines = [l.strip() for l in rewrite_text.split("\n") if l.strip()] if rewrite_text else []
+
+                translated = rewrite_lines[0] if rewrite_lines else ""
+                en_keywords = rewrite_lines[1] if len(rewrite_lines) > 1 else ""
+                cn_keywords = rewrite_lines[2] if len(rewrite_lines) > 2 else ""
+
+                # Detect if original message is Chinese
+                import unicodedata
+                cn_chars = sum(1 for c in message if unicodedata.category(c).startswith('Lo'))
+                is_chinese = cn_chars > len(message) * 0.1
+
+                # Build queries: original + same-language keywords, translated + its-language keywords
+                q1 = message
+                if is_chinese and cn_keywords:
+                    q1 = f"{message}\n{cn_keywords}"
+                elif not is_chinese and en_keywords:
+                    q1 = f"{message}\n{en_keywords}"
+
+                queries = [q1]
+                if translated and translated != message:
+                    q2 = translated
+                    if is_chinese and en_keywords:
+                        q2 = f"{translated}\n{en_keywords}"
+                    elif not is_chinese and cn_keywords:
+                        q2 = f"{translated}\n{cn_keywords}"
+                    queries.append(q2)
+
+                logger.info("Dual retrieval queries: Q1=[%s], Q2=[%s]",
+                            queries[0][:80], queries[1][:80] if len(queries) > 1 else "none")
+
+                results = await _aio.gather(*[_retrieve(q) for q in queries])
+
+                # Merge and deduplicate by chunk_id, keep highest similarity
+                seen: dict[str, dict] = {}
+                for result_chunks in results:
+                    for chunk in result_chunks:
+                        cid = chunk.get("id", chunk.get("chunk_id", ""))
+                        if cid not in seen or chunk.get("similarity", 0) > seen[cid].get("similarity", 0):
+                            seen[cid] = chunk
+                chunks = sorted(seen.values(), key=lambda c: c.get("similarity", 0), reverse=True)[:settings.RAG_TOP_K]
+                logger.info("Dual retrieval: %d queries, %d unique chunks -> top %d",
+                            len(queries), len(seen), len(chunks))
         t_ragflow_end = time.time()
 
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
