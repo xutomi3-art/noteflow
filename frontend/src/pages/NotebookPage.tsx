@@ -296,6 +296,15 @@ export default function NotebookPage() {
   const [hotwordInput, setHotwordInput] = useState("");
   const [renamingSourceId, setRenamingSourceId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [sourceMenuId, setSourceMenuId] = useState<string | null>(null);
+
+  // Close source menu on outside click
+  useEffect(() => {
+    if (!sourceMenuId) return;
+    const handler = () => setSourceMenuId(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [sourceMenuId]);
 
   // Load hotwords from API on mount
   useEffect(() => {
@@ -1710,12 +1719,46 @@ export default function NotebookPage() {
                     )}
                   </div>
                   {notebook?.user_role !== "viewer" && (
-                    <button
-                      onClick={(e) => handleDeleteSource(e, source.id)}
-                      className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-0.5 shrink-0"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="relative shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSourceMenuId(sourceMenuId === source.id ? null : source.id);
+                        }}
+                        className="text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-all p-0.5"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+                      {sourceMenuId === source.id && (
+                        <div
+                          className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            className="w-full text-left px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSourceMenuId(null);
+                              setRenamingSourceId(source.id);
+                              setRenameValue(source.filename);
+                            }}
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            Rename
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-1.5 text-[12px] text-red-500 hover:bg-red-50 flex items-center gap-2"
+                            onClick={(e) => {
+                              setSourceMenuId(null);
+                              handleDeleteSource(e, source.id);
+                            }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                   <input
                     type="checkbox"
