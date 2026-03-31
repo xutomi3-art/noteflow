@@ -165,15 +165,25 @@ async def end_meeting(
     speaker_map = meeting.speaker_map or {}
 
     # 5. Format transcript as markdown
+    from datetime import timedelta
+    beijing_tz_offset = timedelta(hours=8)
+    meeting_start = meeting.started_at
+
     lines = []
     for u in all_utterances:
         if not u.text.strip():
             continue
-        speaker_name = speaker_map.get(u.speaker_id, u.speaker_id)
-        ts_min = u.start_time_ms // 60000
-        ts_sec = (u.start_time_ms // 1000) % 60
-        lines.append(f"**{speaker_name}** ({ts_min:02d}:{ts_sec:02d})")
-        lines.append(f"{u.text}\n")
+        # Use friendly name, fall back to "Speaker N" instead of raw "speaker_0"
+        speaker_name = speaker_map.get(u.speaker_id, u.speaker_id.replace("_", " ").title())
+        # Calculate Beijing wall clock time from meeting start + offset
+        if meeting_start:
+            wall = meeting_start + timedelta(milliseconds=u.start_time_ms) + beijing_tz_offset
+            time_str = wall.strftime("%H:%M")
+        else:
+            ts_min = u.start_time_ms // 60000
+            ts_sec = (u.start_time_ms // 1000) % 60
+            time_str = f"{ts_min:02d}:{ts_sec:02d}"
+        lines.append(f"{time_str} {u.text}\n")
 
     transcript_md = "\n".join(lines)
 
