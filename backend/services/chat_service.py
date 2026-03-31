@@ -376,8 +376,6 @@ async def stream_chat(
         retrieval_q1 = message
         retrieval_q2 = ""
         t_rewrite_start = time.time()
-        logger.info("Rewrite check: enabled=%s, datasets=%d, msg_len=%d",
-                    settings.QUERY_REWRITE_ENABLED, len(dataset_ids) if dataset_ids else 0, len(message))
         if settings.QUERY_REWRITE_ENABLED and dataset_ids and len(message) > 2:
             retrieval_q1, retrieval_q2 = await _rewrite_query_for_retrieval(message)
         t_rewrite_duration = time.time() - t_rewrite_start
