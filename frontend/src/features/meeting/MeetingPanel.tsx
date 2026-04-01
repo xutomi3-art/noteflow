@@ -51,11 +51,16 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
 
   const handleEnd = async () => {
     const notebookId = activeMeeting?.notebook_id;
-    // Close panel immediately for responsive UX
-    reset();
-    onClose();
-    // Finalize meeting in background
-    endMeeting().then(() => {
+    // Start end process (stops audio, sends WS end, calls REST API)
+    // Don't await — let it run while we close the panel
+    const endPromise = endMeeting();
+    // Close panel after a short delay to let the REST call fire
+    setTimeout(() => {
+      reset();
+      onClose();
+    }, 300);
+    // Wait for completion, then refresh sources
+    endPromise.then(() => {
       if (notebookId) fetchSources(notebookId);
     }).catch(() => {});
   };

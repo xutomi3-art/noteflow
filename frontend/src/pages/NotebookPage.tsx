@@ -343,14 +343,17 @@ export default function NotebookPage() {
   const meetingActive = useMeetingStore((s) => s.activeMeeting !== null && s.activeMeeting.notebook_id === id);
 
   // Check for active meeting on page load (e.g. after refresh)
+  // Skip check for 5s after ending a meeting to avoid false "interrupted" prompt
+  const meetingEndedAtRef = useRef(0);
   useEffect(() => {
     if (!id || meetingActive) return;
+    if (Date.now() - meetingEndedAtRef.current < 5000) return;
     const token = localStorage.getItem("access_token");
     if (!token) return;
     fetch(`/api/notebooks/${id}/meetings/active`, {
       headers: { Authorization: `Bearer ${token}` },
     }).then(r => r.ok ? r.json() : null).then(meeting => {
-      if (meeting && meeting.status === "recording") {
+      if (meeting && meeting.status === "recording" && Date.now() - meetingEndedAtRef.current > 5000) {
         setPendingResumeMeeting(meeting);
       }
     }).catch(() => {});
@@ -1443,7 +1446,7 @@ export default function NotebookPage() {
 
           {/* Meeting Panel — shown when meeting is active */}
           {showMeetingPanel && meetingActive ? (
-            <MeetingPanel onClose={() => setShowMeetingPanel(false)} />
+            <MeetingPanel onClose={() => { meetingEndedAtRef.current = Date.now(); setShowMeetingPanel(false); setPendingResumeMeeting(null); }} />
           ) : activeSourceId ? (
             <div className="flex flex-col flex-1 overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 shrink-0">
