@@ -172,19 +172,24 @@ export const useSourceStore = create<SourceState>((set, get) => ({
           return { sources: updatedSources, selectedIds };
         });
       }
-      // Forward shared chat messages to chat store
+      // Forward shared chat messages to chat store (skip own messages)
       if (event.type === "shared_chat_message") {
         const ev = event as Record<string, unknown>;
-        import("./chat-store").then(({ useChatStore }) => {
-          useChatStore.getState().addSharedMessage({
-            id: (ev.message_id as string) || "",
-            notebook_id: notebookId,
-            user_id: (ev.user_id as string) || "",
-            role: (ev.role as "user" | "assistant") || "user",
-            content: (ev.content as string) || "",
-            citations: (ev.citations as []) || [],
-            created_at: new Date().toISOString(),
-            user_name: (ev.user_name as string) || "",
+        // Get current user ID to skip own messages (already shown via normal chat flow)
+        import("@/stores/auth-store").then(({ useAuthStore }) => {
+          const currentUserId = useAuthStore.getState().user?.id;
+          if (currentUserId && ev.user_id === currentUserId) return;
+          import("./chat-store").then(({ useChatStore }) => {
+            useChatStore.getState().addSharedMessage({
+              id: (ev.message_id as string) || "",
+              notebook_id: notebookId,
+              user_id: (ev.user_id as string) || "",
+              role: (ev.role as "user" | "assistant") || "user",
+              content: (ev.content as string) || "",
+              citations: (ev.citations as []) || [],
+              created_at: new Date().toISOString(),
+              user_name: (ev.user_name as string) || "",
+            });
           });
         });
       }
