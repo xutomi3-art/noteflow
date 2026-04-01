@@ -51,18 +51,28 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
 
   const handleEnd = async () => {
     const notebookId = activeMeeting?.notebook_id;
-    // Start end process (stops audio, sends WS end, calls REST API)
-    // Don't await — let it run while we close the panel
-    const endPromise = endMeeting();
-    // Close panel after a short delay to let the REST call fire
-    setTimeout(() => {
-      reset();
-      onClose();
-    }, 300);
-    // Wait for completion, then refresh sources
-    endPromise.then(() => {
-      if (notebookId) fetchSources(notebookId);
-    }).catch(() => {});
+    const meetingId = activeMeeting?.id;
+    // Stop audio + WebSocket immediately (synchronous cleanup)
+    const store = useMeetingStore.getState();
+    if (store._durationInterval) clearInterval(store._durationInterval);
+    if (store._workletNode) store._workletNode.disconnect();
+    if (store._mediaStream) store._mediaStream.getTracks().forEach(t => t.stop());
+    if (store._audioContext) store._audioContext.close();
+    if (store._ws?.readyState === WebSocket.OPEN) {
+      store._ws.send(JSON.stringify({ type: "end" }));
+      store._ws.close();
+    }
+    // Reset state + close panel immediately
+    reset();
+    onClose();
+    // Call REST end API in background
+    if (notebookId && meetingId) {
+      const token = localStorage.getItem("access_token") || "";
+      fetch(`/api/notebooks/${notebookId}/meetings/${meetingId}/end`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(() => fetchSources(notebookId)).catch(() => {});
+    }
   };
 
   return (
