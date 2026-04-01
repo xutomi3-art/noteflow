@@ -168,9 +168,12 @@ async def end_meeting(
     # 2. Fetch all persisted utterances (includes any missed during disconnect)
     db_utterances = await get_utterances(db, meeting_id)
 
-    # 3. Merge: prefer DB utterances (more complete), add any final ASR-only ones
-    all_utterances = db_utterances
-    # Note: final_utterances from ASR may include last few that weren't saved yet
+    # 3. Merge: DB utterances + any final ASR-only ones not yet saved
+    db_seqs = {u.sequence for u in db_utterances}
+    extra = [u for u in final_utterances if u.sequence not in db_seqs and u.text.strip()]
+    all_utterances = list(db_utterances) + extra
+    if extra:
+        logger.info("Merged %d extra utterances from ASR flush", len(extra))
 
     # 4. Apply speaker map
     speaker_map = meeting.speaker_map or {}
@@ -203,21 +206,24 @@ async def end_meeting(
     beijing_tz = timezone(_td(hours=8))
     date_prefix = datetime.now(beijing_tz).strftime("%y%m%d")
     title = f"{date_prefix} Meeting Transcript"
-    try:
-        preview = transcript_md[:2000]
-        title_prompt = (
-            "根据以下会议转录内容，用中文生成一个简短的主题词（2-6个字，不要日期，不要引号）。"
-            "例如：产品评审、锵锵三人行、周会纪要、技术方案讨论\n\n" + preview
-        )
-        generated = await qwen_client.generate(
-            messages=[{"role": "user", "content": title_prompt}],
-            max_tokens=30,
-        )
-        topic = generated.strip().strip('"').strip("'").strip("《》")[:20]
-        if topic:
-            title = f"{date_prefix} {topic}"
-    except Exception as e:
-        logger.warning("Failed to generate meeting title: %s", e)
+    if transcript_md.strip():
+        try:
+            preview = transcript_md[:2000]
+            title_prompt = (
+                "根据以下会议转录内容，用中文生成一个简短的主题词（2-6个字，不要日期，不要引号）。"
+                "例如：产品评审、锵锵三人行、周会纪要、技术方案讨论\n\n" + preview
+            )
+            generated = await qwen_client.generate(
+                messages=[{"role": "user", "content": title_prompt}],
+                max_tokens=30,
+            )
+            topic = generated.strip().strip('"').strip("'").strip("《》")[:20]
+            if topic and "请提供" not in topic and "没有提供" not in topic:
+                title = f"{date_prefix} {topic}"
+        except Exception as e:
+            logger.warning("Failed to generate meeting title: %s", e)
+    else:
+        logger.warning("Empty transcript for meeting %s, skipping LLM title generation", meeting_id)
 
     # 7. Calculate duration
     now = datetime.now(timezone.utc)
