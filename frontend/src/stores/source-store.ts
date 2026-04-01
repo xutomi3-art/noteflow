@@ -174,16 +174,18 @@ export const useSourceStore = create<SourceState>((set, get) => ({
       }
       // Forward shared chat messages to chat store
       if (event.type === "shared_chat_message") {
-        const { useChatStore } = await import("./chat-store");
-        useChatStore.getState().addSharedMessage({
-          id: event.message_id as string,
-          notebook_id: notebookId,
-          user_id: event.user_id as string,
-          role: event.role as "user" | "assistant",
-          content: event.content as string,
-          citations: (event.citations as []) || [],
-          created_at: new Date().toISOString(),
-          user_name: event.user_name as string,
+        const ev = event as Record<string, unknown>;
+        import("./chat-store").then(({ useChatStore }) => {
+          useChatStore.getState().addSharedMessage({
+            id: (ev.message_id as string) || "",
+            notebook_id: notebookId,
+            user_id: (ev.user_id as string) || "",
+            role: (ev.role as "user" | "assistant") || "user",
+            content: (ev.content as string) || "",
+            citations: (ev.citations as []) || [],
+            created_at: new Date().toISOString(),
+            user_name: (ev.user_name as string) || "",
+          });
         });
       }
     });
