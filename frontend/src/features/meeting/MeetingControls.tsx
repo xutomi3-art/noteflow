@@ -4,28 +4,39 @@ interface MeetingControlsProps {
   isPaused: boolean;
   onPause: () => void;
   onResume: () => void;
-  onEnd: () => void;
+  onEnd: () => Promise<void> | void;
 }
 
 export function MeetingControls({ isPaused, onPause, onResume, onEnd }: MeetingControlsProps) {
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
 
   return (
     <div className="flex items-center gap-2">
       {/* Pause / Resume */}
-      <button
-        onClick={isPaused ? onResume : onPause}
-        className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors bg-[#f0f5e0] text-[#5b8c15] hover:bg-[#e4edcf]"
-      >
-        {isPaused ? "Resume" : "Pause"}
-      </button>
+      {!ending && (
+        <button
+          onClick={isPaused ? onResume : onPause}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors bg-[#f0f5e0] text-[#5b8c15] hover:bg-[#e4edcf]"
+        >
+          {isPaused ? "Resume" : "Pause"}
+        </button>
+      )}
 
       {/* End */}
-      {confirmEnd ? (
+      {ending ? (
+        <span className="px-3 py-1.5 text-[12px] font-medium text-slate-400 animate-pulse">
+          Ending...
+        </span>
+      ) : confirmEnd ? (
         <div className="flex items-center gap-1">
           <span className="text-[11px] text-slate-500">End meeting?</span>
           <button
-            onClick={() => { onEnd(); setConfirmEnd(false); }}
+            onClick={async () => {
+              setEnding(true);
+              setConfirmEnd(false);
+              try { await onEnd(); } finally { setEnding(false); }
+            }}
             className="px-2 py-1 rounded text-[11px] font-medium bg-red-500 text-white hover:bg-red-600"
           >
             Yes
