@@ -340,7 +340,7 @@ export default function NotebookPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [showMeetingPanel, setShowMeetingPanel] = useState(false);
   const [pendingResumeMeeting, setPendingResumeMeeting] = useState<any>(null);
-  const meetingActive = useMeetingStore((s) => s.activeMeeting !== null);
+  const meetingActive = useMeetingStore((s) => s.activeMeeting !== null && s.activeMeeting.notebook_id === id);
 
   // Check for active meeting on page load (e.g. after refresh)
   useEffect(() => {
