@@ -51,12 +51,13 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
 
   const handleEnd = async () => {
     const notebookId = activeMeeting?.notebook_id;
-    await endMeeting();
-    if (notebookId) {
-      await fetchSources(notebookId);
-    }
+    // Close panel immediately for responsive UX
     reset();
     onClose();
+    // Finalize meeting in background
+    endMeeting().then(() => {
+      if (notebookId) fetchSources(notebookId);
+    }).catch(() => {});
   };
 
   return (
