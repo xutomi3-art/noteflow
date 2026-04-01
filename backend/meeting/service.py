@@ -23,17 +23,28 @@ logger = logging.getLogger(__name__)
 async def create_meeting(
     db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID
 ) -> Meeting:
-    """Create a new meeting. Only one active meeting per notebook allowed."""
-    # Check for existing active meeting
+    """Create a new meeting. Auto-ends any active meeting by this user in any notebook."""
+    # End all active meetings by this user (across all notebooks)
     result = await db.execute(
         select(Meeting).where(
-            Meeting.notebook_id == notebook_id,
+            Meeting.created_by == user_id,
             Meeting.status.in_(["recording", "paused"]),
         )
     )
-    existing = result.scalar_one_or_none()
-    if existing:
-        raise ValueError("A meeting is already active in this notebook")
+    active_meetings = list(result.scalars().all())
+    for m in active_meetings:
+        m.status = "ended"
+        m.ended_at = datetime.now(timezone.utc)
+        if m.started_at:
+            m.duration_seconds = int((m.ended_at - m.started_at).total_seconds())
+        logger.info("Auto-ended meeting %s in notebook %s (user started new meeting)", m.id, m.notebook_id)
+        # Close ASR session if still active
+        try:
+            await asr_client.end_session(str(m.id))
+        except Exception:
+            pass
+    if active_meetings:
+        await db.commit()
 
     meeting = Meeting(
         notebook_id=notebook_id,
