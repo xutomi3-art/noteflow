@@ -50,14 +50,13 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
   }, [utterances]);
 
   const handleEnd = async () => {
-    const result = await endMeeting();
-    if (result?.source_id && activeMeeting) {
-      await fetchSources(activeMeeting.notebook_id);
+    const notebookId = activeMeeting?.notebook_id;
+    await endMeeting();
+    if (notebookId) {
+      await fetchSources(notebookId);
     }
-    setTimeout(() => {
-      reset();
-      onClose();
-    }, 500);
+    reset();
+    onClose();
   };
 
   return (
