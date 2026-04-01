@@ -72,7 +72,7 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
         nb, source_count, role, member_count = row
         results.append(NotebookResponse(
             id=str(nb.id), name=nb.name, emoji=nb.emoji, cover_color=nb.cover_color,
-            owner_id=str(nb.owner_id), is_shared=nb.is_shared, user_role=role,
+            owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, user_role=role,
             source_count=source_count, member_count=member_count,
             created_at=nb.created_at, updated_at=nb.updated_at, joined_at=None,
         ))
@@ -80,7 +80,7 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
         nb, source_count, role, member_count, joined_at = row
         results.append(NotebookResponse(
             id=str(nb.id), name=nb.name, emoji=nb.emoji, cover_color=nb.cover_color,
-            owner_id=str(nb.owner_id), is_shared=nb.is_shared, user_role=role,
+            owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, user_role=role,
             source_count=source_count, member_count=member_count,
             created_at=nb.created_at, updated_at=nb.updated_at, joined_at=joined_at,
         ))

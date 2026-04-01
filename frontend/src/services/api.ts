@@ -183,6 +183,13 @@ class ApiClient {
     await this.request(`/notebooks/${notebookId}/sources/${sourceId}`, { method: "DELETE" });
   }
 
+  async toggleSharedChat(notebookId: string, enabled: boolean): Promise<void> {
+    await this.request(`/notebooks/${notebookId}/shared-chat`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    });
+  }
+
   async renameSource(notebookId: string, sourceId: string, filename: string): Promise<void> {
     await this.request(`/notebooks/${notebookId}/sources/${sourceId}/rename`, {
       method: "PATCH",

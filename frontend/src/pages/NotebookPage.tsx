@@ -1971,8 +1971,11 @@ export default function NotebookPage() {
                 {messages.map((msg) => (
                   <div key={msg.id} data-message-id={msg.id} data-citations={msg.citations?.length ? btoa(encodeURIComponent(JSON.stringify(msg.citations))) : undefined}>
                     {msg.role === "user" ? (
-                      <div className="flex justify-end">
-                        <div className="bg-[#eef1f5] text-slate-800 px-5 py-3 rounded-2xl rounded-tr-sm max-w-[80%] text-[14px]">
+                      <div className={`flex ${msg.user_name && msg.user_id !== user?.id ? "justify-start" : "justify-end"}`}>
+                        <div className={`${msg.user_name && msg.user_id !== user?.id ? "bg-blue-50 text-slate-800 rounded-2xl rounded-tl-sm" : "bg-[#eef1f5] text-slate-800 rounded-2xl rounded-tr-sm"} px-5 py-3 max-w-[80%] text-[14px]`}>
+                          {msg.user_name && msg.user_id !== user?.id && (
+                            <div className="text-[11px] font-semibold text-blue-600 mb-1">{msg.user_name}</div>
+                          )}
                           {msg.content}
                         </div>
                       </div>
@@ -2498,6 +2501,14 @@ export default function NotebookPage() {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         notebookId={id || ""}
+        sharedChat={notebook?.shared_chat}
+        onSharedChatToggle={async (enabled) => {
+          if (!id) return;
+          await api.toggleSharedChat(id, enabled);
+          const nb = await api.getNotebook(id);
+          setNotebook(nb);
+          if (enabled) fetchHistory(id);
+        }}
         onMemberAdded={() => {
           if (id) {
             api.getNotebook(id).then(setNotebook).catch(() => {});

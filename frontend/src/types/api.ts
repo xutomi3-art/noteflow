@@ -19,6 +19,7 @@ export interface Notebook {
   cover_color: string;
   owner_id: string;
   is_shared: boolean;
+  shared_chat: boolean;
   user_role: string;
   source_count: number;
   member_count: number;
@@ -60,6 +61,7 @@ export interface ChatMessage {
   content: string;
   citations: Citation[];
   created_at: string;
+  user_name?: string;
 }
 
 export interface SavedNote {

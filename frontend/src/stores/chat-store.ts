@@ -25,6 +25,7 @@ interface ChatState {
   stopStream: () => void;
   clearHistory: (notebookId: string) => Promise<void>;
   setDeepThinking: (enabled: boolean) => void;
+  addSharedMessage: (msg: ChatMessage) => void;
   reset: () => void;
 }
 
@@ -178,6 +179,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearHistory: async (notebookId: string) => {
     await api.clearChatHistory(notebookId);
     set({ messages: [] });
+  },
+
+  addSharedMessage: (msg: ChatMessage) => {
+    set((state) => {
+      // Skip if message already exists (avoid duplicates from own messages)
+      if (state.messages.some((m) => m.id === msg.id)) return state;
+      return { messages: [...state.messages, msg] };
+    });
   },
 
   reset: () => {

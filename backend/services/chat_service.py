@@ -350,6 +350,18 @@ async def stream_chat(
     full_response = ""
 
     try:
+        # Check shared_chat mode
+        from backend.models.notebook import Notebook
+        nb = await db.get(Notebook, notebook_id)
+        is_shared_chat = nb.shared_chat if nb else False
+
+        # Resolve user name for shared chat display
+        user_name = ""
+        if is_shared_chat:
+            from backend.models.user import User
+            u = await db.get(User, user_id)
+            user_name = (u.name or u.email.split("@")[0]) if u else ""
+
         # 1. Save user message
         user_msg = ChatMessage(
             notebook_id=notebook_id,
@@ -364,6 +376,18 @@ async def stream_chat(
 
         # Send user message event
         yield f"data: {json.dumps({'type': 'user_message', 'id': str(user_msg.id)})}\n\n"
+
+        # Broadcast to team in shared chat mode
+        if is_shared_chat:
+            from backend.services.event_bus import event_bus
+            await event_bus.publish(str(notebook_id), {
+                "type": "shared_chat_message",
+                "message_id": str(user_msg.id),
+                "user_id": str(user_id),
+                "user_name": user_name,
+                "role": "user",
+                "content": message,
+            })
 
         # 2. Send heartbeat before slow RAGFlow retrieval
         yield ": keepalive\n\n"
@@ -720,6 +744,19 @@ Follow these rules strictly:
         # 7. Send completion event with citations
         yield f"data: {json.dumps({'type': 'done', 'id': str(assistant_msg.id), 'citations': used_citations})}\n\n"
 
+        # Broadcast assistant response to team in shared chat mode
+        if is_shared_chat:
+            from backend.services.event_bus import event_bus
+            await event_bus.publish(str(notebook_id), {
+                "type": "shared_chat_message",
+                "message_id": str(assistant_msg.id),
+                "user_id": str(user_id),
+                "user_name": user_name,
+                "role": "assistant",
+                "content": full_response,
+                "citations": used_citations,
+            })
+
     except Exception as e:
         # Log error to ChatLog
         try:
@@ -749,14 +786,26 @@ Follow these rules strictly:
 
 
 async def get_chat_history(
-    db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID
+    db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID,
+    shared: bool = False,
 ) -> list[ChatMessage]:
-    """Get chat history for a notebook (per-user)."""
-    result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.notebook_id == notebook_id, ChatMessage.user_id == user_id)
-        .order_by(ChatMessage.created_at.asc())
-    )
+    """Get chat history for a notebook.
+
+    If shared=True, returns all users' messages (last 40 = ~20 rounds).
+    Otherwise, returns only the current user's messages.
+    """
+    query = select(ChatMessage).where(ChatMessage.notebook_id == notebook_id)
+    if not shared:
+        query = query.where(ChatMessage.user_id == user_id)
+    query = query.order_by(ChatMessage.created_at.asc())
+    if shared:
+        # Limit to last 40 messages (~20 Q&A rounds) for shared mode
+        from sqlalchemy import func
+        count_q = select(func.count()).where(ChatMessage.notebook_id == notebook_id)
+        total = (await db.execute(count_q)).scalar() or 0
+        if total > 40:
+            query = query.offset(total - 40)
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 

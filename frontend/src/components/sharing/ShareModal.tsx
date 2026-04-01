@@ -6,6 +6,8 @@ interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   notebookId: string;
+  sharedChat?: boolean;
+  onSharedChatToggle?: (enabled: boolean) => void;
   /** Called after successfully adding a member (e.g. to refresh notebook data) */
   onMemberAdded?: () => void;
 }
@@ -16,7 +18,7 @@ interface InvitedEmail {
   status: "sending" | "sent" | "failed";
 }
 
-export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, onSharedChatToggle, onMemberAdded }: ShareModalProps) {
   const { members, fetchMembers, createInviteLink, sendEmailInvite, removeMember } =
     useSharingStore();
 
@@ -362,6 +364,24 @@ export default function ShareModal({ isOpen, onClose, notebookId, onMemberAdded 
             </div>
           )}
         </div>
+
+        {/* Shared Chat Toggle */}
+        {onSharedChatToggle && (
+          <div className="px-6 py-3 border-t border-slate-100">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sharedChat ?? false}
+                onChange={(e) => onSharedChatToggle(e.target.checked)}
+                className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-4 h-4 border-slate-300"
+              />
+              <div>
+                <span className="text-[13px] font-medium text-slate-700">Shared Chat</span>
+                <p className="text-[11px] text-slate-400">Team members can see each other's questions and answers</p>
+              </div>
+            </label>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end">

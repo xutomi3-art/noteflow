@@ -111,7 +111,23 @@ async def get_history(
     if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'view'):
         raise HTTPException(status_code=403, detail='No access to this notebook')
 
-    messages = await chat_service.get_chat_history(db, uuid.UUID(notebook_id), user.id)
+    # Check if shared_chat is enabled
+    from backend.models.notebook import Notebook
+    nb = await db.get(Notebook, uuid.UUID(notebook_id))
+    shared = nb.shared_chat if nb else False
+
+    messages = await chat_service.get_chat_history(db, uuid.UUID(notebook_id), user.id, shared=shared)
+
+    # In shared mode, resolve user names for attribution
+    user_names: dict[str, str] = {}
+    if shared:
+        from backend.models.user import User as UserModel
+        user_ids = {m.user_id for m in messages}
+        for uid in user_ids:
+            u = await db.get(UserModel, uid)
+            if u:
+                user_names[str(uid)] = u.name or u.email.split("@")[0]
+
     return [
         ChatMessageResponse(
             id=str(m.id),
@@ -121,6 +137,7 @@ async def get_history(
             content=m.content,
             citations=m.citations or [],
             created_at=m.created_at,
+            user_name=user_names.get(str(m.user_id), "") if shared else "",
         )
         for m in messages
     ]

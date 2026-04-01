@@ -47,6 +47,7 @@ class NotebookResponse(BaseModel):
     cover_color: str
     owner_id: str
     is_shared: bool
+    shared_chat: bool = False
     user_role: str = "owner"
     source_count: int = 0
     member_count: int = 1

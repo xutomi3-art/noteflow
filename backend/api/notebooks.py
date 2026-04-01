@@ -26,6 +26,7 @@ async def create_notebook(
         cover_color=notebook.cover_color,
         owner_id=str(notebook.owner_id),
         is_shared=notebook.is_shared,
+            shared_chat=notebook.shared_chat,
         user_role='owner',
         source_count=0,
         created_at=notebook.created_at,
@@ -57,6 +58,7 @@ async def get_notebook(
             cover_color=notebook.cover_color,
             owner_id=str(notebook.owner_id),
             is_shared=notebook.is_shared,
+            shared_chat=notebook.shared_chat,
             user_role=role or 'owner',
             source_count=0,
             created_at=notebook.created_at,
@@ -85,6 +87,7 @@ async def update_notebook(
             cover_color=notebook.cover_color,
             owner_id=str(notebook.owner_id),
             is_shared=notebook.is_shared,
+            shared_chat=notebook.shared_chat,
             user_role=role or 'owner',
             source_count=0,
             created_at=notebook.created_at,
@@ -92,6 +95,25 @@ async def update_notebook(
         )
     except ValueError:
         raise HTTPException(status_code=404, detail='Notebook not found')
+
+
+@router.patch('/{notebook_id}/shared-chat')
+async def toggle_shared_chat(
+    notebook_id: str,
+    body: dict,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle shared chat mode for a notebook."""
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'share'):
+        raise HTTPException(status_code=403, detail='No permission')
+    from backend.models.notebook import Notebook
+    nb = await db.get(Notebook, uuid.UUID(notebook_id))
+    if not nb:
+        raise HTTPException(status_code=404, detail='Notebook not found')
+    nb.shared_chat = bool(body.get('enabled', False))
+    await db.commit()
+    return {'shared_chat': nb.shared_chat}
 
 
 @router.delete('/{notebook_id}')

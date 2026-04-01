@@ -27,5 +27,6 @@ class ChatMessageResponse(BaseModel):
     content: str
     citations: list[CitationSchema] = []
     created_at: datetime
+    user_name: str = ""  # Populated in shared chat mode
 
     model_config = {"from_attributes": True}
