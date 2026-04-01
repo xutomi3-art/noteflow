@@ -12,11 +12,17 @@ Full product spec: `PRD_KnowledgeBase_v4.md`
 
 **Two-service architecture** behind an Nginx reverse proxy:
 
-- **Frontend** (`frontend/`): Next.js 15 (App Router) + Tailwind CSS + Zustand
-- **Backend** (`backend/`): Python FastAPI
-- **Nginx** routes `/api/*` → FastAPI:8000, `/*` → Next.js:3000 — no CORS needed
+- **Frontend** (`frontend/`): React 19 + Vite 6 + Tailwind CSS + Zustand + TypeScript
+- **Backend** (`backend/`): Python 3.12 FastAPI + SQLAlchemy 2.0 (async) + Pydantic 2
+- **Nginx** routes `/api/*` → FastAPI:8000, `/*` → Vite:3000 — no CORS needed
 
 Communication: REST + SSE (Server-Sent Events) for streaming. No WebSocket — SSE handles both chat streaming and document processing status.
+
+**Important**: The backend uses `backend.` package prefix for all imports (e.g., `from backend.core.config import settings`). All backend commands (uvicorn, pytest, alembic) must run from the **project root**, not from `backend/`.
+
+**Local dev modes:**
+- **Full stack** (with RAGFlow): `docker compose up -d` → access via `localhost:3100`. The `docker-compose.override.yml` automatically adds RAGFlow + its dependencies (MySQL, Elasticsearch, Redis, MinIO) and maps ports 3100→Nginx, 8100→Backend, 9380→RAGFlow.
+- **Frontend only**: `cd frontend && npm run dev` → Vite proxies `/api` to `localhost:8000` automatically (configured in `vite.config.ts`)
 
 ### Data Flow: Document → AI Answer
 
@@ -39,14 +45,52 @@ RAGFlow is used **only for retrieval** — LLM generation is handled directly vi
 - `backend/services/mineru_client.py` — MinerU document parsing
 - `backend/services/qwen_client.py` — Qwen API for LLM generation + embedding
 - `backend/services/document_pipeline.py` — Orchestrates upload → parse → index → ready
+- `backend/services/chat_service.py` — AI response generation with citation assembly
+- `backend/services/query_router.py` — Routes queries between standard RAG, Excel/DuckDB, and deep-thinking modes
+- `backend/meeting/` — Self-contained meeting transcription module (ASR + speaker diarization) with its own models, schemas, router, and service
+
+### External Services
+
+Beyond Qwen (main LLM), the backend integrates several external APIs configured in `backend/core/config.py`:
+- **Vision LLM**: GLM-4.5v (Zhipu, separate from Qwen) — `LLM_VISION_MODEL`, `LLM_VISION_API_KEY`
+- **TTS**: Alibaba Cloud — podcast audio generation (`ALIBABA_TTS_APPKEY`)
+- **ASR**: Volcengine — meeting transcription (`VOLCENGINE_ASR_APPID`)
+- **Email**: Resend (`RESEND_API_KEY`) — primary; SMTP as legacy fallback
+- **PPT**: Docmee API (`DOCMEE_API_KEY`) — alternative to python-pptx
+- **Web Scraping**: Jina Reader — URL-to-document import
+
+### RAG Tuning (backend/core/config.py)
+
+Key retrieval knobs — change these to tune answer quality:
+- `RAG_TOP_K=8` — chunks retrieved per query
+- `RAG_VECTOR_WEIGHT=0.7` — vector vs BM25 balance (0.7 = 70% vector)
+- `RAG_SIMILARITY_THRESHOLD=0.0` — minimum similarity cutoff
+- `RAG_RERANK_ID="gte-rerank"` — reranking model
+- `QUERY_REWRITE_ENABLED=False` — query rewriting (disabled by default)
+- `RAPTOR_ENABLED=False` — tree-based retrieval (disabled by default)
+
+### Backend Structure
+
+- `backend/api/` — FastAPI routers (auth, chat, notebooks, sources, studio, sharing, admin, etc.)
+- `backend/models/` — SQLAlchemy ORM models
+- `backend/schemas/` — Pydantic request/response schemas
+- `backend/services/` — Business logic layer (~30 services)
+- `backend/core/` — Config (Pydantic BaseSettings), database engine, security, dependency injection
+- `backend/tests/` — pytest tests (conftest uses in-memory SQLite with UUID/DateTime type adapters; `asyncio_mode = auto` in pytest.ini)
 
 ### State Management (Frontend)
 
-Zustand stores with cross-panel coordination:
+Zustand stores in `frontend/src/stores/` with cross-panel coordination:
 - `authStore` — JWT token, user profile, refresh logic
-- `notebookStore` — notebook list, current notebook, sources
+- `notebookStore` — notebook list, current notebook
+- `sourceStore` — document sources per notebook
 - `chatStore` — messages, streaming state, selected source IDs for scoped queries
 - `studioStore` — generated outputs (summary, FAQ, study guide), saved notes
+- `sharingStore` — notebook sharing, members, invite links
+- `adminStore` — admin panel state
+- `pendingUploadStore` — tracks in-progress file uploads
+
+Path alias: `@/*` → `./src/*` (configured in tsconfig + vite). Each store has a co-located `.test.ts` file.
 
 ### Auth
 
@@ -71,11 +115,12 @@ This contract must be preserved end-to-end: MinerU/parser tags chunks with locat
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 15, Tailwind CSS, Zustand, TypeScript |
+| Frontend | React 19, Vite 6, Tailwind CSS, Zustand, TypeScript |
 | Backend | Python FastAPI, SQLAlchemy, Alembic, Pydantic |
 | RAG Engine | RAGFlow (self-hosted, pinned Docker version) |
 | Document Parsing | MinerU (CPU mode) |
-| LLM | Qwen-Plus / Qwen-Max via Alibaba Cloud API |
+| LLM (text) | Qwen-Plus / Qwen-Max via Alibaba Cloud API |
+| LLM (vision) | GLM-4.5v via Zhipu API (separate from Qwen) |
 | Embedding | text-embedding-v3 (Alibaba Cloud) |
 | Database | PostgreSQL |
 | Search | Elasticsearch (bundled with RAGFlow) |
@@ -84,32 +129,69 @@ This contract must be preserved end-to-end: MinerU/parser tags chunks with locat
 
 ## Development Commands
 
+All backend commands run from the **project root** (not from `backend/`).
+
 ```bash
-# Full stack (Docker Compose)
-docker compose up -d              # Start all services
+# Full stack (Docker Compose — includes RAGFlow via override)
+docker compose up -d              # Start all services (Nginx:3100, Backend:8100, RAGFlow:9380)
 docker compose down               # Stop all services
 docker compose logs -f backend    # Tail backend logs
 
 # Frontend (local dev)
 cd frontend && npm install
-npm run dev                       # Next.js dev server on :3000
-npm run build                     # Production build
-npm run lint                      # ESLint
+npm run dev                       # Vite dev server on :3000 (proxies /api → :8000)
+npm run build                     # tsc --noEmit + Vite production build
+npm run lint                      # TypeScript type check only (tsc --noEmit)
 
-# Backend (local dev)
-cd backend && pip install -r requirements.txt
-uvicorn main:app --reload --port 8000    # FastAPI dev server
-alembic upgrade head                      # Run DB migrations
-alembic revision --autogenerate -m "msg"  # Create migration
+# Backend (local dev — run from project root)
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --port 8000    # FastAPI dev server
+alembic -c backend/alembic.ini upgrade head       # Run DB migrations
+alembic -c backend/alembic.ini revision --autogenerate -m "msg"  # Create migration
 
 # Database
 docker compose exec postgres psql -U noteflow -d noteflow
 ```
 
+## Testing Commands
+
+```bash
+# Frontend unit tests (Vitest + testing-library/react, jsdom)
+cd frontend
+npm run test                      # Run all tests
+npm run test:watch                # Watch mode
+npm run test:coverage             # Coverage report (v8 provider)
+npx vitest run src/stores/auth-store.test.ts  # Single test file
+
+# Backend unit tests (pytest + pytest-asyncio — run from project root)
+pip install -r backend/requirements-test.txt  # Install test deps (aiosqlite etc.)
+pytest                            # Run all tests (pytest.ini: testpaths=backend/tests, asyncio_mode=auto)
+pytest backend/tests/test_auth_api.py  # Single test file
+pytest -v                         # Verbose output
+
+# E2E tests (Playwright — sequential, workers=1)
+cd e2e
+npx playwright test               # Run all E2E tests (default: https://noteflow.jotoai.com)
+npx playwright test tests/01-auth.spec.ts  # Single spec
+npx playwright test --headed      # Visual browser mode
+E2E_BASE_URL=http://localhost:3100 npx playwright test  # Against local
+```
+
+### Backend Test Infrastructure
+
+Tests use **in-memory SQLite** (no PostgreSQL needed). Key patterns in `backend/tests/conftest.py`:
+- **Type adapters**: PostgreSQL types (UUID, JSONB, DateTime with TZ) are swapped for SQLite equivalents
+- **bcrypt speedup**: Rounds set to 4 (vs default 12) — ~75x faster password hashing in tests
+- **External service mocks**: `process_document` is mocked in 3 import sites (sources, auth, document_pipeline) to avoid RAGFlow/MinerU calls
+- **Client fixture**: Uses `httpx.AsyncClient` with `ASGITransport` — no real HTTP server needed
+- **Helper functions**: `register_user()` and `create_notebook()` for quick test setup
+
 ## Deployment
 
 - **Server**: 10.200.0.112 (Ubuntu 24.04, 16 cores, 16GB RAM, no GPU)
 - All services run via Docker Compose behind Nginx
+- Production has a separate `landing` service (Next.js marketing site) built from `/opt/netflow_frontend`
+- Backend Docker image requires: `ffmpeg`, `libreoffice-impress`, CJK fonts (`fonts-noto-cjk`)
 - See `LOGIN.md` for server credentials
 
 ## Design Conventions
@@ -118,14 +200,11 @@ docker compose exec postgres psql -U noteflow -d noteflow
 - **API format**: `{ "data": ... }` for success, `{ "error": { "code": "...", "message": "..." } }` for errors
 - **Real-time**: SSE only (no WebSocket) for both chat streaming and status updates
 
-## Phase Boundaries
+## Feature Status
 
-- **Phase 1** ✅: Personal notebooks, PDF/DOCX/PPTX/TXT/MD upload, AI Q&A with citations, Studio (Summary/FAQ/Study Guide/Saved Notes)
-- **Phase 2** ✅: Excel/CSV support (DuckDB + dual-track RAG), notebook sharing (Owner/Editor/Viewer roles, invite links)
-- **Phase 3** ✅: Mind Map, Podcast, PPT generation (python-pptx + Presenton), mobile responsive, inline PDF viewer
-- **Phase 4** ✅: Admin Panel (dashboard/users/LLM config/system/logs/usage), DeepSeek R1 thinking mode, conversation memory, resizable panels, paste image, delete notebook UI, mobile responsive, password reset, SSL
-- **Phase 5** ✅: Google SSO, Microsoft 365 SSO (Entra ID), demo onboarding (7 sources across 3 notebooks), overview DB caching, Studio language detection, Beta badge
-- **Phase 6** (planned): Tenant-based sharing, Presenton GPU PPT, Vanna.ai, Chart Understanding, Subscription plans, Private deployment, Open API
+**Phases 1–5 are complete.** Current features: notebooks, document upload (PDF/DOCX/PPTX/TXT/MD/Excel/CSV), AI Q&A with citations, Studio (Summary/FAQ/Study Guide/Notes), Mind Map, Podcast, PPT generation, sharing (Owner/Editor/Viewer + invite links), Admin Panel, Google & Microsoft SSO, conversation memory, DeepSeek R1 thinking mode, demo onboarding, mobile responsive.
+
+**Phase 6** (planned): Tenant-based sharing, Presenton GPU PPT, Vanna.ai, Chart Understanding, Subscription plans, Private deployment, Open API
 
 ## 🔄 Autonomous Workflow（自主工作流 — 核心）
 

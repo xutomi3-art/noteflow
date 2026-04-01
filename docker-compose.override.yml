@@ -1,7 +1,144 @@
 services:
-  frontend:
+  nginx:
+    image: nginx:alpine
     ports:
-      - "3000:3000"
+      - "3100:80"
+    volumes:
+      - ./docker/nginx/nginx.local.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+    restart: unless-stopped
+  landing:
+    image: alpine:latest
+    entrypoint: ["sh", "-c", "exit 0"]
+    build: !reset null
+    restart: "no"
+  certbot:
+    profiles:
+      - disabled
   backend:
     ports:
-      - "8000:8000"
+      - "8100:8000"
+    environment:
+      - MINERU_BASE_URL=http://cloud.jototech.cn:17860
+      - RAGFLOW_BASE_URL=http://ragflow-server:9380
+      - RAGFLOW_API_KEY=ragflow-noteflow-test-414efb401590babe09c1c21bca79490a
+
+  # ===== RAGFlow Stack =====
+  ragflow-server:
+    image: infiniflow/ragflow:latest-slim
+    container_name: ragflow-server
+    ports:
+      - "9380:9380"
+      - "9443:443"
+    volumes:
+      - ragflow-data:/ragflow
+    environment:
+      - MYSQL_HOST=ragflow-mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=infini_rag_flow
+      - MYSQL_DATABASE=rag_flow
+      - REDIS_HOST=ragflow-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=infini_rag_flow
+      - ES_HOST=ragflow-es
+      - ES_PORT=9200
+      - MINIO_HOST=minio:9000
+      - MINIO_USER=minioadmin
+      - MINIO_PASSWORD=minioadmin
+    depends_on:
+      ragflow-mysql:
+        condition: service_healthy
+      ragflow-es:
+        condition: service_healthy
+      ragflow-redis:
+        condition: service_healthy
+      ragflow-minio:
+        condition: service_healthy
+    networks:
+      - default
+      - ragflow_network
+    restart: unless-stopped
+
+  ragflow-minio:
+    image: minio/minio:latest
+    container_name: minio
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - ragflow-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+      - ragflow_network
+    restart: unless-stopped
+
+  ragflow-mysql:
+    image: mysql:8.0
+    container_name: ragflow-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=infini_rag_flow
+      - MYSQL_DATABASE=rag_flow
+    volumes:
+      - ragflow-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pinfini_rag_flow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+      - ragflow_network
+    restart: unless-stopped
+
+  ragflow-es:
+    image: elasticsearch:8.11.3
+    container_name: ragflow-es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - ragflow-es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - default
+      - ragflow_network
+    restart: unless-stopped
+
+  ragflow-redis:
+    image: redis:7-alpine
+    container_name: ragflow-redis
+    command: redis-server --requirepass infini_rag_flow
+    volumes:
+      - ragflow-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "infini_rag_flow", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+      - ragflow_network
+    restart: unless-stopped
+
+volumes:
+  ragflow-data:
+  ragflow-mysql-data:
+  ragflow-es-data:
+  ragflow-redis-data:
+  ragflow-minio-data:
