@@ -1567,6 +1567,12 @@ export default function NotebookPage() {
                   if (!id) return;
                   try {
                     setShowMeetingPanel(true);
+                    // End any existing recording in another notebook first
+                    const store = useMeetingStore.getState();
+                    if (store.activeMeeting && store.activeMeeting.notebook_id !== id) {
+                      await store.endMeeting();
+                      store.reset();
+                    }
                     await useMeetingStore.getState().startMeeting(id);
                   } catch {
                     setShowMeetingPanel(false);
