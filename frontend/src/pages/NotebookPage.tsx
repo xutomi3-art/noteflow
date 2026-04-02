@@ -342,6 +342,10 @@ export default function NotebookPage() {
   const [pendingResumeMeeting, setPendingResumeMeeting] = useState<any>(null);
   const meetingActive = useMeetingStore((s) => s.activeMeeting !== null && s.activeMeeting.notebook_id === id);
 
+  // Live ASR viewer — when another user is recording, show their transcript
+  const [otherMeetingActive, setOtherMeetingActive] = useState(false);
+  const [liveUtterances, setLiveUtterances] = useState<Array<{text: string; speaker_id: string; is_final: boolean; sequence: number}>>([]);
+
   // Check for active meeting on page load (e.g. after refresh)
   // Skip check for 5s after ending a meeting to avoid false "interrupted" prompt
   const meetingEndedAtRef = useRef(0);
@@ -354,14 +358,44 @@ export default function NotebookPage() {
       headers: { Authorization: `Bearer ${token}` },
     }).then(r => r.ok ? r.json() : null).then(meeting => {
       if (meeting && meeting.status === "recording" && Date.now() - meetingEndedAtRef.current > 5000) {
-        // Only show resume for the meeting creator; others just see info
         if (meeting.created_by === user?.id) {
           setPendingResumeMeeting(meeting);
+        } else {
+          // Another user is recording — show live ASR viewer
+          setOtherMeetingActive(true);
+          setLiveUtterances([]);
         }
-        // TODO: could show "Someone is recording..." banner for other users
+      } else {
+        setOtherMeetingActive(false);
       }
     }).catch(() => {});
   }, [id, meetingActive]);
+
+  // Register callback for live ASR utterances from other users' meetings
+  useEffect(() => {
+    if (!otherMeetingActive) {
+      setOnMeetingUtterance(null);
+      return;
+    }
+    setOnMeetingUtterance((event) => {
+      setLiveUtterances(prev => {
+        const text = event.text as string || "";
+        const sequence = event.sequence as number || 0;
+        const is_final = event.is_final as boolean || false;
+        const speaker_id = event.speaker_id as string || "";
+        if (!text || text === "...") return prev;
+        // Update existing by sequence or append
+        const idx = prev.findIndex(u => u.sequence === sequence);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { text, speaker_id, is_final, sequence };
+          return updated;
+        }
+        return [...prev, { text, speaker_id, is_final, sequence }];
+      });
+    });
+    return () => setOnMeetingUtterance(null);
+  }, [otherMeetingActive, setOnMeetingUtterance]);
 
   // Auto-widen source panel during meeting
   const effectiveLeftWidth = showMeetingPanel ? Math.max(leftWidth, 420) : leftWidth;
@@ -426,7 +460,7 @@ export default function NotebookPage() {
 
   // Stores
   const { user, logout } = useAuthStore();
-  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt, highlightSeq, raptorStatus } =
+  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt, highlightSeq, raptorStatus, setOnMeetingUtterance } =
     useSourceStore();
   const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, thinkingSteps, reset: resetChat } = useChatStore();
   const {
@@ -1534,6 +1568,30 @@ export default function NotebookPage() {
                 </div>
                 <span className="text-[11px] text-red-400">View →</span>
               </button>
+            )}
+
+            {/* Live ASR viewer — another user is recording */}
+            {otherMeetingActive && !meetingActive && (
+              <div className="w-full mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                  </span>
+                  <span className="text-[12px] font-semibold text-blue-700">Live Meeting Transcript</span>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto space-y-1">
+                  {liveUtterances.length === 0 ? (
+                    <p className="text-[11px] text-blue-400 italic">Waiting for speech...</p>
+                  ) : (
+                    liveUtterances.map((u, i) => (
+                      <p key={i} className={`text-[12px] ${u.is_final ? "text-slate-700" : "text-slate-400"}`}>
+                        {u.text}
+                      </p>
+                    ))
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Resume interrupted meeting banner */}

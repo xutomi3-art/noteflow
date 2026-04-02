@@ -13,6 +13,8 @@ interface SourceState {
   highlightExcerpt: string | null;
   highlightSeq: number;
   raptorStatus: "idle" | "running" | "done" | "failed";
+  onMeetingUtterance: ((event: Record<string, unknown>) => void) | null;
+  setOnMeetingUtterance: (cb: ((event: Record<string, unknown>) => void) | null) => void;
 
   fetchSources: (notebookId: string) => Promise<void>;
   uploadSource: (notebookId: string, file: File) => Promise<Source>;
@@ -38,6 +40,8 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   highlightExcerpt: null,
   highlightSeq: 0,
   raptorStatus: "idle",
+  onMeetingUtterance: null,
+  setOnMeetingUtterance: (cb) => set({ onMeetingUtterance: cb }),
 
   fetchSources: async (notebookId: string) => {
     set({ isLoading: true });
@@ -131,6 +135,12 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         if (status === "done") {
           setTimeout(() => set({ raptorStatus: "idle" }), 5000);
         }
+        return;
+      }
+      // Forward meeting utterance events to listener (for live ASR viewer)
+      if (event.type === "meeting_utterance") {
+        const cb = get().onMeetingUtterance;
+        if (cb) cb(event as Record<string, unknown>);
         return;
       }
       if (event.type === "source_status") {
