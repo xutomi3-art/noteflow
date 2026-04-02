@@ -1125,12 +1125,20 @@ export default function NotebookPage() {
         } catch { /* ignore parse error */ }
       }
 
-      // Fallback: try store if DOM didn't have citations
+      // Fallback: search all messages in store for this citation index
       if (!citation) {
         const currentMessages = useChatStore.getState().messages;
-        const msg = currentMessages.find((m) => m.id === msgEl?.dataset.messageId)
-          || currentMessages.find((m) => m.citations?.some((c) => c.index === citationIndex));
-        citation = msg?.citations?.find((c) => c.index === citationIndex) as typeof citation;
+        // Try exact message first, then scan all messages
+        const candidates = msgEl?.dataset.messageId
+          ? [currentMessages.find((m) => m.id === msgEl.dataset.messageId), ...currentMessages].filter(Boolean)
+          : currentMessages;
+        for (const msg of candidates) {
+          const found = msg?.citations?.find((c) => c.index === citationIndex);
+          if (found) {
+            citation = found as typeof citation;
+            break;
+          }
+        }
       }
 
       // Resolve source_id
