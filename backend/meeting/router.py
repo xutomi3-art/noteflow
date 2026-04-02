@@ -287,18 +287,26 @@ async def websocket_audio(
             except Exception as e:
                 logger.error("Meeting ASR error: %s", e)
 
-            # ASR stream ended (error/timeout/proactive reconnect) — reconnect
+            # ASR stream ended — check if meeting is still active
             session = asr_client.get_session(meeting_id)
             if session and session.is_ended:
+                # Check if a NEW session was created (e.g. by page refresh resume)
+                # If so, continue with the new session instead of breaking
+                new_session = asr_client.get_session(meeting_id)
+                if new_session and not new_session.is_ended and new_session is not session:
+                    logger.info("New ASR session detected for meeting %s, continuing", meeting_id)
+                    continue
                 break  # Meeting was explicitly ended
 
             reconnect_count += 1
+            if reconnect_count > max_reconnects:
+                break
             logger.info("ASR reconnecting for meeting %s (attempt %d)", meeting_id, reconnect_count)
             try:
                 await websocket.send_json({"type": "reconnecting"})
                 await asr_client.end_session(meeting_id)
                 await asyncio.sleep(1)
-                await asr_client.start_session(meeting_id)
+                await asr_client.start_session(meeting_id, notebook_id=notebook_id)
                 await websocket.send_json({"type": "reconnected"})
             except Exception as e:
                 logger.error("ASR reconnect failed: %s", e)
@@ -315,10 +323,12 @@ async def websocket_audio(
     for task in pending:
         task.cancel()
 
-    # Cleanup: close ASR session but keep meeting in "recording" state
-    # so user can resume after page refresh
+    # Cleanup: only close ASR session if it's still the one we started
+    # (a new WebSocket may have created a new session via resume)
+    current_session = asr_client.get_session(meeting_id)
     try:
-        await asr_client.end_session(meeting_id)
+        if current_session is session:
+            await asr_client.end_session(meeting_id)
     except Exception as e:
         logger.warning("Meeting ASR cleanup error: %s", e)
 
