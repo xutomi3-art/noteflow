@@ -123,7 +123,7 @@ class ApiClient {
     return this.request("/notebooks");
   }
 
-  async createNotebook(data: { name: string; emoji?: string; cover_color?: string; is_team?: boolean }): Promise<Notebook> {
+  async createNotebook(data: { name: string; emoji?: string; cover_color?: string; is_team?: boolean; custom_prompt?: string }): Promise<Notebook> {
     return this.request("/notebooks", {
       method: "POST",
       body: JSON.stringify(data),
@@ -134,7 +134,7 @@ class ApiClient {
     return this.request(`/notebooks/${id}`);
   }
 
-  async updateNotebook(id: string, data: { name?: string; emoji?: string; cover_color?: string }): Promise<Notebook> {
+  async updateNotebook(id: string, data: { name?: string; emoji?: string; cover_color?: string; custom_prompt?: string }): Promise<Notebook> {
     return this.request(`/notebooks/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

@@ -20,6 +20,7 @@ export interface Notebook {
   owner_id: string;
   is_shared: boolean;
   shared_chat: boolean;
+  custom_prompt: string | null;
   user_role: string;
   source_count: number;
   member_count: number;

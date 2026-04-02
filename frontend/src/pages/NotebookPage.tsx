@@ -38,6 +38,7 @@ import {
   ChevronUp,
   Bug,
   Shield,
+  Settings,
 } from "lucide-react";
 import { useSourceStore } from "@/stores/source-store";
 import { consumePendingUploadFiles, consumePendingUploadUrls } from "@/stores/pending-upload-store";
@@ -382,6 +383,9 @@ export default function NotebookPage() {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
+  const [aiInstructionsValue, setAIInstructionsValue] = useState("");
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
@@ -1350,13 +1354,18 @@ export default function NotebookPage() {
               {notebook?.name || "Loading..."}
             </span>
           )}
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="p-1.5 bg-[#ecfccb] text-[#5b8c15] hover:bg-[#d9f99d] rounded-lg transition-colors"
-            title="Back to Dashboard"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+          {notebook && notebook.user_role !== "viewer" && (
+            <button
+              onClick={() => {
+                setAIInstructionsValue(notebook.custom_prompt || "");
+                setIsAIInstructionsOpen(true);
+              }}
+              className="p-1.5 text-slate-400 hover:text-[#5b8c15] hover:bg-[#ecfccb] rounded-lg transition-colors"
+              title="AI Instructions"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
@@ -2789,6 +2798,61 @@ export default function NotebookPage() {
 
       {/* Feedback Modal */}
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+
+      {/* AI Instructions Modal */}
+      {isAIInstructionsOpen && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setIsAIInstructionsOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-[480px] max-h-[70vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#5b8c15]" />
+                <h3 className="text-base font-semibold text-slate-900">AI Instructions</h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Customize how AI responds in this notebook. These instructions override default behavior.</p>
+            </div>
+            <div className="px-5 py-4">
+              <textarea
+                value={aiInstructionsValue}
+                onChange={(e) => setAIInstructionsValue(e.target.value)}
+                placeholder="e.g. 你是一个法律顾问，回答要简洁专业..."
+                rows={6}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
+                autoFocus
+              />
+              <p className="mt-2 text-xs text-slate-400">
+                Examples: "回答要简洁，不超过3句话" / "You are a legal advisor" / "Always respond with bullet points"
+              </p>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setIsAIInstructionsOpen(false)}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!id) return;
+                  setIsSavingInstructions(true);
+                  try {
+                    const updated = await api.updateNotebook(id, { custom_prompt: aiInstructionsValue.trim() || "" });
+                    setNotebook(updated);
+                    setIsAIInstructionsOpen(false);
+                  } catch {
+                    // silently fail
+                  } finally {
+                    setIsSavingInstructions(false);
+                  }
+                }}
+                disabled={isSavingInstructions}
+                className="px-4 py-2 text-sm font-medium text-white bg-[#5b8c15] hover:bg-[#4a7311] rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isSavingInstructions ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hotwords Modal */}
       {showHotwords && (

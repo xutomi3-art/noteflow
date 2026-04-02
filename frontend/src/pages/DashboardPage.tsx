@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon, Bug, MoreHorizontal, Pencil } from 'lucide-react';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon, Bug, MoreHorizontal, Pencil, Sparkles } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { api } from '@/services/api';
@@ -77,6 +77,8 @@ export default function DashboardPage() {
   const menuRef = useRef<HTMLDivElement>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [pendingUrls, setPendingUrlsList] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
@@ -216,6 +218,8 @@ export default function DashboardPage() {
     setUrlError(null);
     setShowUrlInput(false);
     setNotebookName('');
+    setCustomPrompt('');
+    setShowCustomPrompt(false);
     setIsCreating(false);
   };
 
@@ -309,6 +313,7 @@ export default function DashboardPage() {
         emoji: randomEmoji(),
         cover_color: randomColor(),
         is_team: isTeam,
+        ...(customPrompt.trim() ? { custom_prompt: customPrompt.trim() } : {}),
       });
 
       const filesToUpload = [...pendingFiles];
@@ -884,6 +889,32 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* AI Instructions (collapsible) */}
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex-1 h-px bg-slate-200" />
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomPrompt(!showCustomPrompt)}
+                    className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${showCustomPrompt ? 'text-[#5b8c15]' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    AI Instructions
+                  </button>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+                {showCustomPrompt && (
+                  <div className="mt-3">
+                    <textarea
+                      placeholder="e.g. 你是一个法律顾问，回答要简洁专业..."
+                      value={customPrompt}
+                      onChange={(e) => setCustomPrompt(e.target.value)}
+                      rows={3}
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">Customize how AI responds in this notebook. Overrides default behavior.</p>
                   </div>
                 )}
 
