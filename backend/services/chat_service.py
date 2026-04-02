@@ -568,13 +568,17 @@ async def stream_chat(
         # 3. Build messages for Qwen
         has_rag = bool(context)
 
+        # Detect question language and add instruction to respond in same language
+        is_chinese_msg = any('\u4e00' <= c <= '\u9fff' for c in message)
+        lang_instruction = "\n\nIMPORTANT: You MUST respond entirely in Chinese (中文)." if is_chinese_msg else ""
+
         if context and web_search:
             user_content = f"""Context from source documents:
 {context}
 
 Question: {message}
 
-Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer."""
+Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer.{lang_instruction}"""
         elif context:
             # Detect advisory/analytical questions — use a more open prompt
             advisory_keywords = ["建议", "怎么办", "应该如何", "如何改进", "你觉得", "你认为", "怎么看",
@@ -607,14 +611,14 @@ Answer based on the context above if relevant (cite with [1], [2]). If the conte
 
 Question: {message}
 
-{advice_instruction}"""
+{advice_instruction}{lang_instruction}"""
             else:
                 user_content = f"""Context from source documents:
 {context}
 
 Question: {message}
 
-Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible."""
+Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible.{lang_instruction}"""
         elif web_search:
             user_content = f"""Question: {message}
 
