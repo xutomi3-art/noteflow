@@ -1663,7 +1663,7 @@ export default function NotebookPage() {
               />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1 overflow-y-auto" data-sources-list style={{maxHeight: notebook?.is_shared ? '50vh' : undefined}}>
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
@@ -1846,9 +1846,32 @@ export default function NotebookPage() {
           </div>
           )}
 
-          {/* Team Members (shown for team notebooks) */}
-          {notebook?.is_shared && (
-            <div className="border-t border-slate-100 px-4 py-3 flex-1 min-h-0 flex flex-col">
+          {/* Team Members (shown for team notebooks, hidden during recording) */}
+          {notebook?.is_shared && !showMeetingPanel && (
+            <div
+              className="h-1 cursor-row-resize bg-slate-100 hover:bg-slate-200 transition-colors shrink-0"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const startY = e.clientY;
+                const section = e.currentTarget.parentElement;
+                const sourcesDiv = section?.querySelector('[data-sources-list]') as HTMLElement | null;
+                if (!sourcesDiv) return;
+                const startH = sourcesDiv.getBoundingClientRect().height;
+                const onMove = (ev: MouseEvent) => {
+                  const delta = ev.clientY - startY;
+                  sourcesDiv.style.maxHeight = `${Math.max(100, startH + delta)}px`;
+                };
+                const onUp = () => {
+                  document.removeEventListener('mousemove', onMove);
+                  document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+              }}
+            />
+          )}
+          {notebook?.is_shared && !showMeetingPanel && (
+            <div className="px-4 py-3 flex-1 min-h-0 flex flex-col">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
                   Team ({members.length})
