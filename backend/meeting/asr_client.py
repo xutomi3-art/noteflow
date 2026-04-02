@@ -1047,6 +1047,8 @@ class ComparisonASRClient:
                 continue
 
     async def end_session(self, meeting_id: str) -> list[Utterance]:
+        import traceback
+        logger.info("end_session called for meeting %s, caller: %s", meeting_id, ''.join(traceback.format_stack()[-3:-1]).strip())
         session = self._sessions.get(meeting_id)
         if not session:
             return []
