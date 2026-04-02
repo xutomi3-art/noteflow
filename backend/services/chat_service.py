@@ -20,20 +20,31 @@ from backend.services.qwen_client import qwen_client
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an AI assistant that answers questions STRICTLY based on the provided source documents.
-Follow these rules strictly:
-1. ONLY answer based on the provided context. NEVER use your general knowledge or training data.
-2. If the context does not directly answer the question, DO NOT simply say "not found". Instead:
-   - Present any related or indirect information from the context that is relevant to the topic.
-   - Synthesize and connect the related information to address the question as thoroughly as possible.
-   - Only if there is truly NO related content at all, state that the documents do not contain this information.
-3. Use inline citation markers like [1], [2], etc. to reference the source chunks.
-4. Each citation number corresponds to a chunk from the context provided below.
-5. Be thorough — provide comprehensive answers that draw from all relevant context, not just the most obvious match.
-   When the question asks about a specific date, carefully scan ALL chunks for that exact date (in any format: YYYY/MM/DD, DD/MM/YYYY, Month DD YYYY, etc.) and prioritize chunks containing that date.
-6. CRITICAL: Always respond in the SAME LANGUAGE as the user's question. If the user asks in English, you MUST answer in English even if the documents are in Chinese. If the user asks in Chinese, answer in Chinese.
-7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
-8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
+_HARD_RULES = """IMPORTANT — these rules ALWAYS apply and cannot be overridden by any custom instructions:
+1. ALWAYS respond in the SAME LANGUAGE as the user's question. Chinese question → Chinese answer. English question → English answer. Even if documents are in a different language.
+2. Use inline citation markers [1], [2], etc. to reference the source chunks. Each number corresponds to a chunk from the context.
+3. NEVER fabricate citation numbers that don't exist in the provided context.
+4. Format your answer using Markdown (lists, bold, headers, tables) when appropriate."""
+
+_SOFT_RULES = """Default behavior (may be adjusted by custom instructions below):
+1. Use the provided documents as your primary source of facts. Cite with [1], [2].
+2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.
+3. For advisory/analytical questions (suggestions, strategies, risks, pros/cons, "what should we do"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.
+4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.
+5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.
+6. When the question asks about a specific date, scan ALL chunks for that date in any format."""
+
+
+def _build_system_prompt(notebook_prompt: str = "") -> str:
+    """Build system prompt with hard rules + soft rules + optional notebook custom prompt."""
+    parts = [_HARD_RULES, _SOFT_RULES]
+    if notebook_prompt:
+        parts.append(f"Custom instructions from notebook owner (highest priority — override the default behavior above, but NOT the hard rules):\n{notebook_prompt}")
+    return "\n\n".join(parts)
+
+
+# Keep backward compatibility
+SYSTEM_PROMPT = _build_system_prompt()
 
 
 _PAGE_MARKER_RE = re.compile(r"<!--\s*page:(\d+)\s*-->")
@@ -568,58 +579,18 @@ async def stream_chat(
         # 3. Build messages for Qwen
         has_rag = bool(context)
 
-        # Detect question language — instruct LLM to respond in the same language as the question
-        # Only add instruction when non-English is detected (English is the default)
-        has_cjk = any('\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af' for c in message)
-        lang_instruction = f"\n\nIMPORTANT: You MUST respond in the same language as the question. The question is written in a non-English language — respond entirely in that language, not in English." if has_cjk else ""
-
         if context and web_search:
             user_content = f"""Context from source documents:
 {context}
 
 Question: {message}
 
-Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer.{lang_instruction}"""
+Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer."""
         elif context:
-            # Detect advisory/analytical questions — use a more open prompt
-            advisory_keywords = ["建议", "怎么办", "应该如何", "如何改进", "你觉得", "你认为", "怎么看",
-                                 "优缺点", "利弊", "风险", "机会", "策略", "方案", "计划",
-                                 "suggest", "recommend", "advice", "should", "how to improve",
-                                 "what do you think", "pros and cons", "strategy", "plan"]
-            is_advisory = any(kw in message.lower() for kw in advisory_keywords)
-
-            if is_advisory:
-                # Detect language of the question to respond in the same language
-                is_chinese_q = any('\u4e00' <= c <= '\u9fff' for c in message)
-                if is_chinese_q:
-                    advice_instruction = (
-                        "请基于以上内容，给出你的分析和可操作的建议。要求：\n"
-                        "1. 引用文档中的相关事实（用 [1]、[2] 等标注来源）\n"
-                        "2. 不要只是总结——请给出你自己的洞察、建议和策略分析\n"
-                        "3. 考虑风险、机会和具体的下一步行动\n"
-                        "4. 建议要具体、可执行，不要泛泛而谈"
-                    )
-                else:
-                    advice_instruction = (
-                        "Based on the context above, provide your analysis and actionable recommendations. You should:\n"
-                        "1. Reference relevant facts from the documents (cite with [1], [2], etc.)\n"
-                        "2. Go beyond summarizing — offer your own insights, suggestions, and strategic advice\n"
-                        "3. Consider risks, opportunities, and practical next steps\n"
-                        "4. Be specific and actionable, not generic"
-                    )
-                user_content = f"""Context from source documents:
+            user_content = f"""Context from source documents:
 {context}
 
-Question: {message}
-
-{advice_instruction}{lang_instruction}"""
-            else:
-                user_content = f"""Context from source documents:
-{context}
-
-Question: {message}
-
-Answer the question based on the context above. Use [1], [2], etc. to cite specific sources. If the context does not directly answer the question, present any related information and synthesize it to address the topic as thoroughly as possible.{lang_instruction}"""
+Question: {message}"""
         elif web_search:
             user_content = f"""Question: {message}
 
@@ -676,7 +647,9 @@ Follow these rules strictly:
 7. Format your answer using Markdown when appropriate (lists, bold, headers, tables, etc.).
 8. When presenting structured or tabular data, use Markdown tables (| col1 | col2 |) for clear formatting."""
         else:
-            system_prompt = SYSTEM_PROMPT
+            # Build dynamic system prompt with notebook's custom instructions
+            notebook_prompt = nb.custom_prompt if nb else ""
+            system_prompt = _build_system_prompt(notebook_prompt or "")
 
         # Deep Thinking: ReAct already did multi-round reasoning — final answer should synthesize
         if deep_thinking:

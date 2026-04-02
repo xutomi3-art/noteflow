@@ -24,4 +24,5 @@ class Notebook(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     hotwords: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
     shared_chat: Mapped[bool] = mapped_column(Boolean, default=True)
+    custom_prompt: Mapped[str | None] = mapped_column(sa.Text, nullable=True, default=None)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

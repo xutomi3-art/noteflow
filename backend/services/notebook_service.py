@@ -17,6 +17,7 @@ async def create_notebook(db: AsyncSession, owner_id: uuid.UUID, req: NotebookCr
         cover_color=req.cover_color,
         owner_id=owner_id,
         is_shared=req.is_team,
+        custom_prompt=req.custom_prompt if req.custom_prompt and req.custom_prompt.strip() else None,
     )
     db.add(notebook)
     await db.commit()
@@ -72,7 +73,7 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
         nb, source_count, role, member_count = row
         results.append(NotebookResponse(
             id=str(nb.id), name=nb.name, emoji=nb.emoji, cover_color=nb.cover_color,
-            owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, user_role=role,
+            owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, custom_prompt=nb.custom_prompt, user_role=role,
             source_count=source_count, member_count=member_count,
             created_at=nb.created_at, updated_at=nb.updated_at, joined_at=None,
         ))
@@ -80,7 +81,7 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
         nb, source_count, role, member_count, joined_at = row
         results.append(NotebookResponse(
             id=str(nb.id), name=nb.name, emoji=nb.emoji, cover_color=nb.cover_color,
-            owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, user_role=role,
+            owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, custom_prompt=nb.custom_prompt, user_role=role,
             source_count=source_count, member_count=member_count,
             created_at=nb.created_at, updated_at=nb.updated_at, joined_at=joined_at,
         ))
@@ -125,6 +126,8 @@ async def update_notebook(db: AsyncSession, notebook_id: uuid.UUID, user_id: uui
         notebook.emoji = req.emoji
     if req.cover_color is not None:
         notebook.cover_color = req.cover_color
+    if req.custom_prompt is not None:
+        notebook.custom_prompt = req.custom_prompt if req.custom_prompt.strip() else None
     notebook.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(notebook)

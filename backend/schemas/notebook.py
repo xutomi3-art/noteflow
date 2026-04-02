@@ -10,6 +10,7 @@ class NotebookCreate(BaseModel):
     emoji: str = "📒"
     cover_color: str = "#4A90D9"
     is_team: bool = False
+    custom_prompt: str | None = None
 
     @field_validator('name')
     @classmethod
@@ -26,6 +27,7 @@ class NotebookUpdate(BaseModel):
     name: str | None = None
     emoji: str | None = None
     cover_color: str | None = None
+    custom_prompt: str | None = None
 
     @field_validator('name')
     @classmethod
@@ -48,6 +50,7 @@ class NotebookResponse(BaseModel):
     owner_id: str
     is_shared: bool
     shared_chat: bool = False
+    custom_prompt: str | None = None
     user_role: str = "owner"
     source_count: int = 0
     member_count: int = 1
