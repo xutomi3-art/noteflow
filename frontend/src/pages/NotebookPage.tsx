@@ -474,7 +474,8 @@ export default function NotebookPage() {
   const selectedCount = selectedIds.size;
   const isAllSelected = readySources.length > 0 && readySources.every((s) => selectedIds.has(s.id));
   const hasProcessingSelected = sources.some((s) => selectedIds.has(s.id) && isProcessingStatus(s.status));
-  const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && (readySources.length > 0 && selectedIds.size > 0 || meetingActive);
+  const hasSharedChat = notebook?.shared_chat && messages.length > 0;
+  const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && (readySources.length > 0 && selectedIds.size > 0 || meetingActive || hasSharedChat);
 
   // Data loading — verify access FIRST, then load data
   useEffect(() => {
