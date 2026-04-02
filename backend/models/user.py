@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from sqlalchemy import String, DateTime, Boolean
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.core.database import Base
@@ -23,4 +23,5 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
     is_disabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    hotwords: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

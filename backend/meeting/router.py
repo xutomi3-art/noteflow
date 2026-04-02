@@ -49,42 +49,38 @@ async def get_active_meeting(
 
 
 @router.get("/hotwords")
-async def get_notebook_hotwords(
+async def get_user_hotwords(
     notebook_id: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get ASR hotwords for this notebook."""
-    words = await load_hotwords_from_db(db, notebook_id)
+    """Get ASR hotwords for the current user (shared across all notebooks)."""
+    # Refresh from DB
+    await db.refresh(user)
+    words = user.hotwords or []
+    # Update in-memory cache
+    set_hotwords(str(user.id), words)
     return {"words": words}
 
 
 @router.put("/hotwords")
-async def set_notebook_hotwords(
+async def set_user_hotwords(
     notebook_id: str,
     body: dict,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Set ASR hotwords for this notebook (persisted to DB)."""
+    """Set ASR hotwords for the current user (persisted to users table)."""
     words = body.get("words", [])
     if not isinstance(words, list):
         raise HTTPException(status_code=400, detail="words must be a list")
     clean = list(dict.fromkeys(w.strip() for w in words if isinstance(w, str) and w.strip()))
 
-    # Persist to DB
-    from backend.models.notebook import Notebook
-    result = await db.execute(
-        sa.select(Notebook).where(Notebook.id == uuid.UUID(notebook_id))
-    )
-    notebook = result.scalar_one_or_none()
-    if not notebook:
-        raise HTTPException(status_code=404, detail="Notebook not found")
-    notebook.hotwords = clean
+    user.hotwords = clean
     await db.commit()
 
-    # Update in-memory cache
-    set_hotwords(notebook_id, clean)
+    # Update in-memory cache keyed by user_id
+    set_hotwords(str(user.id), clean)
     return {"words": clean}
 
 
@@ -206,10 +202,16 @@ async def websocket_audio(
     await websocket.accept()
     logger.info("Meeting WS connected: %s", meeting_id)
 
-    # Pre-load hotwords from DB into cache before starting ASR
+    # Pre-load hotwords from DB (user-level) into cache before starting ASR
+    # Cache under notebook_id key so asr_client can find them
     try:
         async with async_session() as db:
-            await load_hotwords_from_db(db, notebook_id)
+            meeting = await service.get_meeting(db, uuid.UUID(meeting_id))
+            if meeting and meeting.created_by:
+                from backend.models.user import User as UserModel
+                u = await db.get(UserModel, meeting.created_by)
+                if u and u.hotwords:
+                    set_hotwords(notebook_id, u.hotwords)
     except Exception as e:
         logger.warning("Failed to load hotwords from DB: %s", e)
 

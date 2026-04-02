@@ -599,14 +599,15 @@ async def generate_content(
     source_ids = body.source_ids if body else None
     logger.info("Studio %s: received source_ids=%s", content_type, source_ids)
     t_start = time.time()
-    context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
 
-    # If no ready sources, try live meeting transcript
-    if not context:
-        from backend.meeting.service import get_live_transcript_for_notebook_async
-        live_transcript = await get_live_transcript_for_notebook_async(notebook_id)
-        if live_transcript:
-            context = live_transcript
+    # If there's an active meeting, prioritize live transcript
+    from backend.meeting.service import get_live_transcript_for_notebook_async
+    live_transcript = await get_live_transcript_for_notebook_async(notebook_id)
+    if live_transcript:
+        context = live_transcript
+        logger.info("Studio %s: using live meeting transcript (%d chars)", content_type, len(context))
+    else:
+        context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
 
     t_context = time.time()
     if not context:
