@@ -35,6 +35,7 @@ class MeetingOut(BaseModel):
     started_at: datetime
     ended_at: datetime | None
     duration_seconds: int | None
+    created_by: str | None = None
 
     class Config:
         from_attributes = True

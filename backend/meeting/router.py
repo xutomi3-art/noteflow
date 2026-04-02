@@ -333,4 +333,5 @@ def _to_out(meeting: service.Meeting) -> MeetingOut:
         started_at=meeting.started_at,
         ended_at=meeting.ended_at,
         duration_seconds=meeting.duration_seconds,
+        created_by=str(meeting.created_by) if meeting.created_by else None,
     )

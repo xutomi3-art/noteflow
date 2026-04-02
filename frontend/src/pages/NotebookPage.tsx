@@ -354,7 +354,11 @@ export default function NotebookPage() {
       headers: { Authorization: `Bearer ${token}` },
     }).then(r => r.ok ? r.json() : null).then(meeting => {
       if (meeting && meeting.status === "recording" && Date.now() - meetingEndedAtRef.current > 5000) {
-        setPendingResumeMeeting(meeting);
+        // Only show resume for the meeting creator; others just see info
+        if (meeting.created_by === user?.id) {
+          setPendingResumeMeeting(meeting);
+        }
+        // TODO: could show "Someone is recording..." banner for other users
       }
     }).catch(() => {});
   }, [id, meetingActive]);
