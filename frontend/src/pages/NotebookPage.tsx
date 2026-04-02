@@ -2293,7 +2293,7 @@ export default function NotebookPage() {
                   <span className="text-[11px] text-slate-400 font-medium px-2">
                     {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
                   </span>
-                  {isStreaming ? (
+                  {isStreaming && !chatInput.trim() ? (
                     <button
                       className="w-9 h-9 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
                       onClick={() => stopStream()}
