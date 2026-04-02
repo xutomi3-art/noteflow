@@ -1104,6 +1104,21 @@ export default function NotebookPage() {
     [leftWidth, rightWidth],
   );
 
+  /** Build a flat map of citation index → {source_id, excerpt} from all messages */
+  const citationMap = useMemo(() => {
+    const map = new Map<number, { source_id: string; filename: string; excerpt: string }>();
+    for (const msg of messages) {
+      if (msg.citations) {
+        for (const c of msg.citations) {
+          if (!map.has(c.index)) {
+            map.set(c.index, { source_id: c.source_id || "", filename: c.filename || "", excerpt: c.excerpt || "" });
+          }
+        }
+      }
+    }
+    return map;
+  }, [messages]);
+
   /** Handle citation badge click — open source content viewer in left panel with highlighted excerpt */
   const handleCitationClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1114,32 +1129,8 @@ export default function NotebookPage() {
       const citationIndex = parseInt(badge.dataset.citationIndex || "", 10);
       if (isNaN(citationIndex)) return;
 
-      // Read citations directly from DOM (stored as data-citations on message div)
-      // This avoids all stale closure / store timing issues
-      const msgEl = badge.closest("[data-message-id]") as HTMLElement | null;
-      let citation: { index: number; source_id: string; filename: string; excerpt: string } | undefined;
-      if (msgEl?.dataset.citations) {
-        try {
-          const citations = JSON.parse(decodeURIComponent(atob(msgEl.dataset.citations)));
-          citation = citations.find((c: { index: number }) => c.index === citationIndex);
-        } catch { /* ignore parse error */ }
-      }
-
-      // Fallback: search all messages in store for this citation index
-      if (!citation) {
-        const currentMessages = useChatStore.getState().messages;
-        // Try exact message first, then scan all messages
-        const candidates = msgEl?.dataset.messageId
-          ? [currentMessages.find((m) => m.id === msgEl.dataset.messageId), ...currentMessages].filter(Boolean)
-          : currentMessages;
-        for (const msg of candidates) {
-          const found = msg?.citations?.find((c) => c.index === citationIndex);
-          if (found) {
-            citation = found as unknown as typeof citation;
-            break;
-          }
-        }
-      }
+      // Look up citation from pre-built map (no DOM traversal needed)
+      const citation = citationMap.get(citationIndex);
 
       // Resolve source_id
       const currentSources = useSourceStore.getState().sources;
@@ -1148,13 +1139,11 @@ export default function NotebookPage() {
         const citStem = citation.filename.replace(/\.[^.]+$/, "").toLowerCase();
         const matched = currentSources.find((s) => {
           const sStem = s.filename.replace(/\.[^.]+$/, "").toLowerCase();
-          return sStem === citStem || s.filename.toLowerCase() === citation!.filename.toLowerCase()
+          return sStem === citStem || s.filename.toLowerCase() === citation.filename.toLowerCase()
             || sStem.includes(citStem) || citStem.includes(sStem);
         });
         if (matched) sourceId = matched.id;
       }
-      if (!sourceId) sourceId = useSourceStore.getState().activeSourceId || "";
-      // Fallback: if citation index not found, open the first ready source
       if (!sourceId) {
         const readySources = currentSources.filter(s => s.status === "ready");
         if (readySources.length > 0) sourceId = readySources[0].id;
@@ -1229,7 +1218,7 @@ export default function NotebookPage() {
         setTimeout(pollHL, 500);
       }
     },
-    [id, setActiveSource],
+    [id, setActiveSource, citationMap],
   );
 
   if (notFound) {
