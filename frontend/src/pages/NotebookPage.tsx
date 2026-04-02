@@ -2250,7 +2250,7 @@ export default function NotebookPage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={isStreaming || hasProcessingSelected || (readySources.length === 0 && !meetingActive)}
+                  disabled={isStreaming || hasProcessingSelected || (readySources.length === 0 && !meetingActive && !otherMeetingActive && !hasSharedChat)}
                 />
                 <div className="flex items-center gap-2 pr-1">
                   <button
