@@ -300,11 +300,38 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
               speaker_id: msg.speaker_id, text: msg.text,
               start_time_ms: msg.start_time_ms, end_time_ms: msg.end_time_ms,
               is_final: msg.is_final, sequence: msg.sequence,
+              provider: msg.provider || "firered2s",
+              wall_time: msg.wall_time || "",
             };
             set((s) => {
-              const updated = s.utterances.filter((u) => u.is_final);
-              if (utt.is_final) return { utterances: [...updated, utt] };
-              return { utterances: [...updated, utt] };
+              const updated = [...s.utterances];
+
+              if (utt.is_final && utt.sequence > 0) {
+                const idx = updated.findIndex((u) => u.sequence === utt.sequence);
+                if (idx >= 0) {
+                  updated[idx] = utt;
+                  return { utterances: updated };
+                }
+                const insertIdx = updated.findIndex((u) => u.sequence > utt.sequence);
+                if (insertIdx >= 0) {
+                  updated.splice(insertIdx, 0, utt);
+                  return { utterances: updated };
+                }
+                return { utterances: [...updated, utt] };
+              }
+
+              if (!utt.is_final && utt.text === "...") {
+                const hasIndicator = updated.some((u) => !u.is_final && u.text === "...");
+                if (hasIndicator) return { utterances: updated };
+                return { utterances: [...updated, utt] };
+              }
+
+              if (!utt.is_final) {
+                return { utterances: [...updated, utt] };
+              }
+
+              const cleaned = updated.filter((u) => u.text !== "...");
+              return { utterances: [...cleaned, utt] };
             });
             if (!get().speakerMap[msg.speaker_id]) {
               set((s) => ({ speakerMap: { ...s.speakerMap, [msg.speaker_id]: msg.speaker_id.replace("_", " ").replace(/\b\w/g, (c: string) => c.toUpperCase()) } }));

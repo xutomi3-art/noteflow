@@ -310,3 +310,60 @@ async def end_meeting(
     })
 
     return source
+
+
+MEETING_STALE_MINUTES = 5  # Auto-end meetings with no WebSocket after this many minutes
+
+
+async def auto_end_stale_meetings() -> None:
+    """Background task: auto-end meetings that have been recording for 5+ minutes
+    without an active WebSocket connection (user closed browser)."""
+    import asyncio
+    from datetime import timedelta
+
+    while True:
+        await asyncio.sleep(60)  # Check every minute
+        try:
+            async with async_session() as db:
+                result = await db.execute(
+                    select(Meeting).where(Meeting.status.in_(["recording", "paused"]))
+                )
+                active = list(result.scalars().all())
+                now = datetime.now(timezone.utc)
+
+                for m in active:
+                    # Check if ASR session exists (= WebSocket connected)
+                    session = asr_client.get_session(str(m.id))
+                    if session and not session.is_ended:
+                        continue  # Active WebSocket, skip
+
+                    # No active session — check how long since last activity
+                    age = (now - m.started_at).total_seconds() / 60 if m.started_at else 999
+                    if age < MEETING_STALE_MINUTES:
+                        continue  # Too recent, give user time to resume
+
+                    # Check if meeting was updated recently (e.g. utterances saved)
+                    last_utt = await db.execute(
+                        select(MeetingUtterance.created_at)
+                        .where(MeetingUtterance.meeting_id == m.id)
+                        .order_by(MeetingUtterance.created_at.desc())
+                        .limit(1)
+                    )
+                    last_row = last_utt.scalar_one_or_none()
+                    if last_row:
+                        mins_since_last = (now - last_row).total_seconds() / 60
+                        if mins_since_last < MEETING_STALE_MINUTES:
+                            continue  # Recent utterance, skip
+
+                    # Stale meeting — auto-end
+                    logger.info("Auto-ending stale meeting %s (no WebSocket for %d+ min)", m.id, MEETING_STALE_MINUTES)
+                    try:
+                        await end_meeting(db, m.id)
+                    except Exception as e:
+                        # If end_meeting fails (e.g. already ended), just mark as ended
+                        m.status = "ended"
+                        m.ended_at = now
+                        await db.commit()
+                        logger.warning("Force-ended stale meeting %s: %s", m.id, e)
+        except Exception as e:
+            logger.error("auto_end_stale_meetings error: %s", e)

@@ -70,6 +70,10 @@ async def lifespan(app: FastAPI):
         public_base_url=settings.PUBLIC_BASE_URL,
     )
 
+    # Start background meeting auto-end (5 min stale timeout)
+    from backend.meeting.service import auto_end_stale_meetings
+    meeting_cleanup_task = asyncio.create_task(auto_end_stale_meetings())
+
     # Start background health monitor
     from backend.services.health_monitor import start_monitor
     monitor_task = asyncio.create_task(start_monitor())
@@ -80,6 +84,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    meeting_cleanup_task.cancel()
     monitor_task.cancel()
     log_cleanup_task.cancel()
 
