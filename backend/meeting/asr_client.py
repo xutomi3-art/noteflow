@@ -823,6 +823,18 @@ class ComparisonASRClient:
         self._pending_rewrite: dict[str, list[Utterance]] = {}
 
     async def start_session(self, meeting_id: str, notebook_id: str = "", **kwargs: str) -> MeetingSession:
+        # Clean up any existing session for this meeting (e.g. page refresh)
+        old = self._sessions.get(meeting_id)
+        if old:
+            old.is_ended = True
+            if old._flush_task:
+                old._flush_task.cancel()
+                try:
+                    await old._flush_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+            logger.info("Cleaned up old ASR session for meeting %s", meeting_id)
+
         session = MeetingSession(
             meeting_id=meeting_id,
             session_start=time.monotonic(),
