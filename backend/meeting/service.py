@@ -98,7 +98,7 @@ async def save_utterance(
         select(MeetingUtterance).where(
             MeetingUtterance.meeting_id == meeting_id,
             MeetingUtterance.sequence == utterance.sequence,
-            MeetingUtterance.speaker_id == (provider or utterance.speaker_id),
+            MeetingUtterance.provider == provider,
         )
     )
     existing = result.scalar_one_or_none()
@@ -115,6 +115,7 @@ async def save_utterance(
             end_time_ms=utterance.end_time_ms,
             is_final=utterance.is_final,
             sequence=utterance.sequence,
+            provider=provider,
         )
         db.add(record)
     await db.commit()

@@ -19,6 +19,7 @@ class UtteranceOut(BaseModel):
     end_time_ms: int
     is_final: bool
     sequence: int
+    provider: str = ""
 
     class Config:
         from_attributes = True

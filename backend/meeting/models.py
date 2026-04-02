@@ -71,6 +71,7 @@ class MeetingUtterance(Base):
     end_time_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
     is_final: Mapped[bool] = mapped_column(Boolean, default=False)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

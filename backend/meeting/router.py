@@ -184,6 +184,7 @@ async def list_utterances(
             end_time_ms=u.end_time_ms,
             is_final=u.is_final,
             sequence=u.sequence,
+            provider=getattr(u, 'provider', '') or '',
         )
         for u in utterances
     ]
