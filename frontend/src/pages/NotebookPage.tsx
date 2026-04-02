@@ -2236,13 +2236,15 @@ export default function NotebookPage() {
                 <input
                   type="text"
                   placeholder={
-                    meetingActive
+                    meetingActive || otherMeetingActive
                       ? "Ask about the meeting..."
-                      : readySources.length === 0
-                        ? "Upload sources to start chatting..."
-                        : hasProcessingSelected
-                          ? "Waiting for sources to finish processing..."
-                          : "Start typing..."
+                      : hasSharedChat
+                        ? "Start typing..."
+                        : readySources.length === 0
+                          ? "Upload sources to start chatting..."
+                          : hasProcessingSelected
+                            ? "Waiting for sources to finish processing..."
+                            : "Start typing..."
                   }
                   className="flex-1 bg-transparent border-none outline-none px-4 text-[14px] text-slate-700 disabled:cursor-not-allowed"
                   value={chatInput}
