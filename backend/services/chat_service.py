@@ -699,6 +699,20 @@ Follow these rules strictly:
 
         # 5. Parse citation references from response
         used_indices = set(int(m) for m in re.findall(r'\[(\d+)\]', full_response))
+        valid_indices = {c["index"] for c in citation_metadata}
+        # Fix hallucinated citation indices: remap out-of-range to valid ones
+        invalid = used_indices - valid_indices
+        if invalid and citation_metadata:
+            max_valid = max(valid_indices)
+            for bad_idx in invalid:
+                # Replace [bad_idx] with the closest valid index (capped at max)
+                replacement = min(bad_idx, max_valid)
+                if replacement not in valid_indices:
+                    replacement = max_valid
+                full_response = full_response.replace(f"[{bad_idx}]", f"[{replacement}]")
+                logger.info("Remapped hallucinated citation [%d] → [%d]", bad_idx, replacement)
+            # Re-parse after remapping
+            used_indices = set(int(m) for m in re.findall(r'\[(\d+)\]', full_response))
         used_citations = [c for c in citation_metadata if c["index"] in used_indices]
 
         # 6. Save assistant message
