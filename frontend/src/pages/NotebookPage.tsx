@@ -1663,7 +1663,7 @@ export default function NotebookPage() {
               />
             </div>
 
-            <div className="space-y-1 overflow-y-auto" data-sources-list style={{maxHeight: notebook?.is_shared ? '50vh' : undefined}}>
+            <div className="space-y-1 overflow-y-auto flex-1 min-h-[200px]" data-sources-list>
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
