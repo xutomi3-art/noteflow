@@ -39,6 +39,33 @@ class ApiClient {
       headers,
     });
 
+    // Auto-refresh on 401 (token expired)
+    if (res.status === 401 && this.accessToken && !path.includes("/auth/")) {
+      const refreshToken = localStorage.getItem("refresh_token");
+      if (refreshToken) {
+        try {
+          const tokens = await this.refreshToken(refreshToken);
+          this.accessToken = tokens.access_token;
+          localStorage.setItem("access_token", tokens.access_token);
+          localStorage.setItem("refresh_token", tokens.refresh_token);
+          // Retry original request with new token
+          headers["Authorization"] = `Bearer ${tokens.access_token}`;
+          const retryRes = await fetch(`${API_BASE}${path}`, { ...options, headers });
+          if (retryRes.ok) return retryRes.json();
+        } catch {
+          // Refresh failed — redirect to login
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+          window.location.href = "/login";
+          throw new ApiError("Session expired", 401);
+        }
+      }
+      // No refresh token — redirect to login
+      localStorage.removeItem("access_token");
+      window.location.href = "/login";
+      throw new ApiError("Session expired", 401);
+    }
+
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       const detail = body.detail;
