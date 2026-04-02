@@ -600,6 +600,14 @@ async def generate_content(
     logger.info("Studio %s: received source_ids=%s", content_type, source_ids)
     t_start = time.time()
     context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
+
+    # If no ready sources, try live meeting transcript
+    if not context:
+        from backend.meeting.service import get_live_transcript_for_notebook_async
+        live_transcript = await get_live_transcript_for_notebook_async(notebook_id)
+        if live_transcript:
+            context = live_transcript
+
     t_context = time.time()
     if not context:
         raise HTTPException(status_code=400, detail="No ready sources available for generation")
