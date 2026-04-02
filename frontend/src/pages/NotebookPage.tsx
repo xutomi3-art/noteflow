@@ -508,7 +508,7 @@ export default function NotebookPage() {
   const isAllSelected = readySources.length > 0 && readySources.every((s) => selectedIds.has(s.id));
   const hasProcessingSelected = sources.some((s) => selectedIds.has(s.id) && isProcessingStatus(s.status));
   const hasSharedChat = notebook?.shared_chat && messages.length > 0;
-  const canSend = chatInput.trim().length > 0 && !isStreaming && !hasProcessingSelected && (readySources.length > 0 && selectedIds.size > 0 || meetingActive || otherMeetingActive || hasSharedChat);
+  const canSend = chatInput.trim().length > 0 && !hasProcessingSelected && (readySources.length > 0 && selectedIds.size > 0 || meetingActive || otherMeetingActive || hasSharedChat);
 
   // Data loading — verify access FIRST, then load data
   useEffect(() => {
@@ -700,9 +700,11 @@ export default function NotebookPage() {
   // Handlers
   const handleSend = useCallback(() => {
     if (!id || !canSend) return;
+    // If currently streaming, abort it first
+    if (isStreaming) stopStream();
     sendMessage(id, chatInput.trim(), [...selectedIds], webSearchEnabled, deepThinking);
     setChatInput("");
-  }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled, deepThinking]);
+  }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled, deepThinking, isStreaming, stopStream]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -2250,7 +2252,7 @@ export default function NotebookPage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  disabled={isStreaming || hasProcessingSelected || (readySources.length === 0 && !meetingActive && !otherMeetingActive && !hasSharedChat)}
+                  disabled={hasProcessingSelected || (readySources.length === 0 && !meetingActive && !otherMeetingActive && !hasSharedChat)}
                 />
                 <div className="flex items-center gap-2 pr-1">
                   <button
