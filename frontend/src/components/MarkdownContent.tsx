@@ -107,10 +107,16 @@ export default function MarkdownContent({ content, className }: MarkdownContentP
     [],
   );
 
+  // Pre-process: escape citation markers [N] so markdown parser doesn't eat them
+  // Replace [N] with a placeholder that survives markdown parsing
+  const processedContent = useMemo(() => {
+    return content.replace(/\[(\d+)\]/g, '⟦$1⟧');
+  }, [content]);
+
   return (
     <div className={className}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
@@ -125,7 +131,7 @@ function processCitations(children: React.ReactNode): React.ReactNode {
     if (typeof child !== "string") return child;
 
     const parts: React.ReactNode[] = [];
-    const regex = /\[(\d+)\]/g;
+    const regex = /⟦(\d+)⟧/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
