@@ -584,16 +584,30 @@ Answer based on the context above if relevant (cite with [1], [2]). If the conte
             is_advisory = any(kw in message.lower() for kw in advisory_keywords)
 
             if is_advisory:
+                # Detect language of the question to respond in the same language
+                is_chinese_q = any('\u4e00' <= c <= '\u9fff' for c in message)
+                if is_chinese_q:
+                    advice_instruction = (
+                        "请基于以上内容，给出你的分析和可操作的建议。要求：\n"
+                        "1. 引用文档中的相关事实（用 [1]、[2] 等标注来源）\n"
+                        "2. 不要只是总结——请给出你自己的洞察、建议和策略分析\n"
+                        "3. 考虑风险、机会和具体的下一步行动\n"
+                        "4. 建议要具体、可执行，不要泛泛而谈"
+                    )
+                else:
+                    advice_instruction = (
+                        "Based on the context above, provide your analysis and actionable recommendations. You should:\n"
+                        "1. Reference relevant facts from the documents (cite with [1], [2], etc.)\n"
+                        "2. Go beyond summarizing — offer your own insights, suggestions, and strategic advice\n"
+                        "3. Consider risks, opportunities, and practical next steps\n"
+                        "4. Be specific and actionable, not generic"
+                    )
                 user_content = f"""Context from source documents:
 {context}
 
 Question: {message}
 
-Based on the context above, provide your analysis and actionable recommendations. You should:
-1. Reference relevant facts from the documents (cite with [1], [2], etc.)
-2. Go beyond summarizing — offer your own insights, suggestions, and strategic advice
-3. Consider risks, opportunities, and practical next steps
-4. Be specific and actionable, not generic"""
+{advice_instruction}"""
             else:
                 user_content = f"""Context from source documents:
 {context}
