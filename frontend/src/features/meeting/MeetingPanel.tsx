@@ -1,9 +1,8 @@
-import { ArrowLeft, Mic } from "lucide-react";
-import { useMeetingStore, ASR_PROVIDERS, ASR_LABELS } from "./meeting-store";
+import { ArrowLeft } from "lucide-react";
+import { useMeetingStore } from "./meeting-store";
 import { MeetingControls } from "./MeetingControls";
 import { UtteranceList } from "./UtteranceList";
 import { useSourceStore } from "../../stores/source-store";
-import { useMemo } from "react";
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -12,10 +11,6 @@ function formatDuration(seconds: number): string {
   if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
-
-const PROVIDER_COLORS: Record<string, string> = {
-  qwen3: "bg-purple-500",
-};
 
 interface MeetingPanelProps {
   onClose: () => void;
@@ -38,17 +33,6 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
 
   const fetchSources = useSourceStore((s) => s.fetchSources);
   const activeMeeting = useMeetingStore((s) => s.activeMeeting);
-
-  const groupedUtterances = useMemo(() => {
-    const groups: Record<string, typeof utterances> = {};
-    for (const p of ASR_PROVIDERS) {
-      groups[p] = utterances.filter((u) => {
-        const prov = u.provider || "";
-        return prov === p || (!prov && p === ASR_PROVIDERS[0]);
-      });
-    }
-    return groups;
-  }, [utterances]);
 
   const handleEnd = async () => {
     const notebookId = activeMeeting?.notebook_id;
@@ -123,35 +107,14 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
         </div>
       )}
 
-      {/* Transcript — 2-way comparison */}
+      {/* Transcript */}
       <div className="flex-1 overflow-y-auto">
-        {ASR_PROVIDERS.map((provider) => (
-          <div key={provider} className="border-b border-slate-100 last:border-b-0">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
-              <span className={`w-2 h-2 rounded-full ${PROVIDER_COLORS[provider] || "bg-gray-400"}`} />
-              <span className="text-[11px] font-semibold text-slate-600">
-                {ASR_LABELS[provider] || provider}
-              </span>
-              <span className="text-[10px] text-slate-400">
-                {groupedUtterances[provider]?.filter((u) => u.is_final).length || 0} segments
-              </span>
-            </div>
-            <div className="max-h-[300px] overflow-y-auto">
-              <UtteranceList
-                utterances={groupedUtterances[provider] || []}
-                speakerMap={speakerMap}
-                onRenameSpeaker={renameSpeaker}
-                compact
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Footer */}
-      <div className="px-3 py-2 border-t border-slate-100 text-[10px] text-slate-400 text-center">
-        <Mic className="w-3 h-3 inline mr-1" />
-        Qwen3-ASR
+        <UtteranceList
+          utterances={utterances}
+          speakerMap={speakerMap}
+          onRenameSpeaker={renameSpeaker}
+          compact
+        />
       </div>
     </div>
   );
