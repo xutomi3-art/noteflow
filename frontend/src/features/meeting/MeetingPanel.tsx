@@ -44,7 +44,11 @@ export function MeetingPanel({ onClose }: MeetingPanelProps) {
   const groupedUtterances = useMemo(() => {
     const groups: Record<string, typeof utterances> = {};
     for (const p of ASR_PROVIDERS) {
-      groups[p] = utterances.filter((u) => (u.provider || "funasr") === p);
+      groups[p] = utterances.filter((u) => {
+        const prov = u.provider || "";
+        // Match current provider, or legacy "funasr" → "firered2s"
+        return prov === p || (p === "firered2s" && prov === "funasr") || (!prov && p === ASR_PROVIDERS[0]);
+      });
     }
     return groups;
   }, [utterances]);

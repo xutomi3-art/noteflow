@@ -269,11 +269,12 @@ async def websocket_audio(
                         "wall_time": wall_time,
                     })
 
-                    # Save all utterances to DB (not just final) so resume works
-                    async with async_session() as db:
-                        await service.save_utterance(
-                            db, uuid.UUID(meeting_id), utterance
-                        )
+                    # Save utterances to DB so resume works (skip "..." placeholder)
+                    if utterance.text.strip() and utterance.text.strip() != "...":
+                        async with async_session() as db:
+                            await service.save_utterance(
+                                db, uuid.UUID(meeting_id), utterance
+                            )
 
                     await event_bus.publish(notebook_id, {
                         "type": "meeting_utterance",
