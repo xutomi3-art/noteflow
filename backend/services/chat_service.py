@@ -568,9 +568,10 @@ async def stream_chat(
         # 3. Build messages for Qwen
         has_rag = bool(context)
 
-        # Detect question language and add instruction to respond in same language
-        is_chinese_msg = any('\u4e00' <= c <= '\u9fff' for c in message)
-        lang_instruction = "\n\nIMPORTANT: You MUST respond entirely in Chinese (中文)." if is_chinese_msg else ""
+        # Detect question language — instruct LLM to respond in the same language as the question
+        # Only add instruction when non-English is detected (English is the default)
+        has_cjk = any('\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u30ff' or '\uac00' <= c <= '\ud7af' for c in message)
+        lang_instruction = f"\n\nIMPORTANT: You MUST respond in the same language as the question. The question is written in a non-English language — respond entirely in that language, not in English." if has_cjk else ""
 
         if context and web_search:
             user_content = f"""Context from source documents:
