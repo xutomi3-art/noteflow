@@ -1146,6 +1146,11 @@ export default function NotebookPage() {
         if (matched) sourceId = matched.id;
       }
       if (!sourceId) sourceId = useSourceStore.getState().activeSourceId || "";
+      // Fallback: if citation index not found, open the first ready source
+      if (!sourceId) {
+        const readySources = currentSources.filter(s => s.status === "ready");
+        if (readySources.length > 0) sourceId = readySources[0].id;
+      }
       if (!sourceId) return;
 
       const excerpt = citation?.excerpt || null;
