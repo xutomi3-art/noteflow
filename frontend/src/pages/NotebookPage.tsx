@@ -371,32 +371,6 @@ export default function NotebookPage() {
     }).catch(() => {});
   }, [id, meetingActive]);
 
-  // Register callback for live ASR utterances from other users' meetings
-  useEffect(() => {
-    if (!otherMeetingActive) {
-      setOnMeetingUtterance(null);
-      return;
-    }
-    setOnMeetingUtterance((event) => {
-      setLiveUtterances(prev => {
-        const text = event.text as string || "";
-        const sequence = event.sequence as number || 0;
-        const is_final = event.is_final as boolean || false;
-        const speaker_id = event.speaker_id as string || "";
-        if (!text || text === "...") return prev;
-        // Update existing by sequence or append
-        const idx = prev.findIndex(u => u.sequence === sequence);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = { text, speaker_id, is_final, sequence };
-          return updated;
-        }
-        return [...prev, { text, speaker_id, is_final, sequence }];
-      });
-    });
-    return () => setOnMeetingUtterance(null);
-  }, [otherMeetingActive, setOnMeetingUtterance]);
-
   // Auto-widen source panel during meeting
   const effectiveLeftWidth = showMeetingPanel ? Math.max(leftWidth, 420) : leftWidth;
   const [isMobile, setIsMobile] = useState(false);
@@ -502,6 +476,31 @@ export default function NotebookPage() {
     }
     setRenamingSourceId(null);
   }, [id, fetchSources]);
+
+  // Register callback for live ASR utterances from other users' meetings
+  useEffect(() => {
+    if (!otherMeetingActive) {
+      setOnMeetingUtterance(null);
+      return;
+    }
+    setOnMeetingUtterance((event: Record<string, unknown>) => {
+      setLiveUtterances(prev => {
+        const text = event.text as string || "";
+        const sequence = event.sequence as number || 0;
+        const is_final = event.is_final as boolean || false;
+        const speaker_id = event.speaker_id as string || "";
+        if (!text || text === "...") return prev;
+        const idx = prev.findIndex(u => u.sequence === sequence);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { text, speaker_id, is_final, sequence };
+          return updated;
+        }
+        return [...prev, { text, speaker_id, is_final, sequence }];
+      });
+    });
+    return () => setOnMeetingUtterance(null);
+  }, [otherMeetingActive, setOnMeetingUtterance]);
 
   // Derived
   const readySources = sources.filter((s) => s.status === "ready");
