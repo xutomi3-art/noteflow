@@ -91,19 +91,34 @@ async def update_speaker_map(
 async def save_utterance(
     db: AsyncSession, meeting_id: uuid.UUID, utterance: Utterance
 ) -> MeetingUtterance:
-    """Persist an utterance to the database."""
-    record = MeetingUtterance(
-        meeting_id=meeting_id,
-        speaker_id=utterance.speaker_id,
-        text=utterance.text,
-        start_time_ms=utterance.start_time_ms,
-        end_time_ms=utterance.end_time_ms,
-        is_final=utterance.is_final,
-        sequence=utterance.sequence,
+    """Persist or update an utterance in the database (upsert by meeting_id + sequence + provider)."""
+    provider = utterance.provider or ""
+    # Check if utterance with same sequence+provider already exists
+    result = await db.execute(
+        select(MeetingUtterance).where(
+            MeetingUtterance.meeting_id == meeting_id,
+            MeetingUtterance.sequence == utterance.sequence,
+            MeetingUtterance.speaker_id == (provider or utterance.speaker_id),
+        )
     )
-    db.add(record)
+    existing = result.scalar_one_or_none()
+    if existing:
+        # Update existing (e.g. LLM rewrite replaces partial)
+        existing.text = utterance.text
+        existing.is_final = utterance.is_final
+    else:
+        record = MeetingUtterance(
+            meeting_id=meeting_id,
+            speaker_id=utterance.speaker_id,
+            text=utterance.text,
+            start_time_ms=utterance.start_time_ms,
+            end_time_ms=utterance.end_time_ms,
+            is_final=utterance.is_final,
+            sequence=utterance.sequence,
+        )
+        db.add(record)
     await db.commit()
-    return record
+    return existing or record
 
 
 async def get_utterances(
