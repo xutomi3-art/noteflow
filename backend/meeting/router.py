@@ -287,15 +287,16 @@ async def websocket_audio(
             except Exception as e:
                 logger.error("Meeting ASR error: %s", e)
 
-            # ASR stream ended — check if meeting is still active
-            session = asr_client.get_session(meeting_id)
-            if session and session.is_ended:
-                # Check if a NEW session was created (e.g. by page refresh resume)
-                # If so, continue with the new session instead of breaking
-                new_session = asr_client.get_session(meeting_id)
-                if new_session and not new_session.is_ended and new_session is not session:
-                    logger.info("New ASR session detected for meeting %s, continuing", meeting_id)
-                    continue
+            # ASR stream ended — check why
+            current = asr_client.get_session(meeting_id)
+
+            # If session was replaced by a new WebSocket (page refresh + resume),
+            # this old handler should exit and let the new one take over
+            if current is not session:
+                logger.info("ASR session replaced for meeting %s, old handler exiting", meeting_id)
+                break
+
+            if current and current.is_ended:
                 break  # Meeting was explicitly ended
 
             reconnect_count += 1
@@ -306,7 +307,7 @@ async def websocket_audio(
                 await websocket.send_json({"type": "reconnecting"})
                 await asr_client.end_session(meeting_id)
                 await asyncio.sleep(1)
-                await asr_client.start_session(meeting_id, notebook_id=notebook_id)
+                session = await asr_client.start_session(meeting_id, notebook_id=notebook_id)
                 await websocket.send_json({"type": "reconnected"})
             except Exception as e:
                 logger.error("ASR reconnect failed: %s", e)

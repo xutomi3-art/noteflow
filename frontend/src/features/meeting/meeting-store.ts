@@ -17,10 +17,8 @@ export interface Utterance {
   wall_time?: string;  // Beijing time HH:MM:SS
 }
 
-export const ASR_PROVIDERS = ['coli', 'firered2s', 'qwen3'] as const;
+export const ASR_PROVIDERS = ['qwen3'] as const;
 export const ASR_LABELS: Record<string, string> = {
-  coli: 'Coli (SenseVoice)',
-  firered2s: 'FireRedASR2S',
   qwen3: 'Qwen3-ASR',
 };
 
