@@ -576,7 +576,26 @@ Question: {message}
 
 Answer based on the context above if relevant (cite with [1], [2]). If the context does not contain relevant information, use web search to find the answer."""
         elif context:
-            user_content = f"""Context from source documents:
+            # Detect advisory/analytical questions — use a more open prompt
+            advisory_keywords = ["建议", "怎么办", "应该如何", "如何改进", "你觉得", "你认为", "怎么看",
+                                 "优缺点", "利弊", "风险", "机会", "策略", "方案", "计划",
+                                 "suggest", "recommend", "advice", "should", "how to improve",
+                                 "what do you think", "pros and cons", "strategy", "plan"]
+            is_advisory = any(kw in message.lower() for kw in advisory_keywords)
+
+            if is_advisory:
+                user_content = f"""Context from source documents:
+{context}
+
+Question: {message}
+
+Based on the context above, provide your analysis and actionable recommendations. You should:
+1. Reference relevant facts from the documents (cite with [1], [2], etc.)
+2. Go beyond summarizing — offer your own insights, suggestions, and strategic advice
+3. Consider risks, opportunities, and practical next steps
+4. Be specific and actionable, not generic"""
+            else:
+                user_content = f"""Context from source documents:
 {context}
 
 Question: {message}
