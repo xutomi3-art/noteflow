@@ -80,6 +80,7 @@ export default function DashboardPage() {
   const [customPrompt, setCustomPrompt] = useState('');
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const [pendingUrls, setPendingUrlsList] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -914,7 +915,29 @@ export default function DashboardPage() {
                       rows={3}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
                     />
-                    <p className="mt-1 text-xs text-slate-400">Customize how AI responds in this notebook. Overrides default behavior.</p>
+                    <div className="mt-1 flex items-center justify-between">
+                      <p className="text-xs text-slate-400">Customize how AI responds. Overrides default behavior.</p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!customPrompt.trim()) return;
+                          setIsOptimizingPrompt(true);
+                          try {
+                            const optimized = await api.optimizePrompt(customPrompt.trim());
+                            setCustomPrompt(optimized);
+                          } catch {
+                            // silently fail
+                          } finally {
+                            setIsOptimizingPrompt(false);
+                          }
+                        }}
+                        disabled={isOptimizingPrompt || !customPrompt.trim()}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        {isOptimizingPrompt ? "Optimizing..." : "Optimize"}
+                      </button>
+                    </div>
                   </div>
                 )}
 

@@ -141,6 +141,14 @@ class ApiClient {
     });
   }
 
+  async optimizePrompt(prompt: string): Promise<string> {
+    const res = await this.request<{ optimized_prompt: string }>("/notebooks/optimize-prompt", {
+      method: "POST",
+      body: JSON.stringify({ prompt }),
+    });
+    return res.optimized_prompt;
+  }
+
   async deleteNotebook(id: string): Promise<void> {
     await this.request(`/notebooks/${id}`, { method: "DELETE" });
   }

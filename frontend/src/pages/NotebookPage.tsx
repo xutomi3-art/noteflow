@@ -386,6 +386,7 @@ export default function NotebookPage() {
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
   const [aiInstructionsValue, setAIInstructionsValue] = useState("");
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
   const [isAddingUrl, setIsAddingUrl] = useState(false);
@@ -2819,9 +2820,30 @@ export default function NotebookPage() {
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
                 autoFocus
               />
-              <p className="mt-2 text-xs text-slate-400">
-                Examples: "回答要简洁，不超过3句话" / "You are a legal advisor" / "Always respond with bullet points"
-              </p>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-slate-400">
+                  e.g. "回答要简洁，不超过3句话" / "You are a legal advisor"
+                </p>
+                <button
+                  onClick={async () => {
+                    if (!aiInstructionsValue.trim()) return;
+                    setIsOptimizing(true);
+                    try {
+                      const optimized = await api.optimizePrompt(aiInstructionsValue.trim());
+                      setAIInstructionsValue(optimized);
+                    } catch {
+                      // silently fail
+                    } finally {
+                      setIsOptimizing(false);
+                    }
+                  }}
+                  disabled={isOptimizing || !aiInstructionsValue.trim()}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  {isOptimizing ? "Optimizing..." : "Optimize"}
+                </button>
+              </div>
             </div>
             <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
               <button
