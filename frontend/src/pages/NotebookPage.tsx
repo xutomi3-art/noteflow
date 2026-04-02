@@ -1135,7 +1135,7 @@ export default function NotebookPage() {
         for (const msg of candidates) {
           const found = msg?.citations?.find((c) => c.index === citationIndex);
           if (found) {
-            citation = found as typeof citation;
+            citation = found as unknown as typeof citation;
             break;
           }
         }
