@@ -383,7 +383,7 @@ export default function NotebookPage() {
   const [feedbackMsgId, setFeedbackMsgId] = useState<string | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
-  const [sourceTeamRatio, setSourceTeamRatio] = useState(2); // Sources:Team = 2:1
+  const [sourceHeightPct, setSourceHeightPct] = useState(65); // Sources height as % of available space
   const [urlInput, setUrlInput] = useState("");
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
   const [aiInstructionsValue, setAIInstructionsValue] = useState("");
@@ -1556,7 +1556,7 @@ export default function NotebookPage() {
               </div>
             </div>
           ) : (
-          <div className="p-4 flex-1 overflow-hidden flex flex-col" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
+          <div className="p-4 flex-1 overflow-y-auto flex flex-col" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
             {notebook?.user_role !== "viewer" && (
               <button
                 onClick={() => setShowAddSourceModal(true)}
@@ -1688,7 +1688,7 @@ export default function NotebookPage() {
               />
             </div>
 
-            <div className="space-y-1 overflow-y-auto min-h-[100px]" data-sources-list style={{ flex: notebook?.is_shared ? sourceTeamRatio : 1 }}>
+            <div className={`space-y-1 overflow-y-auto ${notebook?.is_shared ? "" : "flex-1"}`} data-sources-list style={notebook?.is_shared ? { maxHeight: `${sourceHeightPct}vh`, minHeight: 100 } : undefined}>
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
@@ -1878,18 +1878,14 @@ export default function NotebookPage() {
               onMouseDown={(e) => {
                 e.preventDefault();
                 const startY = e.clientY;
-                const container = e.currentTarget.parentElement;
-                const sourcesDiv = container?.querySelector('[data-sources-list]') as HTMLElement | null;
-                const teamDiv = container?.querySelector('[data-team-list]') as HTMLElement | null;
-                if (!sourcesDiv || !teamDiv) return;
-                const startSourceH = sourcesDiv.getBoundingClientRect().height;
-                const startTeamH = teamDiv.getBoundingClientRect().height;
-                const totalH = startSourceH + startTeamH;
+                const sourcesDiv = e.currentTarget.parentElement?.querySelector('[data-sources-list]') as HTMLElement | null;
+                if (!sourcesDiv) return;
+                const startH = sourcesDiv.getBoundingClientRect().height;
                 const onMove = (ev: MouseEvent) => {
                   const delta = ev.clientY - startY;
-                  const newSourceH = Math.max(80, Math.min(totalH - 80, startSourceH + delta));
-                  const newRatio = newSourceH / (totalH - newSourceH);
-                  setSourceTeamRatio(Math.max(0.3, Math.min(5, newRatio)));
+                  const newH = startH + delta;
+                  const pct = (newH / window.innerHeight) * 100;
+                  setSourceHeightPct(Math.max(15, Math.min(75, pct)));
                 };
                 const onUp = () => {
                   document.removeEventListener('mousemove', onMove);
@@ -1903,7 +1899,7 @@ export default function NotebookPage() {
             </div>
           )}
           {notebook?.is_shared && !showMeetingPanel && (
-            <div className="px-4 py-3 min-h-[80px] flex flex-col" data-team-list style={{ flex: 1 }}>
+            <div className="px-4 py-3 min-h-[80px] overflow-y-auto flex flex-col" data-team-list>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
                   Team ({members.length})
