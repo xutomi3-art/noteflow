@@ -138,7 +138,7 @@ async def get_history(
             citations=m.citations or [],
             created_at=m.created_at,
             user_name=user_names.get(str(m.user_id), "") if shared else "",
-            metadata=m.metadata,
+            metadata=m.msg_metadata,
         )
         for m in messages
     ]

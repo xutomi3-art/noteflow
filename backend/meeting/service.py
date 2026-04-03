@@ -410,7 +410,7 @@ async def _generate_meeting_minutes(
             role="assistant",
             content=minutes_text,
             citations=[],
-            metadata={
+            msg_metadata={
                 "type": "meeting_minutes",
                 "meeting_id": str(meeting_id),
                 "title": title,
@@ -431,7 +431,7 @@ async def _generate_meeting_minutes(
                 "role": "assistant",
                 "content": msg.content,
                 "citations": [],
-                "metadata": msg.metadata,
+                "metadata": msg.msg_metadata,
                 "created_at": msg.created_at.isoformat(),
             },
         })
