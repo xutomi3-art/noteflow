@@ -309,7 +309,150 @@ async def end_meeting(
         "title": title,
     })
 
+    # 15. Generate meeting minutes in background
+    if transcript_md.strip():
+        import asyncio as _aio
+        _aio.create_task(_generate_meeting_minutes_safe(meeting.id, meeting.notebook_id, meeting.created_by, title, transcript_md, meeting.started_at, duration))
+
     return source
+
+
+_MINUTES_PROMPT = """你是专业的会议纪要助手。根据以下会议转录内容生成结构化会议纪要。
+
+会议信息：
+- 会议名称：{title}
+- 时间：{start_time}
+- 时长：{duration}
+
+转录内容：
+{transcript}
+
+请用 Markdown 格式输出，包含以下章节：
+
+## 📋 会议概要
+（2-3句话概括核心内容和结论）
+
+## 📝 详细纪要
+（按主题分层列出要点，使用多级缩进列表，保留具体数据、人名、产品名等）
+
+## ✅ 关键决策
+（列出明确达成的决策。如无明确决策则跳过此节）
+
+## 💬 重要发言
+（值得记录的原话引用，用「」标注。如无则跳过此节）
+
+## 📑 章节时间线
+（按时间段划分：HH:MM 主题概述）
+
+写作原则：保留所有具体数据，语言简洁专业，信息密度高。如转录内容过短无实质内容，仅输出简短说明。
+加注："智能纪要由 AI 生成，可能存在不准确之处，请谨慎甄别后使用"
+"""
+
+
+async def _generate_meeting_minutes(
+    meeting_id: uuid.UUID,
+    notebook_id: uuid.UUID,
+    user_id: uuid.UUID,
+    title: str,
+    transcript: str,
+    started_at: datetime | None,
+    duration_seconds: int,
+) -> None:
+    """Generate meeting minutes via LLM and save as a chat message."""
+    import re
+    from backend.models.chat_message import ChatMessage
+
+    # Skip if transcript too short
+    clean = transcript.strip()
+    if len(clean) < 50:
+        logger.info("Transcript too short (%d chars), skipping minutes for %s", len(clean), meeting_id)
+        return
+
+    # Format time info
+    from datetime import timedelta
+    beijing_tz = timezone(timedelta(hours=8))
+    start_str = started_at.astimezone(beijing_tz).strftime("%Y-%m-%d %H:%M") if started_at else "Unknown"
+    dur_min = duration_seconds // 60
+    dur_sec = duration_seconds % 60
+    duration_str = f"{dur_min}分{dur_sec}秒"
+
+    # Truncate transcript if too long
+    truncated = transcript[:6000]
+    if len(transcript) > 6000:
+        truncated += "\n\n... (转录内容过长，已截取前6000字)"
+
+    prompt = _MINUTES_PROMPT.format(
+        title=title,
+        start_time=start_str,
+        duration=duration_str,
+        transcript=truncated,
+    )
+
+    # Generate via LLM
+    minutes_text = await qwen_client.generate(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=4096,
+    )
+
+    if not minutes_text or minutes_text.startswith("[Error"):
+        logger.error("Meeting minutes generation failed for %s: %s", meeting_id, minutes_text[:100] if minutes_text else "empty")
+        return
+
+    # Extract summary from 会议概要 section
+    summary_match = re.search(r"##\s*📋\s*会议概要\s*\n+(.*?)(?=\n##|\Z)", minutes_text, re.DOTALL)
+    collapsed_summary = summary_match.group(1).strip()[:150] if summary_match else minutes_text[:100]
+
+    # Save as chat message
+    async with async_session() as db:
+        msg = ChatMessage(
+            notebook_id=notebook_id,
+            user_id=user_id,
+            role="assistant",
+            content=minutes_text,
+            citations=[],
+            metadata={
+                "type": "meeting_minutes",
+                "meeting_id": str(meeting_id),
+                "title": title,
+                "collapsed_summary": collapsed_summary,
+            },
+        )
+        db.add(msg)
+        await db.commit()
+        await db.refresh(msg)
+
+        # Push via SSE
+        await event_bus.publish(str(notebook_id), {
+            "type": "meeting_minutes_ready",
+            "message": {
+                "id": str(msg.id),
+                "notebook_id": str(msg.notebook_id),
+                "user_id": str(msg.user_id),
+                "role": "assistant",
+                "content": msg.content,
+                "citations": [],
+                "metadata": msg.metadata,
+                "created_at": msg.created_at.isoformat(),
+            },
+        })
+
+    logger.info("Meeting minutes generated for %s (%d chars)", meeting_id, len(minutes_text))
+
+
+async def _generate_meeting_minutes_safe(
+    meeting_id: uuid.UUID,
+    notebook_id: uuid.UUID,
+    user_id: uuid.UUID,
+    title: str,
+    transcript: str,
+    started_at: datetime | None,
+    duration_seconds: int,
+) -> None:
+    """Safe wrapper — never raises."""
+    try:
+        await _generate_meeting_minutes(meeting_id, notebook_id, user_id, title, transcript, started_at, duration_seconds)
+    except Exception as e:
+        logger.error("Meeting minutes generation failed: %s", e, exc_info=True)
 
 
 MEETING_STALE_MINUTES = 5  # Auto-end meetings with no WebSocket after this many minutes

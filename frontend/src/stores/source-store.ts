@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Source } from "@/types/api";
+import type { Source, ChatMessage } from "@/types/api";
 import { api } from "@/services/api";
 
 interface SourceState {
@@ -202,6 +202,26 @@ export const useSourceStore = create<SourceState>((set, get) => ({
             });
           });
         });
+      }
+
+      // Meeting minutes ready — add to chat
+      if (event.type === "meeting_minutes_ready") {
+        const ev = event as Record<string, unknown>;
+        const msg = ev.message as Record<string, unknown> | undefined;
+        if (msg) {
+          import("./chat-store").then(({ useChatStore }) => {
+            useChatStore.getState().addSharedMessage({
+              id: (msg.id as string) || "",
+              notebook_id: notebookId,
+              user_id: (msg.user_id as string) || "",
+              role: "assistant",
+              content: (msg.content as string) || "",
+              citations: [],
+              created_at: (msg.created_at as string) || new Date().toISOString(),
+              metadata: msg.metadata as ChatMessage["metadata"],
+            });
+          });
+        }
       }
     });
 

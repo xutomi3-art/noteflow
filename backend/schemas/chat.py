@@ -28,5 +28,6 @@ class ChatMessageResponse(BaseModel):
     citations: list[CitationSchema] = []
     created_at: datetime
     user_name: str = ""  # Populated in shared chat mode
+    metadata: dict | None = None
 
     model_config = {"from_attributes": True}

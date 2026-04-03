@@ -49,6 +49,7 @@ import { useSharingStore } from "@/stores/sharing-store";
 import { api } from "@/services/api";
 import type { Notebook, Source, ChatMessage } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
+import MeetingMinutesMessage from "@/components/MeetingMinutesMessage";
 import FeedbackModal from "@/components/FeedbackModal";
 import PptConfigModal from "@/components/PptConfigModal";
 import type { PptConfig } from "@/components/PptConfigModal";
@@ -2081,7 +2082,17 @@ export default function NotebookPage() {
               <div className="space-y-8">
                 {messages.map((msg) => (
                   <div key={msg.id} data-message-id={msg.id} data-citations={msg.citations?.length ? btoa(encodeURIComponent(JSON.stringify(msg.citations))) : undefined}>
-                    {msg.role === "user" ? (
+                    {msg.metadata?.type === "meeting_minutes" ? (
+                      <div className="flex justify-start">
+                        <MeetingMinutesMessage
+                          message={msg}
+                          onSave={() => handleSaveMessageAsNote(msg)}
+                          isSaved={savedMessageIds.has(msg.id)}
+                          onCopy={() => handleCopyMessage(msg.id, msg.content)}
+                          isCopied={copiedMessageIds.has(msg.id)}
+                        />
+                      </div>
+                    ) : msg.role === "user" ? (
                       <div className={`flex ${msg.user_name && msg.user_id !== user?.id ? "justify-start" : "justify-end"}`}>
                         <div className={`${msg.user_name && msg.user_id !== user?.id ? "bg-blue-50 text-slate-800 rounded-2xl rounded-tl-sm" : "bg-[#eef1f5] text-slate-800 rounded-2xl rounded-tr-sm"} px-5 py-3 max-w-[80%] text-[14px]`}>
                           {msg.user_name && msg.user_id !== user?.id && (

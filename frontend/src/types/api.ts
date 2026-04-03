@@ -63,6 +63,12 @@ export interface ChatMessage {
   citations: Citation[];
   created_at: string;
   user_name?: string;
+  metadata?: {
+    type: string;
+    meeting_id?: string;
+    title?: string;
+    collapsed_summary?: string;
+  } | null;
 }
 
 export interface SavedNote {
