@@ -1361,10 +1361,13 @@ export default function NotebookPage() {
                 setAIInstructionsValue(notebook.custom_prompt || "");
                 setIsAIInstructionsOpen(true);
               }}
-              className="p-1.5 text-slate-400 hover:text-[#5b8c15] hover:bg-[#ecfccb] rounded-lg transition-colors"
-              title="AI Instructions"
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                notebook.custom_prompt ? "text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20" : "text-slate-400 hover:text-[#5b8c15] hover:bg-[#ecfccb]"
+              }`}
+              title="Notebook Persona"
             >
-              <Settings className="w-4 h-4" />
+              <Sparkles className="w-3 h-3" />
+              <span className="hidden md:inline">Persona</span>
             </button>
           )}
         </div>
@@ -2807,22 +2810,22 @@ export default function NotebookPage() {
             <div className="px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#5b8c15]" />
-                <h3 className="text-base font-semibold text-slate-900">AI Instructions</h3>
+                <h3 className="text-base font-semibold text-slate-900">Notebook Persona</h3>
               </div>
-              <p className="text-xs text-slate-400 mt-1">Customize how AI responds in this notebook. These instructions override default behavior.</p>
+              <p className="text-xs text-slate-400 mt-1">设定 AI 在此笔记本中的回答风格和角色</p>
             </div>
             <div className="px-5 py-4">
               <textarea
                 value={aiInstructionsValue}
                 onChange={(e) => setAIInstructionsValue(e.target.value)}
-                placeholder="e.g. 你是一个法律顾问，回答要简洁专业..."
+                placeholder={"e.g. 你是一名法律顾问，回答要简洁专业\ne.g. 事实类问题严格基于文档，建议类问题可以发散思考\ne.g. Always respond with bullet points, keep it under 3 sentences"}
                 rows={6}
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
                 autoFocus
               />
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-xs text-slate-400">
-                  e.g. "回答要简洁，不超过3句话" / "You are a legal advisor"
+                  设定回答风格、角色、语气等，AI 将按此响应
                 </p>
                 <button
                   onClick={async () => {
@@ -2841,7 +2844,7 @@ export default function NotebookPage() {
                   className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                 >
                   <Sparkles className="w-3 h-3" />
-                  {isOptimizing ? "Optimizing..." : "Optimize"}
+                  {isOptimizing ? "Optimizing..." : "AI Optimize"}
                 </button>
               </div>
             </div>

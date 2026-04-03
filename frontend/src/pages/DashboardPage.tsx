@@ -78,7 +78,7 @@ export default function DashboardPage() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [notebookName, setNotebookName] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
-  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
+  const [showCustomPrompt, setShowCustomPrompt] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const [pendingUrls, setPendingUrlsList] = useState<string[]>([]);
@@ -220,7 +220,7 @@ export default function DashboardPage() {
     setShowUrlInput(false);
     setNotebookName('');
     setCustomPrompt('');
-    setShowCustomPrompt(false);
+    setShowCustomPrompt(true);
     setIsCreating(false);
   };
 
@@ -893,7 +893,7 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {/* AI Instructions (collapsible) */}
+                {/* Notebook Persona */}
                 <div className="mt-4 flex items-center gap-3">
                   <div className="flex-1 h-px bg-slate-200" />
                   <button
@@ -902,21 +902,21 @@ export default function DashboardPage() {
                     className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${showCustomPrompt ? 'text-[#5b8c15]' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     <Sparkles className="w-4 h-4" />
-                    AI Instructions
+                    Notebook Persona
                   </button>
                   <div className="flex-1 h-px bg-slate-200" />
                 </div>
                 {showCustomPrompt && (
                   <div className="mt-3">
                     <textarea
-                      placeholder="e.g. 你是一个法律顾问，回答要简洁专业..."
+                      placeholder={"e.g. 你是一名法律顾问，回答要简洁专业\ne.g. 事实类问题严格基于文档，建议类问题可以发散思考\ne.g. Always respond with bullet points, keep it under 3 sentences"}
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
-                      rows={3}
+                      rows={4}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
                     />
                     <div className="mt-1 flex items-center justify-between">
-                      <p className="text-xs text-slate-400">Customize how AI responds. Overrides default behavior.</p>
+                      <p className="text-xs text-slate-400">设定 AI 在此笔记本中的回答风格和角色</p>
                       <button
                         type="button"
                         onClick={async () => {
@@ -935,7 +935,7 @@ export default function DashboardPage() {
                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                       >
                         <Sparkles className="w-3 h-3" />
-                        {isOptimizingPrompt ? "Optimizing..." : "Optimize"}
+                        {isOptimizingPrompt ? "Optimizing..." : "AI Optimize"}
                       </button>
                     </div>
                   </div>
