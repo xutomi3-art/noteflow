@@ -383,6 +383,7 @@ export default function NotebookPage() {
   const [feedbackMsgId, setFeedbackMsgId] = useState<string | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
+  const [sourceTeamRatio, setSourceTeamRatio] = useState(2); // Sources:Team = 2:1
   const [urlInput, setUrlInput] = useState("");
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
   const [aiInstructionsValue, setAIInstructionsValue] = useState("");
@@ -693,8 +694,13 @@ export default function NotebookPage() {
     if (!userScrolledUpRef.current) {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamingContent]);
-  // Reset scroll lock when streaming ends
+  }, [messages, streamingContent, isStreaming]);
+  // Reset scroll lock when streaming starts or ends
+  useEffect(() => {
+    if (isStreaming) {
+      userScrolledUpRef.current = false;
+    }
+  }, [isStreaming]);
   useEffect(() => {
     if (!streamingContent) {
       userScrolledUpRef.current = false;
@@ -708,6 +714,8 @@ export default function NotebookPage() {
     if (!id || !canSend) return;
     // If currently streaming, abort it first
     if (isStreaming) stopStream();
+    // Reset scroll lock so chat scrolls to show the new question
+    userScrolledUpRef.current = false;
     sendMessage(id, chatInput.trim(), [...selectedIds], webSearchEnabled, deepThinking);
     setChatInput("");
   }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled, deepThinking, isStreaming, stopStream]);
@@ -730,6 +738,7 @@ export default function NotebookPage() {
     'pdf', 'docx', 'pptx', 'txt', 'md',
     'xlsx', 'xls', 'csv',
     'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp',
+    'mp3', 'wav', 'm4a', 'flac', 'ogg', 'webm',
   ]);
 
   const handleFileUpload = useCallback(
@@ -1679,7 +1688,7 @@ export default function NotebookPage() {
               />
             </div>
 
-            <div className="space-y-1 overflow-y-auto flex-1 min-h-[200px]" data-sources-list>
+            <div className="space-y-1 overflow-y-auto min-h-[100px]" data-sources-list style={{ flex: notebook?.is_shared ? sourceTeamRatio : 1 }}>
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
@@ -1865,17 +1874,22 @@ export default function NotebookPage() {
           {/* Team Members (shown for team notebooks, hidden during recording) */}
           {notebook?.is_shared && !showMeetingPanel && (
             <div
-              className="h-1 cursor-row-resize bg-slate-100 hover:bg-slate-200 transition-colors shrink-0"
+              className="h-1.5 cursor-row-resize bg-slate-100 hover:bg-slate-300 transition-colors shrink-0 flex items-center justify-center group"
               onMouseDown={(e) => {
                 e.preventDefault();
                 const startY = e.clientY;
-                const section = e.currentTarget.parentElement;
-                const sourcesDiv = section?.querySelector('[data-sources-list]') as HTMLElement | null;
-                if (!sourcesDiv) return;
-                const startH = sourcesDiv.getBoundingClientRect().height;
+                const container = e.currentTarget.parentElement;
+                const sourcesDiv = container?.querySelector('[data-sources-list]') as HTMLElement | null;
+                const teamDiv = container?.querySelector('[data-team-list]') as HTMLElement | null;
+                if (!sourcesDiv || !teamDiv) return;
+                const startSourceH = sourcesDiv.getBoundingClientRect().height;
+                const startTeamH = teamDiv.getBoundingClientRect().height;
+                const totalH = startSourceH + startTeamH;
                 const onMove = (ev: MouseEvent) => {
                   const delta = ev.clientY - startY;
-                  sourcesDiv.style.maxHeight = `${Math.max(100, startH + delta)}px`;
+                  const newSourceH = Math.max(80, Math.min(totalH - 80, startSourceH + delta));
+                  const newRatio = newSourceH / (totalH - newSourceH);
+                  setSourceTeamRatio(Math.max(0.3, Math.min(5, newRatio)));
                 };
                 const onUp = () => {
                   document.removeEventListener('mousemove', onMove);
@@ -1884,10 +1898,12 @@ export default function NotebookPage() {
                 document.addEventListener('mousemove', onMove);
                 document.addEventListener('mouseup', onUp);
               }}
-            />
+            >
+              <div className="w-8 h-0.5 rounded-full bg-slate-300 group-hover:bg-slate-400 transition-colors" />
+            </div>
           )}
           {notebook?.is_shared && !showMeetingPanel && (
-            <div className="px-4 py-3 flex-1 min-h-0 flex flex-col">
+            <div className="px-4 py-3 min-h-[80px] flex flex-col" data-team-list style={{ flex: 1 }}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
                   Team ({members.length})
@@ -2689,7 +2705,7 @@ export default function NotebookPage() {
               ref={modalFileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp"
+              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp,.mp3,.wav,.m4a,.flac,.ogg,.webm"
               className="sr-only"
               onChange={(e) => {
                 handleModalFilesSelected(e.target.files);

@@ -244,6 +244,7 @@ export default function DashboardPage() {
     'pdf', 'docx', 'pptx', 'txt', 'md',
     'xlsx', 'xls', 'csv',
     'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp',
+    'mp3', 'wav', 'm4a', 'flac', 'ogg', 'webm',
   ]);
 
   const handleFilesSelected = (files: FileList | null) => {
@@ -763,7 +764,7 @@ export default function DashboardPage() {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp"
+              accept=".pdf,.docx,.pptx,.txt,.md,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.gif,.bmp,.mp3,.wav,.m4a,.flac,.ogg,.webm"
               className="sr-only"
               onChange={(e) => {
                 handleFilesSelected(e.target.files);
