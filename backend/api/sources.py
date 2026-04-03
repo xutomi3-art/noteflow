@@ -31,6 +31,15 @@ ALLOWED_TYPES = {
     'image/webp': 'webp',
     'image/gif': 'gif',
     'image/bmp': 'bmp',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/x-m4a': 'm4a',
+    'audio/mp4': 'm4a',
+    'audio/flac': 'flac',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'webm',
 }
 
 EXT_MAP = {
@@ -48,6 +57,12 @@ EXT_MAP = {
     '.webp': 'webp',
     '.gif': 'gif',
     '.bmp': 'bmp',
+    '.mp3': 'mp3',
+    '.wav': 'wav',
+    '.m4a': 'm4a',
+    '.flac': 'flac',
+    '.ogg': 'ogg',
+    '.webm': 'webm',
 }
 
 
@@ -71,7 +86,7 @@ async def upload_source(
 
     file_type = _detect_file_type(file.filename or '', file.content_type)
     if file_type is None:
-        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV, JPG, PNG, WEBP, GIF, BMP')
+        raise HTTPException(status_code=400, detail='Unsupported file type. Allowed: PDF, DOCX, PPTX, TXT, MD, XLSX, XLS, CSV, JPG, PNG, WEBP, GIF, BMP, MP3, WAV, M4A')
 
     content = await file.read()
     file_size = len(content)
