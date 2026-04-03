@@ -12,11 +12,89 @@ from backend.models.source import Source
 from backend.services.event_bus import event_bus
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
-from backend.services.asr_service import asr_service, AUDIO_EXTENSIONS
+from backend.services.asr_service import AUDIO_EXTENSIONS
 from backend.services.qwen_client import qwen_client, IMAGE_EXTENSIONS
 from backend.services.source_service import get_source, update_source_status
 
 logger = logging.getLogger(__name__)
+
+_QWEN3_ASR_URL = os.environ.get("QWEN3_ASR_URL", "http://10.200.0.102:9997/v1")
+_QWEN3_ASR_MODEL = "Qwen3-ASR-1.7B"
+
+
+async def _transcribe_audio_file(file_path: str) -> str:
+    """Transcribe an audio file using Qwen3-ASR (same as meeting ASR)."""
+    import httpx
+    import subprocess
+    import tempfile
+
+    # Convert to WAV 16kHz mono if needed (Qwen3-ASR expects WAV)
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext != ".wav":
+        wav_path = tempfile.mktemp(suffix=".wav")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-i", file_path, "-ar", "16000", "-ac", "1", "-f", "wav", wav_path, "-y"],
+                capture_output=True, timeout=300,
+            )
+        except Exception as e:
+            logger.error("ffmpeg conversion failed: %s", e)
+            raise ValueError(f"Audio conversion failed: {e}")
+    else:
+        wav_path = file_path
+
+    try:
+        # Split into chunks of ~55 seconds (Qwen3-ASR max ~60s)
+        file_size = os.path.getsize(wav_path)
+        chunk_size = 55 * 16000 * 2  # 55 seconds at 16kHz 16-bit mono
+        transcripts = []
+
+        with open(wav_path, "rb") as f:
+            wav_header = f.read(44)  # WAV header
+            chunk_idx = 0
+            while True:
+                pcm_data = f.read(chunk_size)
+                if not pcm_data:
+                    break
+                # Build a valid WAV from this chunk
+                import struct
+                data_size = len(pcm_data)
+                wav_chunk = bytearray(44 + data_size)
+                wav_chunk[0:4] = b"RIFF"
+                struct.pack_into("<I", wav_chunk, 4, 36 + data_size)
+                wav_chunk[8:12] = b"WAVE"
+                wav_chunk[12:16] = b"fmt "
+                struct.pack_into("<I", wav_chunk, 16, 16)
+                struct.pack_into("<H", wav_chunk, 20, 1)  # PCM
+                struct.pack_into("<H", wav_chunk, 22, 1)  # mono
+                struct.pack_into("<I", wav_chunk, 24, 16000)  # sample rate
+                struct.pack_into("<I", wav_chunk, 28, 32000)  # byte rate
+                struct.pack_into("<H", wav_chunk, 32, 2)  # block align
+                struct.pack_into("<H", wav_chunk, 34, 16)  # bits per sample
+                wav_chunk[36:40] = b"data"
+                struct.pack_into("<I", wav_chunk, 40, data_size)
+                wav_chunk[44:] = pcm_data
+
+                # Send to Qwen3-ASR
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    resp = await client.post(
+                        f"{_QWEN3_ASR_URL.rstrip('/')}/audio/transcriptions",
+                        files={"file": ("chunk.wav", bytes(wav_chunk), "audio/wav")},
+                        data={"model": _QWEN3_ASR_MODEL},
+                    )
+                    if resp.status_code == 200:
+                        text = resp.json().get("text", "").strip()
+                        if text:
+                            transcripts.append(text)
+                            logger.info("ASR chunk %d: %d chars", chunk_idx, len(text))
+                    else:
+                        logger.warning("Qwen3-ASR returned %d for chunk %d", resp.status_code, chunk_idx)
+                chunk_idx += 1
+
+        return "\n".join(transcripts)
+    finally:
+        if wav_path != file_path and os.path.exists(wav_path):
+            os.remove(wav_path)
 
 # Limit concurrent RAGFlow polling tasks to avoid exhausting the DB connection pool
 _poll_semaphore = asyncio.Semaphore(5)
@@ -545,10 +623,10 @@ async def process_document(
                 logger.info("Excel/CSV will be processed by RAGFlow: %s", filename)
                 content = None  # Signal to upload original file to RAGFlow
 
-            # Step 2b: Route audio to ASR pipeline
+            # Step 2b: Route audio to ASR pipeline (Qwen3-ASR via Xinference)
             elif file_type in AUDIO_EXTENSIONS:
-                logger.info("Processing audio via ASR: %s", filename)
-                transcript = await asr_service.transcribe_file(file_path)
+                logger.info("Processing audio via Qwen3-ASR: %s", filename)
+                transcript = await _transcribe_audio_file(file_path)
 
                 # Save transcript as markdown
                 md_path = file_path.rsplit(".", 1)[0] + ".md"
