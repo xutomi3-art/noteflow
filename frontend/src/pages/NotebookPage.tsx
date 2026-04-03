@@ -760,7 +760,7 @@ export default function NotebookPage() {
       }
       const messages: string[] = [];
       if (rejectedType.length > 0) {
-        messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp`);
+        messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp, mp3, wav, m4a`);
       }
       if (rejectedSize.length > 0) {
         messages.push(`Exceeds ${maxFileSizeMB} MB limit:\n${rejectedSize.join('\n')}`);
@@ -851,7 +851,7 @@ export default function NotebookPage() {
     }
     const messages: string[] = [];
     if (rejectedType.length > 0) {
-      messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp`);
+      messages.push(`Unsupported file type:\n${rejectedType.join('\n')}\n\nSupported: pdf, docx, pptx, txt, md, xlsx, xls, csv, jpg, jpeg, png, webp, gif, bmp, mp3, wav, m4a`);
     }
     if (rejectedSize.length > 0) {
       messages.push(`Exceeds ${maxFileSizeMB} MB limit:\n${rejectedSize.join('\n')}`);
