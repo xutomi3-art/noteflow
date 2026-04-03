@@ -1556,7 +1556,7 @@ export default function NotebookPage() {
               </div>
             </div>
           ) : (
-          <div className="p-4 flex-1 overflow-y-auto" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
+          <div className="p-4 flex-1 overflow-hidden flex flex-col" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
             {notebook?.user_role !== "viewer" && (
               <button
                 onClick={() => setShowAddSourceModal(true)}
