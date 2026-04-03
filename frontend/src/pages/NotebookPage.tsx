@@ -383,7 +383,7 @@ export default function NotebookPage() {
   const [feedbackMsgId, setFeedbackMsgId] = useState<string | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
-  const [sourceHeightPct, setSourceHeightPct] = useState(65); // Sources height as % of available space
+  const [sourceFlex, setSourceFlex] = useState(2); // Sources flex ratio (vs team=1)
   const [urlInput, setUrlInput] = useState("");
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
   const [aiInstructionsValue, setAIInstructionsValue] = useState("");
@@ -1556,11 +1556,11 @@ export default function NotebookPage() {
               </div>
             </div>
           ) : (
-          <div className="p-4 flex-1 overflow-y-auto flex flex-col" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
+          <div className={`p-4 flex-1 flex flex-col ${notebook?.is_shared ? "overflow-hidden" : "overflow-y-auto"}`} onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
             {notebook?.user_role !== "viewer" && (
               <button
                 onClick={() => setShowAddSourceModal(true)}
-                className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-4"
+                className="w-full flex flex-col items-center justify-center gap-1 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-center cursor-pointer hover:border-[#5b8c15]/40 hover:bg-slate-50/50 transition-colors mb-4 shrink-0"
               >
                 <Plus className="w-4 h-4 text-slate-400" />
                 <span className="text-[13px] font-medium text-slate-600">Add sources</span>
@@ -1677,7 +1677,7 @@ export default function NotebookPage() {
               </button>
             )}
 
-            <div className="flex items-center gap-3 p-2 mb-1">
+            <div className="flex items-center gap-3 p-2 mb-1 shrink-0">
               <span className="text-[11px] font-medium text-slate-500 flex-1">Select all sources</span>
               <div className="w-[18px] shrink-0" />
               <input
@@ -1688,7 +1688,7 @@ export default function NotebookPage() {
               />
             </div>
 
-            <div className={`space-y-1 overflow-y-auto ${notebook?.is_shared ? "" : "flex-1"}`} data-sources-list style={notebook?.is_shared ? { maxHeight: `${sourceHeightPct}vh`, minHeight: 100 } : undefined}>
+            <div className="space-y-1 overflow-y-auto min-h-0" data-sources-list style={{ flex: notebook?.is_shared ? sourceFlex : 1 }}>
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
@@ -1874,20 +1874,27 @@ export default function NotebookPage() {
           {/* Team Members (shown for team notebooks, hidden during recording) */}
           {notebook?.is_shared && !showMeetingPanel && (
             <div
-              className="h-1.5 cursor-row-resize bg-slate-100 hover:bg-slate-300 transition-colors shrink-0 flex items-center justify-center group"
+              className="h-4 cursor-row-resize bg-slate-50 hover:bg-slate-200 active:bg-slate-300 transition-colors shrink-0 flex items-center justify-center group border-y border-slate-200 select-none"
               onMouseDown={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 const startY = e.clientY;
-                const sourcesDiv = e.currentTarget.parentElement?.querySelector('[data-sources-list]') as HTMLElement | null;
-                if (!sourcesDiv) return;
-                const startH = sourcesDiv.getBoundingClientRect().height;
+                const srcEl = e.currentTarget.previousElementSibling as HTMLElement | null;
+                const teamEl = e.currentTarget.nextElementSibling as HTMLElement | null;
+                if (!srcEl || !teamEl) return;
+                const startSrcH = srcEl.getBoundingClientRect().height;
+                const startTeamH = teamEl.getBoundingClientRect().height;
+                const total = startSrcH + startTeamH;
+                document.body.style.cursor = 'row-resize';
+                document.body.style.userSelect = 'none';
                 const onMove = (ev: MouseEvent) => {
                   const delta = ev.clientY - startY;
-                  const newH = startH + delta;
-                  const pct = (newH / window.innerHeight) * 100;
-                  setSourceHeightPct(Math.max(15, Math.min(75, pct)));
+                  const newSrc = Math.max(60, Math.min(total - 60, startSrcH + delta));
+                  setSourceFlex(newSrc / (total - newSrc));
                 };
                 const onUp = () => {
+                  document.body.style.cursor = '';
+                  document.body.style.userSelect = '';
                   document.removeEventListener('mousemove', onMove);
                   document.removeEventListener('mouseup', onUp);
                 };
@@ -1899,7 +1906,7 @@ export default function NotebookPage() {
             </div>
           )}
           {notebook?.is_shared && !showMeetingPanel && (
-            <div className="px-4 py-3 min-h-[80px] overflow-y-auto flex flex-col" data-team-list>
+            <div className="px-4 py-3 overflow-y-auto min-h-0" data-team-list style={{ flex: 1 }}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
                   Team ({members.length})
