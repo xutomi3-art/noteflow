@@ -1565,7 +1565,7 @@ export default function NotebookPage() {
                 <Plus className="w-4 h-4 text-slate-400" />
                 <span className="text-[13px] font-medium text-slate-600">Add sources</span>
                 <span className="text-[10px] text-slate-400">
-                  pdf, images, docs,{' '}
+                  pdf, images, docs, audio,{' '}
                   <span className="relative group/tip inline-block">
                     <span className="underline decoration-dotted underline-offset-2 cursor-default">and more</span>
                     <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 rounded-lg bg-slate-900 text-white text-[10px] leading-relaxed px-2.5 py-2 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
@@ -2728,7 +2728,7 @@ export default function NotebookPage() {
               <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
               <p className="text-sm text-slate-400 mb-1">or paste an image from clipboard (Ctrl+V / Cmd+V)</p>
               <p className="text-sm text-slate-500 mb-1">
-                pdf, images, docs,{' '}
+                pdf, images, docs, audio,{' '}
                 <span className="relative group/tip inline-block">
                   <span className="underline decoration-dotted underline-offset-2 cursor-default">and more</span>
                   <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-lg bg-slate-900 text-white text-xs leading-relaxed px-3 py-2.5 opacity-0 group-hover/tip:opacity-100 transition-opacity duration-200 z-50 shadow-lg">
