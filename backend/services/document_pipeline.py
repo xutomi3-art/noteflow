@@ -8,6 +8,7 @@ from sqlalchemy import select
 from backend.core.config import settings
 from backend.core.database import async_session
 from backend.models.notebook import Notebook
+from backend.models.user import User
 from backend.services.event_bus import event_bus
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
@@ -325,17 +326,41 @@ async def _notify(
 async def _ensure_dataset(
     db: "AsyncSession", notebook_id: uuid.UUID  # noqa: F821
 ) -> str | None:
-    """Ensure notebook has a RAGFlow dataset. Create if needed."""
+    """Ensure the notebook owner has a RAGFlow dataset. Create if needed.
+
+    Uses per-user dataset strategy: all notebooks belonging to the same user
+    share a single RAGFlow dataset (= single MinIO bucket). Retrieval is
+    scoped to the correct notebook via document_ids filtering.
+    """
     result = await db.execute(select(Notebook).where(Notebook.id == notebook_id))
     notebook = result.scalar_one_or_none()
     if notebook is None:
         return None
 
+    # Look up the notebook owner's dataset
+    user_result = await db.execute(select(User).where(User.id == notebook.owner_id))
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    if user.ragflow_dataset_id:
+        # Backfill notebook-level field for compatibility during migration
+        if not notebook.ragflow_dataset_id:
+            notebook.ragflow_dataset_id = user.ragflow_dataset_id
+            await db.commit()
+        return user.ragflow_dataset_id
+
+    # Fallback: check if notebook already has a dataset (pre-migration data)
     if notebook.ragflow_dataset_id:
+        # Adopt the notebook's existing dataset as the user's dataset
+        user.ragflow_dataset_id = notebook.ragflow_dataset_id
+        await db.commit()
         return notebook.ragflow_dataset_id
 
-    dataset_id = await ragflow_client.create_dataset(f"notebook-{notebook_id}")
+    # Create a new per-user dataset
+    dataset_id = await ragflow_client.create_dataset(f"user-{user.id}")
     if dataset_id:
+        user.ragflow_dataset_id = dataset_id
         notebook.ragflow_dataset_id = dataset_id
         await db.commit()
         return dataset_id

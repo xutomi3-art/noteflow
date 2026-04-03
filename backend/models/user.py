@@ -22,5 +22,6 @@ class User(Base):
     auth_provider: Mapped[str] = mapped_column(String(20), default="local", server_default="local")
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
     is_disabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
+    ragflow_dataset_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

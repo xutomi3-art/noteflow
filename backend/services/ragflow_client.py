@@ -203,6 +203,14 @@ class RAGFlowClient:
                             "position_int": meta.get("positions", meta.get("position_int", [])),
                         })
 
+            # Filter by document_ids if specified (scopes retrieval to specific notebook's documents)
+            if document_ids:
+                allowed = set(document_ids)
+                before_count = len(all_chunks)
+                all_chunks = [c for c in all_chunks if c.get("doc_id") in allowed]
+                if before_count != len(all_chunks):
+                    logger.info("document_ids filter: %d -> %d chunks", before_count, len(all_chunks))
+
             # Sort by score descending and limit
             all_chunks.sort(key=lambda c: c.get("similarity", 0), reverse=True)
             # DEBUG: log 1912 presence before/after trim

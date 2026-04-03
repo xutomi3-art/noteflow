@@ -361,7 +361,10 @@ async def stream_chat(
         chunks = []
         react_steps: list[dict] = []  # Track ReAct steps for logging
         if dataset_ids:
-            filter_doc_ids = document_ids if source_ids and document_ids else None
+            # Always filter by document_ids to scope retrieval to current notebook's
+            # documents. With per-user datasets, a single RAGFlow dataset contains
+            # documents from ALL of a user's notebooks, so filtering is essential.
+            filter_doc_ids = document_ids if document_ids else None
 
             if deep_thinking:
                 # ReAct loop: Thought → Search → Observation → ... → Answer
