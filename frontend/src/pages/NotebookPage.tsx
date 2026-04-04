@@ -391,6 +391,7 @@ export default function NotebookPage() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [sourceFlex, setSourceFlex] = useState(2); // Sources flex ratio (vs team=1)
   const [urlInput, setUrlInput] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
   const [aiInstructionsValue, setAIInstructionsValue] = useState("");
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
@@ -1384,17 +1385,12 @@ export default function NotebookPage() {
           )}
           {notebook && notebook.user_role !== "viewer" && (
             <button
-              onClick={() => {
-                setAIInstructionsValue(notebook.custom_prompt || "");
-                setIsAIInstructionsOpen(true);
-              }}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
-                notebook.custom_prompt ? "text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20" : "text-slate-400 hover:text-[#5b8c15] hover:bg-[#ecfccb]"
-              }`}
-              title="Notebook Persona"
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              title="Notebook Settings"
             >
-              <Sparkles className="w-3 h-3" />
-              <span className="hidden md:inline">Persona</span>
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Settings</span>
             </button>
           )}
         </div>
@@ -2884,6 +2880,53 @@ export default function NotebookPage() {
 
       {/* Feedback Modal */}
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+
+      {/* Notebook Settings Modal */}
+      {isSettingsOpen && notebook && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setIsSettingsOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-[500px] max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-slate-500" />
+                <h3 className="text-base font-semibold text-slate-900">Notebook Settings</h3>
+              </div>
+              <button onClick={() => setIsSettingsOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(80vh-60px)]">
+              {/* Notebook Persona Section */}
+              <div className="px-5 py-4 border-b border-slate-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-[#5b8c15]" />
+                  <h4 className="text-[13px] font-semibold text-slate-800">Notebook Persona</h4>
+                  {notebook.custom_prompt && <span className="text-[10px] px-1.5 py-0.5 bg-[#5b8c15]/10 text-[#5b8c15] rounded font-medium">Active</span>}
+                </div>
+                <p className="text-[11px] text-slate-400 mb-2">设定 AI 在此笔记本中的回答风格和角色</p>
+                <button
+                  onClick={() => {
+                    setAIInstructionsValue(notebook.custom_prompt || "");
+                    setIsAIInstructionsOpen(true);
+                    setIsSettingsOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-xl border border-slate-200 hover:border-[#5b8c15]/40 hover:bg-slate-50 transition-colors"
+                >
+                  {notebook.custom_prompt ? (
+                    <p className="text-[12px] text-slate-600 line-clamp-2">{notebook.custom_prompt}</p>
+                  ) : (
+                    <p className="text-[12px] text-slate-400 italic">Click to set persona...</p>
+                  )}
+                </button>
+              </div>
+
+              {/* More settings sections can be added here */}
+              <div className="px-5 py-4 text-center">
+                <p className="text-[11px] text-slate-300">More settings coming soon</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Instructions Modal */}
       {isAIInstructionsOpen && (
