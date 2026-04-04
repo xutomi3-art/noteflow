@@ -345,6 +345,10 @@ export default function NotebookPage() {
   const [showMeetingPanel, setShowMeetingPanel] = useState(false);
   const [pendingResumeMeeting, setPendingResumeMeeting] = useState<any>(null);
   const meetingActive = useMeetingStore((s) => s.activeMeeting !== null && s.activeMeeting.notebook_id === id);
+  const meetDuration = useMeetingStore((s) => s.duration);
+  const meetUtterances = useMeetingStore((s) => s.utterances);
+  const meetPaused = useMeetingStore((s) => s.isPaused);
+  const meetActiveMeeting = useMeetingStore((s) => s.activeMeeting);
 
   // Live ASR viewer — when another user is recording, show their transcript
   const [otherMeetingActive, setOtherMeetingActive] = useState(false);
@@ -1589,60 +1593,52 @@ export default function NotebookPage() {
             )}
 
             {/* Inline Recording Card — owner is recording */}
-            {meetingActive && (() => {
-              const { utterances: meetUtts, isPaused: meetPaused, duration: meetDuration, pauseMeeting: meetPause, resumeMeeting: meetResume, reset: meetReset, activeMeeting: meetActive, _durationInterval, _workletNode, _mediaStream, _audioContext, _ws } = useMeetingStore.getState();
-              const dur = useMeetingStore((s) => s.duration);
-              const utts = useMeetingStore((s) => s.utterances);
-              const paused = useMeetingStore((s) => s.isPaused);
-              const formatDur = (s: number) => { const m = Math.floor(s / 60); const sec = s % 60; return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`; };
-              const handleEndInline = () => {
-                const nbId = meetActive?.notebook_id;
-                const mId = meetActive?.id;
-                const store = useMeetingStore.getState();
-                if (store._durationInterval) clearInterval(store._durationInterval);
-                if (store._workletNode) store._workletNode.disconnect();
-                if (store._mediaStream) store._mediaStream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-                if (store._audioContext) store._audioContext.close();
-                if (store._ws?.readyState === WebSocket.OPEN) { store._ws.send(JSON.stringify({ type: "end" })); store._ws.close(); }
-                meetReset();
-                meetingEndedAtRef.current = Date.now();
-                if (nbId && mId) {
-                  const token = localStorage.getItem("access_token") || "";
-                  fetch(`/api/notebooks/${nbId}/meetings/${mId}/end`, { method: "POST", headers: { Authorization: `Bearer ${token}` } })
-                    .then(() => fetchSources(nbId)).catch(() => {});
-                }
-              };
-              return (
-                <div className="w-full mb-3 rounded-xl border border-red-200 bg-red-50/50 overflow-hidden shrink-0">
-                  <div className="flex items-center justify-between px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="relative flex h-2 w-2">
-                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${paused ? "bg-amber-400" : "bg-red-400"} opacity-75`} />
-                        <span className={`relative inline-flex rounded-full h-2 w-2 ${paused ? "bg-amber-500" : "bg-red-500"}`} />
-                      </span>
-                      <span className="text-[13px] font-mono font-semibold text-slate-800">{formatDur(dur)}</span>
-                      <span className={`text-[10px] font-semibold ${paused ? "text-amber-600" : "text-red-500"}`}>{paused ? "PAUSED" : "REC"}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => paused ? useMeetingStore.getState().resumeMeeting() : useMeetingStore.getState().pauseMeeting()} className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">{paused ? "Resume" : "Pause"}</button>
-                      <button onClick={handleEndInline} className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-red-200 text-red-600 hover:bg-red-50">End</button>
-                    </div>
+            {meetingActive && (
+              <div className="w-full mb-3 rounded-xl border border-red-200 bg-red-50/50 overflow-hidden shrink-0">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${meetPaused ? "bg-amber-400" : "bg-red-400"} opacity-75`} />
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${meetPaused ? "bg-amber-500" : "bg-red-500"}`} />
+                    </span>
+                    <span className="text-[13px] font-mono font-semibold text-slate-800">{`${Math.floor(meetDuration / 60).toString().padStart(2, "0")}:${(meetDuration % 60).toString().padStart(2, "0")}`}</span>
+                    <span className={`text-[10px] font-semibold ${meetPaused ? "text-amber-600" : "text-red-500"}`}>{meetPaused ? "PAUSED" : "REC"}</span>
                   </div>
-                  <div className="max-h-[250px] overflow-y-auto px-3 pb-2 space-y-0.5">
-                    {utts.length === 0 ? (
-                      <p className="text-[11px] text-red-300 italic py-2">Waiting for speech...</p>
-                    ) : (
-                      utts.map((u, i) => (
-                        <p key={i} className={`text-[12px] leading-relaxed ${u.is_final ? "text-slate-700" : "text-slate-400 italic"}`}>
-                          {u.wall_time && <span className="text-[10px] text-red-300 mr-1.5 font-mono">{u.wall_time}</span>}
-                          {u.text}
-                        </p>
-                      ))
-                    )}
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => meetPaused ? useMeetingStore.getState().resumeMeeting() : useMeetingStore.getState().pauseMeeting()} className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">{meetPaused ? "Resume" : "Pause"}</button>
+                    <button onClick={() => {
+                      const store = useMeetingStore.getState();
+                      const nbId = meetActiveMeeting?.notebook_id;
+                      const mId = meetActiveMeeting?.id;
+                      if (store._durationInterval) clearInterval(store._durationInterval);
+                      if (store._workletNode) store._workletNode.disconnect();
+                      if (store._mediaStream) store._mediaStream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+                      if (store._audioContext) store._audioContext.close();
+                      if (store._ws?.readyState === WebSocket.OPEN) { store._ws.send(JSON.stringify({ type: "end" })); store._ws.close(); }
+                      store.reset();
+                      meetingEndedAtRef.current = Date.now();
+                      if (nbId && mId) {
+                        const token = localStorage.getItem("access_token") || "";
+                        fetch(`/api/notebooks/${nbId}/meetings/${mId}/end`, { method: "POST", headers: { Authorization: `Bearer ${token}` } })
+                          .then(() => fetchSources(nbId)).catch(() => {});
+                      }
+                    }} className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-red-200 text-red-600 hover:bg-red-50">End</button>
                   </div>
                 </div>
-              );
-            })()}
+                <div className="max-h-[250px] overflow-y-auto px-3 pb-2 space-y-0.5">
+                  {meetUtterances.length === 0 ? (
+                    <p className="text-[11px] text-red-300 italic py-2">Waiting for speech...</p>
+                  ) : (
+                    meetUtterances.map((u, i) => (
+                      <p key={i} className={`text-[12px] leading-relaxed ${u.is_final ? "text-slate-700" : "text-slate-400 italic"}`}>
+                        {u.wall_time && <span className="text-[10px] text-red-300 mr-1.5 font-mono">{u.wall_time}</span>}
+                        {u.text}
+                      </p>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Live ASR viewer — another user is recording */}
             {otherMeetingActive && !meetingActive && (
