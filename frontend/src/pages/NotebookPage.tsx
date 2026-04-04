@@ -2955,7 +2955,8 @@ export default function NotebookPage() {
                   <Sparkles className="w-3.5 h-3.5 text-purple-500" />
                   <h4 className="text-[13px] font-semibold text-slate-800">Meeting AI Suggestions</h4>
                 </div>
-                <p className="text-[11px] text-slate-400 mb-3">AI 在会议中自动给出决策、行动项等建议</p>
+                <p className="text-[11px] text-slate-400 mb-1">AI 在会议中自动给出决策、行动项等建议</p>
+                <p className="text-[11px] text-slate-500 font-medium mb-2">Frequency</p>
                 <div className="flex items-center gap-2">
                   {(["high", "medium", "low", "off"] as const).map((level) => (
                     <button
