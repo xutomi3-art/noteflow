@@ -1880,10 +1880,10 @@ export default function NotebookPage() {
                 e.stopPropagation();
                 const startY = e.clientY;
                 const section = e.currentTarget.closest('section');
-                const srcEl = section?.querySelector('[data-sources-list]') as HTMLElement | null;
+                const p4El = section?.querySelector('.p-4') as HTMLElement | null;
                 const teamEl = section?.querySelector('[data-team-list]') as HTMLElement | null;
-                if (!srcEl || !teamEl) return;
-                const startSrcH = srcEl.getBoundingClientRect().height;
+                if (!p4El || !teamEl) return;
+                const startSrcH = p4El.getBoundingClientRect().height;
                 const startTeamH = teamEl.getBoundingClientRect().height;
                 const total = startSrcH + startTeamH;
                 document.body.style.cursor = 'row-resize';
@@ -1891,11 +1891,16 @@ export default function NotebookPage() {
                 const onMove = (ev: MouseEvent) => {
                   const delta = ev.clientY - startY;
                   const newSrc = Math.max(60, Math.min(total - 60, startSrcH + delta));
-                  setSourceFlex(newSrc / (total - newSrc));
+                  const ratio = newSrc / (total - newSrc);
+                  p4El.style.flex = `${ratio} 1 0%`;
+                  teamEl.style.flex = '1 1 0%';
                 };
                 const onUp = () => {
                   document.body.style.cursor = '';
                   document.body.style.userSelect = '';
+                  const finalH = p4El.getBoundingClientRect().height;
+                  const finalTeamH = teamEl.getBoundingClientRect().height;
+                  setSourceFlex(finalH / (finalTeamH || 1));
                   document.removeEventListener('mousemove', onMove);
                   document.removeEventListener('mouseup', onUp);
                 };
