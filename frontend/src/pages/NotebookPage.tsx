@@ -1123,7 +1123,7 @@ export default function NotebookPage() {
     [id, uploadSource],
   );
 
-  /** Resizable panel drag */
+  /** Resizable panel drag — direct DOM manipulation for smooth tracking */
   const handleDragStart = useCallback(
     (panel: "left" | "right", e: React.MouseEvent) => {
       e.preventDefault();
@@ -1132,17 +1132,28 @@ export default function NotebookPage() {
       dragStartXRef.current = e.clientX;
       dragStartWidthRef.current = panel === "left" ? leftWidth : rightWidth;
 
+      // Find the panel element to manipulate directly
+      const section = (e.currentTarget as HTMLElement).closest("main");
+      const leftEl = section?.querySelector("section") as HTMLElement | null;
+      const rightEl = section?.querySelector("[data-studio-panel]") as HTMLElement | null;
+
       const handleMouseMove = (ev: MouseEvent) => {
         if (!isDraggingRef.current) return;
         const delta = ev.clientX - dragStartXRef.current;
-        if (isDraggingRef.current === "left") {
-          setLeftWidth(Math.max(180, Math.min(600, dragStartWidthRef.current + delta)));
-        } else {
-          setRightWidth(Math.max(200, Math.min(700, dragStartWidthRef.current - delta)));
+        if (isDraggingRef.current === "left" && leftEl) {
+          leftEl.style.width = `${Math.max(180, Math.min(600, dragStartWidthRef.current + delta))}px`;
+        } else if (isDraggingRef.current === "right" && rightEl) {
+          rightEl.style.width = `${Math.max(200, Math.min(700, dragStartWidthRef.current - delta))}px`;
         }
       };
 
       const handleMouseUp = () => {
+        // Sync final width to state
+        if (isDraggingRef.current === "left" && leftEl) {
+          setLeftWidth(leftEl.offsetWidth);
+        } else if (isDraggingRef.current === "right" && rightEl) {
+          setRightWidth(rightEl.offsetWidth);
+        }
         isDraggingRef.current = null;
         setIsDragging(false);
         document.removeEventListener("mousemove", handleMouseMove);
@@ -2385,6 +2396,7 @@ export default function NotebookPage() {
 
         {/* Right Panel: Studio */}
         <section
+          data-studio-panel
           style={!isMobile && !isRightCollapsed ? { width: rightWidth } : undefined}
           className={`bg-white border-l border-slate-200 flex-col overflow-hidden shrink-0 relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "studio" ? "flex w-full" : "hidden") : "flex"}`}
         >
