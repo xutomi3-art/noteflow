@@ -67,6 +67,7 @@ function fileTypeColor(fileType: string): string {
   if (t === "docx" || t === "doc") return "bg-blue-100 text-blue-600";
   if (t === "xlsx" || t === "csv") return "bg-green-100 text-green-600";
   if (["mp3", "wav", "m4a", "flac", "ogg", "webm"].includes(t)) return "bg-purple-100 text-purple-600";
+  if (t === "meeting") return "bg-purple-100 text-purple-600";
   return "bg-slate-100 text-slate-600"; // txt, md, etc.
 }
 
@@ -79,6 +80,7 @@ function fileTypeIcon(fileType: string): React.ReactNode {
   if (t === "xlsx" || t === "xls" || t === "csv") return <Table2 className={cls} />;
   if (["jpg", "jpeg", "png", "webp", "gif"].includes(t)) return <ImageIcon className={cls} />;
   if (["mp3", "wav", "m4a", "flac", "ogg", "webm"].includes(t)) return <Mic className={cls} />;
+  if (t === "meeting") return <Mic className={cls} />;
   if (t === "txt" || t === "md") return <AlignLeft className={cls} />;
   return <FileText className={cls} />;
 }
