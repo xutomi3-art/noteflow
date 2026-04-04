@@ -392,6 +392,8 @@ export default function NotebookPage() {
   const [sourceFlex, setSourceFlex] = useState(2); // Sources flex ratio (vs team=1)
   const [urlInput, setUrlInput] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const meetTranscriptRef = useRef<HTMLDivElement>(null);
+  const liveTranscriptRef = useRef<HTMLDivElement>(null);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
   const [aiInstructionsValue, setAIInstructionsValue] = useState("");
   const [isSavingInstructions, setIsSavingInstructions] = useState(false);
@@ -713,6 +715,18 @@ export default function NotebookPage() {
       userScrolledUpRef.current = false;
     }
   }, [streamingContent]);
+
+  // Auto-scroll meeting transcript areas
+  useEffect(() => {
+    if (meetTranscriptRef.current) {
+      meetTranscriptRef.current.scrollTop = meetTranscriptRef.current.scrollHeight;
+    }
+  }, [meetUtterances]);
+  useEffect(() => {
+    if (liveTranscriptRef.current) {
+      liveTranscriptRef.current.scrollTop = liveTranscriptRef.current.scrollHeight;
+    }
+  }, [liveUtterances]);
 
   // Highlight is now handled by the ref callback on the source content div (see JSX below)
 
@@ -1621,7 +1635,7 @@ export default function NotebookPage() {
                     }} className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-red-200 text-red-600 hover:bg-red-50">End</button>
                   </div>
                 </div>
-                <div className="max-h-[250px] overflow-y-auto px-3 pb-2 space-y-0.5">
+                <div ref={meetTranscriptRef} className="max-h-[250px] overflow-y-auto px-3 pb-2 space-y-0.5">
                   {meetUtterances.length === 0 ? (
                     <p className="text-[11px] text-red-300 italic py-2">Waiting for speech...</p>
                   ) : (
@@ -1646,7 +1660,7 @@ export default function NotebookPage() {
                   </span>
                   <span className="text-[12px] font-semibold text-blue-700">Live Meeting Transcript</span>
                 </div>
-                <div className="max-h-[250px] overflow-y-auto px-3 pb-2 space-y-0.5">
+                <div ref={liveTranscriptRef} className="max-h-[250px] overflow-y-auto px-3 pb-2 space-y-0.5">
                   {liveUtterances.length === 0 ? (
                     <p className="text-[11px] text-blue-400 italic">Waiting for speech...</p>
                   ) : (
