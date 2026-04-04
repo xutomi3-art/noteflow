@@ -53,6 +53,9 @@ class MeetingSession:
     _result_queue: asyncio.Queue | None = None
     _flush_task: asyncio.Task | None = None
     notebook_id: str = ""  # for hotwords lookup
+    # Suggestion tracking
+    suggestion_last_time: float = 0.0      # monotonic time of last suggestion
+    suggestion_last_char_count: int = 0    # total char count at last suggestion
 
 
 # ── Volcengine Seed-ASR 2.0 (WebSocket) ───────────────────────────

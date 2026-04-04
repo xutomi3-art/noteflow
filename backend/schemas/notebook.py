@@ -28,6 +28,7 @@ class NotebookUpdate(BaseModel):
     emoji: str | None = None
     cover_color: str | None = None
     custom_prompt: str | None = None
+    suggestion_level: str | None = None
 
     @field_validator('name')
     @classmethod
@@ -51,6 +52,7 @@ class NotebookResponse(BaseModel):
     is_shared: bool
     shared_chat: bool = False
     custom_prompt: str | None = None
+    suggestion_level: str = "medium"
     user_role: str = "owner"
     source_count: int = 0
     member_count: int = 1

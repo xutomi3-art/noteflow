@@ -134,7 +134,7 @@ class ApiClient {
     return this.request(`/notebooks/${id}`);
   }
 
-  async updateNotebook(id: string, data: { name?: string; emoji?: string; cover_color?: string; custom_prompt?: string }): Promise<Notebook> {
+  async updateNotebook(id: string, data: { name?: string; emoji?: string; cover_color?: string; custom_prompt?: string; suggestion_level?: string }): Promise<Notebook> {
     return this.request(`/notebooks/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

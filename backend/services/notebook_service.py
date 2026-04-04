@@ -128,6 +128,8 @@ async def update_notebook(db: AsyncSession, notebook_id: uuid.UUID, user_id: uui
         notebook.cover_color = req.cover_color
     if req.custom_prompt is not None:
         notebook.custom_prompt = req.custom_prompt if req.custom_prompt.strip() else None
+    if req.suggestion_level is not None and req.suggestion_level in ("high", "medium", "low", "off"):
+        notebook.suggestion_level = req.suggestion_level
     notebook.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(notebook)

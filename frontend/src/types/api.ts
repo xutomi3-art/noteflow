@@ -21,6 +21,7 @@ export interface Notebook {
   is_shared: boolean;
   shared_chat: boolean;
   custom_prompt: string | null;
+  suggestion_level: string;
   user_role: string;
   source_count: number;
   member_count: number;

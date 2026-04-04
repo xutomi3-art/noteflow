@@ -458,6 +458,129 @@ async def _generate_meeting_minutes_safe(
         logger.error("Meeting minutes generation failed: %s", e, exc_info=True)
 
 
+# ── Meeting Live Suggestions ─────────────────────────────────────
+
+SUGGESTION_CONFIG = {
+    "high":   {"silence_secs": 10, "char_threshold": 600,  "min_interval": 480},
+    "medium": {"silence_secs": 15, "char_threshold": 1000, "min_interval": 1080},
+    "low":    {"silence_secs": 25, "char_threshold": 1500, "min_interval": 3000},
+}
+
+_SUGGESTION_SYSTEM = """你是会议实时助手。根据会议对话内容，给出 2-3 条简短、有价值的建议。
+重点关注：
+- 需要确认或记录的决策
+- 讨论中可能遗漏的要点
+- 需要分配责任人的行动项
+- 值得进一步展开的问题
+
+规则：
+- 每条不超过 50 字
+- 只提有价值的建议，宁缺毋滥
+- 如果对话太日常/无实质内容，返回空数组 []
+- 用对话的语言回答（中文对话用中文建议）
+- 用 JSON 数组: [{"type": "decision|action|question|insight", "text": "..."}]"""
+
+
+def _build_suggestion_prompt(transcript: str, notebook_prompt: str = "") -> tuple[str, str]:
+    """Build system + user messages for suggestion generation."""
+    parts = [_SUGGESTION_SYSTEM]
+    if notebook_prompt:
+        parts.append(f"Notebook 背景设定（请结合此角色给出建议）：\n{notebook_prompt}")
+    system_msg = "\n\n".join(parts)
+    user_msg = f"以下是最近的会议对话，请给出建议：\n\n{transcript[-3000:]}"
+    return system_msg, user_msg
+
+
+async def generate_meeting_suggestion(
+    meeting_id: str,
+    notebook_id: str,
+    user_id: str,
+    transcript: str,
+    custom_prompt: str = "",
+) -> None:
+    """Generate AI suggestions from meeting transcript and push to chat."""
+    import json as _json
+    from backend.models.chat_message import ChatMessage
+
+    system_msg, user_msg = _build_suggestion_prompt(transcript, custom_prompt)
+
+    result = await qwen_client.generate(
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ],
+        max_tokens=400, temperature=0.3,
+    )
+
+    if not result or result.startswith("[Error"):
+        logger.warning("Meeting suggestion generation failed: %s", result[:100] if result else "empty")
+        return
+
+    # Parse JSON — extract array from response
+    try:
+        # Handle markdown fencing
+        clean = result.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        suggestions = _json.loads(clean)
+        if not isinstance(suggestions, list) or not suggestions:
+            return
+    except (_json.JSONDecodeError, Exception):
+        logger.warning("Failed to parse suggestion JSON: %s", result[:200])
+        return
+
+    # Format as markdown content
+    icons = {"decision": "✅", "action": "📋", "question": "❓", "insight": "💡"}
+    lines = [f"{icons.get(s.get('type', ''), '💡')} {s.get('text', '')}" for s in suggestions if s.get('text')]
+    if not lines:
+        return
+    content = "\n".join(lines)
+
+    # Save as ChatMessage
+    nb_uuid = uuid.UUID(notebook_id)
+    user_uuid = uuid.UUID(user_id)
+    async with async_session() as db:
+        msg = ChatMessage(
+            notebook_id=nb_uuid,
+            user_id=user_uuid,
+            role="assistant",
+            content=content,
+            citations=[],
+            msg_metadata={
+                "type": "meeting_suggestion",
+                "meeting_id": meeting_id,
+                "suggestions": suggestions,
+            },
+        )
+        db.add(msg)
+        await db.commit()
+        await db.refresh(msg)
+
+        await event_bus.publish(notebook_id, {
+            "type": "meeting_suggestion",
+            "message": {
+                "id": str(msg.id),
+                "notebook_id": notebook_id,
+                "user_id": user_id,
+                "role": "assistant",
+                "content": content,
+                "citations": [],
+                "metadata": msg.msg_metadata,
+                "created_at": msg.created_at.isoformat(),
+            },
+        })
+
+    logger.info("Meeting suggestion generated for %s (%d items)", meeting_id, len(suggestions))
+
+
+async def _generate_suggestion_safe(meeting_id: str, notebook_id: str, user_id: str, transcript: str, custom_prompt: str = "") -> None:
+    """Safe wrapper — never raises."""
+    try:
+        await generate_meeting_suggestion(meeting_id, notebook_id, user_id, transcript, custom_prompt)
+    except Exception as e:
+        logger.error("Meeting suggestion failed: %s", e, exc_info=True)
+
+
 MEETING_STALE_MINUTES = 5  # Auto-end meetings with no WebSocket after this many minutes
 
 

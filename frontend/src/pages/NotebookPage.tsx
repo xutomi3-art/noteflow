@@ -2172,6 +2172,22 @@ export default function NotebookPage() {
                           isCopied={copiedMessageIds.has(msg.id)}
                         />
                       </div>
+                    ) : msg.metadata?.type === "meeting_suggestion" ? (
+                      <div className="flex justify-start">
+                        <div className="w-full max-w-[90%]">
+                          <div className="rounded-xl border border-purple-200/60 bg-purple-50/30 px-4 py-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                              <span className="text-[12px] font-semibold text-purple-700">AI Meeting Insight</span>
+                            </div>
+                            <div className="space-y-1">
+                              {msg.content.split("\n").filter(Boolean).map((line, i) => (
+                                <p key={i} className="text-[13px] text-slate-700">{line}</p>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     ) : msg.role === "user" ? (
                       <div className={`flex ${msg.user_name && msg.user_id !== user?.id ? "justify-start" : "justify-end"}`}>
                         <div className={`${msg.user_name && msg.user_id !== user?.id ? "bg-blue-50 text-slate-800 rounded-2xl rounded-tl-sm" : "bg-[#eef1f5] text-slate-800 rounded-2xl rounded-tr-sm"} px-5 py-3 max-w-[80%] text-[14px]`}>
@@ -2933,9 +2949,38 @@ export default function NotebookPage() {
                 </button>
               </div>
 
-              {/* More settings sections can be added here */}
-              <div className="px-5 py-4 text-center">
-                <p className="text-[11px] text-slate-300">More settings coming soon</p>
+              {/* Meeting AI Suggestions Section */}
+              <div className="px-5 py-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                  <h4 className="text-[13px] font-semibold text-slate-800">Meeting AI Suggestions</h4>
+                </div>
+                <p className="text-[11px] text-slate-400 mb-3">AI 在会议中自动给出决策、行动项等建议</p>
+                <div className="flex items-center gap-2">
+                  {(["high", "medium", "low", "off"] as const).map((level) => (
+                    <button
+                      key={level}
+                      onClick={async () => {
+                        if (!id) return;
+                        const updated = await api.updateNotebook(id, { suggestion_level: level });
+                        setNotebook(updated);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                        notebook.suggestion_level === level
+                          ? "bg-purple-100 text-purple-700 border border-purple-300"
+                          : "bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {level === "high" ? "High" : level === "medium" ? "Medium" : level === "low" ? "Low" : "Off"}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  {notebook.suggestion_level === "off" ? "Suggestions disabled" :
+                   notebook.suggestion_level === "high" ? "~6 suggestions per hour" :
+                   notebook.suggestion_level === "low" ? "~1 suggestion per hour" :
+                   "~3 suggestions per hour (default)"}
+                </p>
               </div>
             </div>
           </div>

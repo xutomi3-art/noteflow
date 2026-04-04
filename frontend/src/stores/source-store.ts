@@ -204,8 +204,8 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         });
       }
 
-      // Meeting minutes ready — add to chat
-      if (event.type === "meeting_minutes_ready") {
+      // Meeting suggestion or minutes ready — add to chat
+      if (event.type === "meeting_suggestion" || event.type === "meeting_minutes_ready") {
         const ev = event as Record<string, unknown>;
         const msg = ev.message as Record<string, unknown> | undefined;
         if (msg) {
