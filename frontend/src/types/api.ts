@@ -83,6 +83,17 @@ export interface SavedNote {
   created_at: string;
 }
 
+export interface CustomSkill {
+  id: string;
+  name: string;
+  prompt: string;
+  icon: string;
+  created_by: string;
+  notebook_id: string;
+  all_notebooks: boolean;
+  shared_with_team: boolean;
+}
+
 export interface InviteLink {
   id: string;
   token: string;

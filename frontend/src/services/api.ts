@@ -1,4 +1,4 @@
-import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member } from "@/types/api";
+import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member, CustomSkill } from "@/types/api";
 import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth, ResourcesData, UsageStats, ChatLogItem, FeedbackItem } from "@/types/admin";
 
 const API_BASE = "/api";
@@ -500,6 +500,37 @@ class ApiClient {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_ids: sourceIds?.length ? sourceIds : null }),
+      });
+      return data.content;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  // Custom Skills
+  async listCustomSkills(notebookId: string): Promise<CustomSkill[]> {
+    return this.request(`/notebooks/${notebookId}/studio/custom-skills`);
+  }
+
+  async createCustomSkill(notebookId: string, data: { name: string; prompt: string; icon?: string; all_notebooks?: boolean; shared_with_team?: boolean }): Promise<CustomSkill> {
+    return this.request(`/notebooks/${notebookId}/studio/custom-skills`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCustomSkill(notebookId: string, skillId: string): Promise<void> {
+    await this.request(`/notebooks/${notebookId}/studio/custom-skills/${skillId}`, { method: "DELETE" });
+  }
+
+  async executeCustomSkill(notebookId: string, skillId: string, sourceIds?: string[]): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000);
+    try {
+      const data = await this.request<{ content: string }>(`/notebooks/${notebookId}/studio/custom-skills/${skillId}/execute`, {
+        method: "POST",
+        signal: controller.signal,
         body: JSON.stringify({ source_ids: sourceIds?.length ? sourceIds : null }),
       });
       return data.content;

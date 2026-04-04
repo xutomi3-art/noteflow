@@ -392,6 +392,12 @@ export default function NotebookPage() {
   const [sourceFlex, setSourceFlex] = useState(2); // Sources flex ratio (vs team=1)
   const [urlInput, setUrlInput] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCreateSkillOpen, setIsCreateSkillOpen] = useState(false);
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillPrompt, setNewSkillPrompt] = useState("");
+  const [newSkillAllNb, setNewSkillAllNb] = useState(true);
+  const [newSkillShared, setNewSkillShared] = useState(false);
+  const [isCreatingSkill, setIsCreatingSkill] = useState(false);
   const meetTranscriptRef = useRef<HTMLDivElement>(null);
   const liveTranscriptRef = useRef<HTMLDivElement>(null);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
@@ -464,6 +470,11 @@ export default function NotebookPage() {
     fetchNotes,
     deleteNote,
     closePdf,
+    customSkills,
+    fetchCustomSkills,
+    createCustomSkill,
+    deleteCustomSkill,
+    executeCustomSkill,
     reset: resetStudio,
   } = useStudioStore();
   const { members, fetchMembers, removeMember } = useSharingStore();
@@ -545,6 +556,7 @@ export default function NotebookPage() {
       subscribeStatus(id);
       fetchHistory(id);
       fetchNotes(id);
+      fetchCustomSkills(id);
       api.getOverview(id).then(data => {
         if (!cancelled && data.overview) {
           // Defer overview update if chat is streaming to avoid interrupting SSE
@@ -2527,6 +2539,53 @@ export default function NotebookPage() {
               </button>
             </div>
 
+            {/* Custom Skills */}
+            {customSkills.length > 0 && (
+              <div className="px-4 mb-3">
+                <h3 className="text-[11px] font-bold text-slate-400 tracking-wider mb-2">CUSTOM SKILLS</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {customSkills.map((skill) => (
+                    <button
+                      key={skill.id}
+                      onClick={async () => {
+                        if (!id) return;
+                        await executeCustomSkill(id, skill.id, Array.from(selectedIds));
+                        await fetchHistory(id);
+                      }}
+                      disabled={isGenerating[skill.id]}
+                      className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 cursor-pointer transition-colors text-left group relative"
+                    >
+                      {isGenerating[skill.id] ? (
+                        <Loader2 className="w-4 h-4 text-slate-500 mb-2 animate-spin" />
+                      ) : (
+                        <span className="text-sm mb-2 block">{skill.icon}</span>
+                      )}
+                      <div className="text-[11px] font-bold text-slate-700 truncate">{skill.name}</div>
+                      {skill.created_by === user?.id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); id && deleteCustomSkill(id, skill.id); }}
+                          className="absolute top-1 right-1 p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* + New Skill */}
+            <div className="px-4 mb-4">
+              <button
+                onClick={() => setIsCreateSkillOpen(true)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-slate-200 text-[12px] text-slate-500 hover:text-[#5b8c15] hover:border-[#5b8c15]/40 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                New Skill
+              </button>
+            </div>
+
             <div className="px-4">
             {/* PDF Viewer modal is rendered outside this panel — see below */}
 
@@ -2605,12 +2664,8 @@ export default function NotebookPage() {
               </div>
             )}
 
-            {/* Saved Notes */}
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[11px] font-bold text-slate-400 tracking-wider">SAVED NOTES</h3>
-              </div>
-
+            {/* Saved Notes — hidden, available in Chat history */}
+            <div className="hidden">
               <div className="space-y-3">
                 {notes.map((note) => {
                   const isExpanded = expandedNoteId === note.id;
@@ -2701,8 +2756,8 @@ export default function NotebookPage() {
             </div>
           )}
 
-          {/* Add Note Button */}
-          <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
+          {/* Add Note Button — hidden */}
+          <div className="hidden absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
             {showNoteInput ? (
               <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-3 mx-4 pointer-events-auto w-full max-w-[300px]">
                 <textarea
@@ -2938,6 +2993,76 @@ export default function NotebookPage() {
 
       {/* Feedback Modal */}
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+
+      {/* Create Custom Skill Modal */}
+      {isCreateSkillOpen && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setIsCreateSkillOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-[460px] max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">Create Custom Skill</h3>
+              <button onClick={() => setIsCreateSkillOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 mb-1 block">Skill Name</label>
+                <input
+                  type="text"
+                  value={newSkillName}
+                  onChange={(e) => setNewSkillName(e.target.value)}
+                  placeholder="e.g. Generate Weekly Report"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-slate-600 mb-1 block">Prompt Template</label>
+                <textarea
+                  value={newSkillPrompt}
+                  onChange={(e) => setNewSkillPrompt(e.target.value)}
+                  placeholder="Based on the documents, generate a weekly report that includes..."
+                  rows={5}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">The documents will be automatically appended to your prompt.</p>
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={newSkillAllNb} onChange={(e) => setNewSkillAllNb(e.target.checked)} className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5" />
+                  <span className="text-[12px] text-slate-700">Available in all my notebooks</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={newSkillShared} onChange={(e) => setNewSkillShared(e.target.checked)} className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5" />
+                  <span className="text-[12px] text-slate-700">Share with team in this notebook</span>
+                </label>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+              <button onClick={() => setIsCreateSkillOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+              <button
+                disabled={isCreatingSkill || !newSkillName.trim() || !newSkillPrompt.trim()}
+                onClick={async () => {
+                  if (!id) return;
+                  setIsCreatingSkill(true);
+                  try {
+                    await createCustomSkill(id, { name: newSkillName.trim(), prompt: newSkillPrompt.trim(), all_notebooks: newSkillAllNb, shared_with_team: newSkillShared });
+                    setIsCreateSkillOpen(false);
+                    setNewSkillName("");
+                    setNewSkillPrompt("");
+                    setNewSkillAllNb(true);
+                    setNewSkillShared(false);
+                  } catch { /* silently fail */ }
+                  finally { setIsCreatingSkill(false); }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-[#5b8c15] hover:bg-[#4a7311] rounded-lg disabled:opacity-50"
+              >
+                {isCreatingSkill ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notebook Settings Modal */}
       {isSettingsOpen && notebook && (

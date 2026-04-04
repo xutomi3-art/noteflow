@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import type { SavedNote } from "@/types/api";
+import type { SavedNote, CustomSkill } from "@/types/api";
 import { api } from "@/services/api";
 
 interface PdfViewerState {
   sourceId: string;
   filename: string;
   page: number;
-  _seq: number;  // monotonic counter to force re-render on same-source page changes
+  _seq: number;
 }
 
 interface StudioState {
@@ -16,6 +16,7 @@ interface StudioState {
   notes: SavedNote[];
   isLoadingNotes: boolean;
   pdfViewer: PdfViewerState | null;
+  customSkills: CustomSkill[];
 
   setActiveTab: (tab: StudioState["activeTab"]) => void;
   generateContent: (notebookId: string, contentType: string, sourceIds?: string[]) => Promise<void>;
@@ -24,6 +25,10 @@ interface StudioState {
   deleteNote: (notebookId: string, noteId: string) => Promise<void>;
   openPdf: (sourceId: string, filename: string, page: number) => void;
   closePdf: () => void;
+  fetchCustomSkills: (notebookId: string) => Promise<void>;
+  createCustomSkill: (notebookId: string, data: { name: string; prompt: string; icon?: string; all_notebooks?: boolean; shared_with_team?: boolean }) => Promise<CustomSkill>;
+  deleteCustomSkill: (notebookId: string, skillId: string) => Promise<void>;
+  executeCustomSkill: (notebookId: string, skillId: string, sourceIds?: string[]) => Promise<void>;
   reset: () => void;
 }
 
@@ -34,6 +39,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   notes: [],
   isLoadingNotes: false,
   pdfViewer: null,
+  customSkills: [],
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -96,5 +102,37 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }));
   },
 
-  reset: () => set({ activeTab: null, content: {}, isGenerating: {}, notes: [], isLoadingNotes: false, pdfViewer: null }),
+  fetchCustomSkills: async (notebookId: string) => {
+    try {
+      const skills = await api.listCustomSkills(notebookId);
+      set({ customSkills: skills });
+    } catch {
+      // silently fail
+    }
+  },
+
+  createCustomSkill: async (notebookId, data) => {
+    const skill = await api.createCustomSkill(notebookId, data);
+    set(state => ({ customSkills: [...state.customSkills, skill] }));
+    return skill;
+  },
+
+  deleteCustomSkill: async (notebookId, skillId) => {
+    await api.deleteCustomSkill(notebookId, skillId);
+    set(state => ({ customSkills: state.customSkills.filter(s => s.id !== skillId) }));
+  },
+
+  executeCustomSkill: async (notebookId, skillId, sourceIds) => {
+    set(state => ({ isGenerating: { ...state.isGenerating, [skillId]: true } }));
+    try {
+      const content = await api.executeCustomSkill(notebookId, skillId, sourceIds);
+      set(state => ({ content: { ...state.content, [skillId]: content } }));
+    } catch (err) {
+      set(state => ({ content: { ...state.content, [skillId]: `Error: ${err}` } }));
+    } finally {
+      set(state => ({ isGenerating: { ...state.isGenerating, [skillId]: false } }));
+    }
+  },
+
+  reset: () => set({ activeTab: null, content: {}, isGenerating: {}, notes: [], isLoadingNotes: false, pdfViewer: null, customSkills: [] }),
 }));

@@ -854,3 +854,209 @@ async def generate_content(
         await db.commit()
 
     return {"content": content}
+
+
+# ── Custom Skills CRUD ─────────────────────────────────────────
+
+from backend.models.custom_skill import CustomSkill
+from backend.models.notebook_member import NotebookMember
+from sqlalchemy import or_
+
+
+class CustomSkillCreate(BaseModel):
+    name: str
+    prompt: str
+    icon: str = "💡"
+    all_notebooks: bool = True
+    shared_with_team: bool = False
+
+
+class CustomSkillUpdate(BaseModel):
+    name: str | None = None
+    prompt: str | None = None
+    icon: str | None = None
+    all_notebooks: bool | None = None
+    shared_with_team: bool | None = None
+
+
+class CustomSkillResponse(BaseModel):
+    id: str
+    name: str
+    prompt: str
+    icon: str
+    created_by: str
+    notebook_id: str
+    all_notebooks: bool
+    shared_with_team: bool
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/custom-skills")
+async def list_custom_skills(
+    notebook_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List custom skills visible in this notebook for the current user."""
+    nb_uuid = uuid.UUID(notebook_id)
+
+    # Skills visible to this user in this notebook:
+    # 1. My skills with all_notebooks=True (visible everywhere)
+    # 2. My skills created in this notebook
+    # 3. Team-shared skills in this notebook (if I'm a member)
+    stmt = select(CustomSkill).where(
+        or_(
+            # My global skills
+            (CustomSkill.created_by == user.id) & (CustomSkill.all_notebooks == True),
+            # My skills in this notebook
+            (CustomSkill.created_by == user.id) & (CustomSkill.notebook_id == nb_uuid),
+            # Team-shared skills in this notebook
+            (CustomSkill.notebook_id == nb_uuid) & (CustomSkill.shared_with_team == True),
+        )
+    )
+    result = await db.execute(stmt)
+    skills = result.scalars().all()
+
+    # Deduplicate (a skill could match multiple conditions)
+    seen = set()
+    unique = []
+    for s in skills:
+        if s.id not in seen:
+            seen.add(s.id)
+            unique.append({
+                "id": str(s.id), "name": s.name, "prompt": s.prompt, "icon": s.icon,
+                "created_by": str(s.created_by), "notebook_id": str(s.notebook_id),
+                "all_notebooks": s.all_notebooks, "shared_with_team": s.shared_with_team,
+            })
+    return unique
+
+
+@router.post("/custom-skills")
+async def create_custom_skill(
+    notebook_id: str,
+    body: CustomSkillCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a custom skill."""
+    if not body.name.strip() or not body.prompt.strip():
+        raise HTTPException(status_code=400, detail="Name and prompt are required")
+
+    skill = CustomSkill(
+        name=body.name.strip(),
+        prompt=body.prompt.strip(),
+        icon=body.icon or "💡",
+        created_by=user.id,
+        notebook_id=uuid.UUID(notebook_id),
+        all_notebooks=body.all_notebooks,
+        shared_with_team=body.shared_with_team,
+    )
+    db.add(skill)
+    await db.commit()
+    await db.refresh(skill)
+    return {
+        "id": str(skill.id), "name": skill.name, "prompt": skill.prompt, "icon": skill.icon,
+        "created_by": str(skill.created_by), "notebook_id": str(skill.notebook_id),
+        "all_notebooks": skill.all_notebooks, "shared_with_team": skill.shared_with_team,
+    }
+
+
+@router.patch("/custom-skills/{skill_id}")
+async def update_custom_skill(
+    notebook_id: str,
+    skill_id: str,
+    body: CustomSkillUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a custom skill (only the creator can edit)."""
+    skill = await db.get(CustomSkill, uuid.UUID(skill_id))
+    if not skill or skill.created_by != user.id:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    if body.name is not None:
+        skill.name = body.name.strip()
+    if body.prompt is not None:
+        skill.prompt = body.prompt.strip()
+    if body.icon is not None:
+        skill.icon = body.icon
+    if body.all_notebooks is not None:
+        skill.all_notebooks = body.all_notebooks
+    if body.shared_with_team is not None:
+        skill.shared_with_team = body.shared_with_team
+    await db.commit()
+    return {"data": {"message": "Skill updated"}}
+
+
+@router.delete("/custom-skills/{skill_id}")
+async def delete_custom_skill(
+    notebook_id: str,
+    skill_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a custom skill (only the creator can delete)."""
+    skill = await db.get(CustomSkill, uuid.UUID(skill_id))
+    if not skill or skill.created_by != user.id:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    await db.delete(skill)
+    await db.commit()
+    return {"data": {"message": "Skill deleted"}}
+
+
+@router.post("/custom-skills/{skill_id}/execute")
+async def execute_custom_skill(
+    notebook_id: str,
+    skill_id: str,
+    body: StudioRequest = Body(default=StudioRequest()),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Execute a custom skill — same as generate_content but uses custom prompt."""
+    skill = await db.get(CustomSkill, uuid.UUID(skill_id))
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    source_ids = body.source_ids if body else None
+
+    from backend.meeting.service import get_live_transcript_for_notebook_async
+    live_transcript = await get_live_transcript_for_notebook_async(notebook_id)
+    if live_transcript:
+        context = live_transcript
+    else:
+        context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
+
+    if not context:
+        raise HTTPException(status_code=400, detail="No ready sources available")
+
+    lang = _detect_language(context)
+    prompt = skill.prompt + f"\n\nDOCUMENTS:\n{context}"
+    system_msg = f"You are a helpful assistant. Write your entire response in {lang}."
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": prompt},
+    ]
+    content = await qwen_client.generate(messages)
+
+    # Save as ChatMessage
+    from backend.models.chat_message import ChatMessage
+    lines = [l for l in content.split("\n") if l.strip() and not l.strip().startswith("#")]
+    collapsed = lines[0][:150] if lines else content[:150]
+
+    msg = ChatMessage(
+        notebook_id=uuid.UUID(notebook_id),
+        user_id=user.id,
+        role="assistant",
+        content=content,
+        citations=[],
+        msg_metadata={
+            "type": "skill_output",
+            "skill_type": str(skill.id),
+            "skill_label": skill.name,
+            "collapsed_summary": collapsed,
+        },
+    )
+    db.add(msg)
+    await db.commit()
+
+    return {"content": content}
