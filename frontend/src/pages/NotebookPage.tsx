@@ -1338,7 +1338,7 @@ export default function NotebookPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-white font-sans text-slate-900 overflow-hidden">
+    <div className="h-dvh flex flex-col bg-white font-sans text-slate-900 overflow-hidden">
       {/* Header */}
       <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-2 md:px-4 shrink-0 select-none">
         <div className="flex items-center gap-3">
@@ -2346,7 +2346,7 @@ export default function NotebookPage() {
           </div>
 
           {/* Chat Input Area */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-10 pb-6 px-8 select-none">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-10 pb-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] px-8 md:px-8 px-3 select-none">
             <div className="max-w-3xl mx-auto">
               <div
                 className={`relative bg-white border rounded-2xl shadow-sm flex items-center px-2 py-2 transition-all ${
