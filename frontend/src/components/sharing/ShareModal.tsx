@@ -19,7 +19,7 @@ interface InvitedEmail {
 }
 
 export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, onSharedChatToggle, onMemberAdded }: ShareModalProps) {
-  const { members, fetchMembers, createInviteLink, sendEmailInvite, removeMember } =
+  const { members, fetchMembers, createInviteLink, sendEmailInvite, removeMember, updateMemberRole } =
     useSharingStore();
 
   const [emailInput, setEmailInput] = useState("");
@@ -350,7 +350,17 @@ export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, on
                     {member.status === "pending" ? (
                       <span className="text-[11px] text-amber-500 font-medium w-14 text-right shrink-0">Pending</span>
                     ) : (
-                      <span className="text-[11px] text-slate-400 capitalize w-14 text-right shrink-0">{member.role}</span>
+                      <select
+                        value={member.role}
+                        onChange={async (e) => {
+                          await updateMemberRole(notebookId, member.user_id, e.target.value);
+                          fetchMembers(notebookId);
+                        }}
+                        className="text-[11px] text-slate-500 bg-transparent border border-slate-200 rounded-md px-1.5 py-0.5 cursor-pointer hover:border-slate-300 focus:outline-none focus:border-[#5b8c15] capitalize shrink-0"
+                      >
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
                     )}
                     <button
                       onClick={() => handleRemoveMember(member.user_id)}
