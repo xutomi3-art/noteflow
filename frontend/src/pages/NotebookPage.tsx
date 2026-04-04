@@ -2378,7 +2378,7 @@ export default function NotebookPage() {
                   <button
                     type="button"
                     onClick={() => setDeepThinking(!deepThinking)}
-                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
+                    className={`hidden md:inline-flex text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
                       deepThinking
                         ? "bg-purple-600 text-white"
                         : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
@@ -2391,7 +2391,7 @@ export default function NotebookPage() {
                   <button
                     type="button"
                     onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
+                    className={`hidden md:inline-flex text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
                       webSearchEnabled
                         ? "bg-[#5b8c15] text-white"
                         : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
@@ -2400,7 +2400,7 @@ export default function NotebookPage() {
                     <Globe className="w-3 h-3 inline-block mr-1 -mt-px" />
                     Internet {webSearchEnabled ? "On" : "Off"}
                   </button>
-                  <span className="text-[11px] text-slate-400 font-medium px-2">
+                  <span className="hidden md:inline text-[11px] text-slate-400 font-medium px-2">
                     {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
                   </span>
                   {isStreaming && !chatInput.trim() ? (
