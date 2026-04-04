@@ -99,6 +99,197 @@ Rules:
 
 Source content:
 {context}""",
+    "swot": """You are a strategic analyst. Based on the following documents (which may include meeting transcripts, reports, or other materials), perform a thorough SWOT analysis on the core topic discussed.
+
+Output format:
+
+## 📊 SWOT Analysis: [auto-extract core topic]
+
+**Context**: (2-3 sentences summarizing what is being analyzed)
+
+### 💪 Strengths
+- **[Title]**: Specific explanation with evidence from the documents
+- (3-5 items)
+
+### ⚠️ Weaknesses
+- **[Title]**: Specific explanation with evidence from the documents
+- (3-5 items)
+
+### 🚀 Opportunities
+- **[Title]**: Specific explanation referencing trends or possibilities mentioned
+- (3-5 items)
+
+### 🔴 Threats
+- **[Title]**: Specific explanation with evidence from the documents
+- (3-5 items)
+
+### 📌 Recommendations
+Based on the SWOT analysis, provide 3-5 strategic recommendations, each with:
+- The recommendation
+- Which SWOT factor it addresses
+- Priority (High/Medium/Low)
+
+Rules:
+- Every item must have specific evidence from the documents, no generic statements
+- Preserve all specific data, names, amounts, dates
+- If information is insufficient, state clearly what is missing
+- Write in the same language as the documents
+
+DOCUMENTS:
+{context}""",
+    "recommendations": """You are an experienced business consultant. Based on the following documents (which may include meeting transcripts, reports, or other materials), provide detailed, actionable recommendations for the issues and challenges discussed.
+
+Output format:
+
+## 💡 Recommendations
+
+**Issue Overview**: (3-5 sentences summarizing the problems and challenges)
+
+### Recommendation 1: [Title]
+- **Problem**: What specific issue this addresses (cite from documents)
+- **Solution**: Step-by-step action plan (be as specific as possible)
+- **Rationale**: Why this approach (backed by document data or domain knowledge)
+- **Expected Outcome**: What results to expect
+- **Risks**: Potential obstacles
+
+### Recommendation 2: [Title]
+(same format)
+
+### Recommendation 3: [Title]
+(same format)
+
+(Provide 3-5 core recommendations)
+
+### Quick Action Items
+| # | Action | Suggested Owner | Timeline | Priority |
+|---|--------|----------------|----------|----------|
+| 1 | ... | ... | ... | High/Med/Low |
+
+### Issues Requiring Further Discussion
+- Points where **no consensus** was reached, with each party's position
+- Topics **not covered but should be discussed**
+
+Rules:
+- Recommendations must be specific and actionable, not vague like "improve communication"
+- Each recommendation must be supported by evidence from the documents
+- Preserve all specific data, names, amounts, dates
+- Write in the same language as the documents
+
+DOCUMENTS:
+{context}""",
+    "risk_analysis": """You are a professional risk management consultant. Based on the following documents (which may include meeting transcripts, reports, or other materials), identify and analyze all risks discussed or implied.
+
+Output format:
+
+## 🔍 Risk Analysis Report
+
+**Scope**: (2-3 sentences describing what is being analyzed)
+
+### Identified Risks
+
+**🔴 High Risk**
+
+**Risk 1: [Name]**
+- **Description**: What the risk is (cite from documents)
+- **Trigger**: Under what conditions it would occur
+- **Impact**: Which areas affected (financial/timeline/personnel/compliance)
+- **Severity**: Specific potential consequences
+- **Current Status**: Any existing mitigation discussed
+- **Recommended Action**: Specific risk mitigation steps
+
+**🟡 Medium Risk**
+
+**Risk 2: [Name]**
+(same format, may be slightly abbreviated)
+
+**🟢 Low Risk**
+
+**Risk 3: [Name]**
+(brief description)
+
+### Potential Risks (not discussed but noteworthy)
+- Risks **not mentioned in the documents but likely relevant** based on context
+- Explain why each is considered a potential risk
+
+### Risk Matrix
+| Risk | Likelihood | Impact | Level | Urgency |
+|------|-----------|--------|-------|---------|
+| ... | High/Med/Low | High/Med/Low | 🔴/🟡/🟢 | Immediate/Short-term/Long-term |
+
+### Recommended Next Steps
+- Risks requiring **immediate action** with specific steps
+- Risks requiring **ongoing monitoring** with suggested indicators
+- Risks requiring **further assessment** with evaluation methods
+
+Rules:
+- Risks must be specific, not generic like "market risk"
+- Each risk must have evidence from the documents
+- Distinguish between "known risks" and "potential risks"
+- Preserve all specific data, names, amounts, dates
+- Write in the same language as the documents
+
+DOCUMENTS:
+{context}""",
+    "decision_support": """You are a decision analysis expert. Based on the following documents (which may include meeting transcripts, reports, or other materials), identify all items requiring decisions and provide structured decision support analysis.
+
+Output format:
+
+## 🎯 Decision Support Analysis
+
+**Overview**: (Summarize which items need decisions, which are decided, which are pending)
+
+### Decisions Already Made
+| # | Decision | Key Rationale | Owner | Notes |
+|---|---------|--------------|-------|-------|
+| 1 | ... | ... | ... | ... |
+
+### Pending Decision Analysis
+
+**Pending Item 1: [Decision Question]**
+
+**Background**: Why this decision is needed (cite from documents)
+
+**Options Comparison**:
+| Dimension | Option A: [Name] | Option B: [Name] | Option C: [Name] |
+|-----------|-----------------|-----------------|-----------------|
+| Approach | ... | ... | ... |
+| Pros | ... | ... | ... |
+| Cons | ... | ... | ... |
+| Cost | ... | ... | ... |
+| Timeline | ... | ... | ... |
+| Risk | ... | ... | ... |
+
+**Stakeholder Positions**:
+- [Person/Role A] leans toward: ... Reason: ...
+- [Person/Role B] leans toward: ... Reason: ...
+
+**AI Recommendation**:
+- Recommended option: [X]
+- Rationale: (backed by document data and discussion content)
+- Watch out for: ...
+
+**Pending Item 2: [Decision Question]**
+(same format)
+
+### Implicit Decision Points
+- Items **implied but not explicitly raised** that need decisions
+- Why each also requires a decision
+
+### Decision Timeline
+| Pending Item | Suggested Deadline | Reason | Info Needed Before Deciding |
+|-------------|-------------------|--------|---------------------------|
+| ... | ... | ... | ... |
+
+Rules:
+- Options comparison must be fair and objective, not biased
+- AI recommendation must be clear, not just "each has pros and cons"
+- If insufficient info for a recommendation, state what info is missing
+- Quote original statements as evidence using 「」
+- Preserve all specific data, names, amounts, dates
+- Write in the same language as the documents
+
+DOCUMENTS:
+{context}""",
 }
 
 PPT_PROMPT = """You are creating a professional PowerPoint presentation based on the source documents.
@@ -628,6 +819,38 @@ async def generate_content(
     content = await qwen_client.generate(messages)
     t_llm = time.time()
 
-    logger.info("Studio %s: LLM generation %.1fs, %d chars output. Total: %.1fs", content_type, t_llm - t_context, len(content), t_llm - t_start)
+    logger.info("Skill %s: LLM generation %.1fs, %d chars output. Total: %.1fs", content_type, t_llm - t_context, len(content), t_llm - t_start)
+
+    # Save as ChatMessage for display in Chat panel (skip mindmap — it's JSON)
+    if content_type != "mindmap":
+        from backend.models.chat_message import ChatMessage
+
+        skill_labels = {
+            "summary": "Summary", "faq": "FAQ", "action_items": "Action Items",
+            "swot": "SWOT Analysis", "recommendations": "Recommendations",
+            "risk_analysis": "Risk Analysis", "decision_support": "Decision Support",
+            "study_guide": "Study Guide",
+        }
+        label = skill_labels.get(content_type, content_type.replace("_", " ").title())
+
+        # Extract first 150 chars as collapsed summary
+        lines = [l for l in content.split("\n") if l.strip() and not l.strip().startswith("#")]
+        collapsed = lines[0][:150] if lines else content[:150]
+
+        msg = ChatMessage(
+            notebook_id=uuid.UUID(notebook_id),
+            user_id=user.id,
+            role="assistant",
+            content=content,
+            citations=[],
+            msg_metadata={
+                "type": "skill_output",
+                "skill_type": content_type,
+                "skill_label": label,
+                "collapsed_summary": collapsed,
+            },
+        )
+        db.add(msg)
+        await db.commit()
 
     return {"content": content}

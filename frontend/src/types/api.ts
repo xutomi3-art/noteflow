@@ -69,6 +69,9 @@ export interface ChatMessage {
     meeting_id?: string;
     title?: string;
     collapsed_summary?: string;
+    skill_type?: string;
+    skill_label?: string;
+    suggestions?: Array<{type: string; text: string}>;
   } | null;
 }
 

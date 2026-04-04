@@ -1100,9 +1100,13 @@ export default function NotebookPage() {
         }
       } else {
         await generateContent(id, action, Array.from(selectedIds));
+        // Refresh chat history so the skill output message appears in Chat
+        if (action !== "mindmap") {
+          await fetchHistory(id);
+        }
       }
     },
-    [id, generateContent, selectedIds],
+    [id, generateContent, selectedIds, fetchHistory],
   );
 
   const handleDeleteSource = useCallback(
@@ -1481,7 +1485,7 @@ export default function NotebookPage() {
           [
             { key: "sources" as const, label: "Sources", icon: <Files className="w-4 h-4" /> },
             { key: "chat" as const, label: "Chat", icon: <MessageSquare className="w-4 h-4" /> },
-            { key: "studio" as const, label: "Studio", icon: <Sparkles className="w-4 h-4" /> },
+            { key: "studio" as const, label: "Skill", icon: <Sparkles className="w-4 h-4" /> },
           ] as const
         ).map((tab) => (
           <button
@@ -1581,7 +1585,7 @@ export default function NotebookPage() {
               </div>
             </div>
           ) : (
-          <div className={`p-4 flex flex-col ${notebook?.is_shared ? "overflow-hidden" : "overflow-y-auto flex-1"}`} style={notebook?.is_shared ? { flex: sourceFlex } : undefined} onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
+          <div className="p-4 flex flex-col overflow-y-auto flex-1" onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
             {notebook?.user_role !== "viewer" && (
               <button
                 onClick={() => setShowAddSourceModal(true)}
@@ -1926,107 +1930,7 @@ export default function NotebookPage() {
           </div>
           )}
 
-          {/* Team Members (shown for team notebooks, hidden during recording) */}
-          {notebook?.is_shared && (
-            <div
-              className="h-4 cursor-row-resize bg-slate-50 hover:bg-slate-200 active:bg-slate-300 transition-colors shrink-0 flex items-center justify-center group border-y border-slate-200 select-none"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const startY = e.clientY;
-                const section = e.currentTarget.closest('section');
-                const p4El = section?.querySelector('.p-4') as HTMLElement | null;
-                const teamEl = section?.querySelector('[data-team-list]') as HTMLElement | null;
-                if (!p4El || !teamEl) return;
-                const startSrcH = p4El.getBoundingClientRect().height;
-                const startTeamH = teamEl.getBoundingClientRect().height;
-                const total = startSrcH + startTeamH;
-                document.body.style.cursor = 'row-resize';
-                document.body.style.userSelect = 'none';
-                const onMove = (ev: MouseEvent) => {
-                  const delta = ev.clientY - startY;
-                  const newSrc = Math.max(60, Math.min(total - 60, startSrcH + delta));
-                  const ratio = newSrc / (total - newSrc);
-                  p4El.style.flex = `${ratio} 1 0%`;
-                  teamEl.style.flex = '1 1 0%';
-                };
-                const onUp = () => {
-                  document.body.style.cursor = '';
-                  document.body.style.userSelect = '';
-                  const finalH = p4El.getBoundingClientRect().height;
-                  const finalTeamH = teamEl.getBoundingClientRect().height;
-                  setSourceFlex(finalH / (finalTeamH || 1));
-                  document.removeEventListener('mousemove', onMove);
-                  document.removeEventListener('mouseup', onUp);
-                };
-                document.addEventListener('mousemove', onMove);
-                document.addEventListener('mouseup', onUp);
-              }}
-            >
-              <div className="w-8 h-0.5 rounded-full bg-slate-300 group-hover:bg-slate-400 transition-colors" />
-            </div>
-          )}
-          {notebook?.is_shared && (
-            <div className="px-4 py-3 overflow-y-auto min-h-0" data-team-list style={{ flex: 1 }}>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Team ({members.length})
-                </h3>
-                {(notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
-                  <button
-                    onClick={() => setIsShareModalOpen(true)}
-                    className="text-[12px] text-[#5b8c15] hover:text-[#4a7311] font-medium transition-colors flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Invite
-                  </button>
-                )}
-              </div>
-              <div className="space-y-1 overflow-y-auto flex-1">
-                {members.map((member) => (
-                  <div
-                    key={member.user_id}
-                    className="flex items-center gap-2 py-1.5 group"
-                  >
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold shrink-0 ${
-                      member.status === "pending"
-                        ? "bg-slate-200 text-slate-500"
-                        : "bg-[#5b8c15] text-white"
-                    }`}>
-                      {(member.name || member.email || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-[12px] truncate ${
-                        member.status === "pending" ? "text-slate-400 italic" : "text-slate-700 font-medium"
-                      }`}>
-                        {member.name || member.email}
-                      </div>
-                      {member.email && member.name && (
-                        <div className="text-[10px] text-slate-400 truncate">{member.email}</div>
-                      )}
-                    </div>
-                    {member.status === "pending" ? (
-                      <span className="text-[10px] text-amber-500 font-medium shrink-0">Pending</span>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 capitalize shrink-0">{member.role}</span>
-                    )}
-                    {(notebook?.user_role === "owner" || notebook?.user_role === "editor") && (
-                      member.role !== "owner" ? (
-                        <button
-                          onClick={() => removeMember(id || "", member.user_id)}
-                          className="p-0.5 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      ) : (
-                        <div className="w-4 shrink-0" />
-                      )
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Team section moved to right Skill panel */}
         </section>
 
         {/* Left Drag Handle */}
@@ -2187,6 +2091,16 @@ export default function NotebookPage() {
                             </div>
                           </div>
                         </div>
+                      </div>
+                    ) : msg.metadata?.type === "skill_output" ? (
+                      <div className="flex justify-start">
+                        <MeetingMinutesMessage
+                          message={{...msg, metadata: {...msg.metadata, title: msg.metadata?.skill_label || "Skill Output", collapsed_summary: msg.metadata?.collapsed_summary || ""}}}
+                          onSave={() => handleSaveMessageAsNote(msg)}
+                          isSaved={savedMessageIds.has(msg.id)}
+                          onCopy={() => handleCopyMessage(msg.id, msg.content)}
+                          isCopied={copiedMessageIds.has(msg.id)}
+                        />
                       </div>
                     ) : msg.role === "user" ? (
                       <div className={`flex ${msg.user_name && msg.user_id !== user?.id ? "justify-start" : "justify-end"}`}>
@@ -2482,14 +2396,14 @@ export default function NotebookPage() {
           </div>
         )}
 
-        {/* Right Panel: Studio */}
+        {/* Right Panel: Skill */}
         <section
           data-studio-panel
           style={!isMobile && !isRightCollapsed ? { width: rightWidth } : undefined}
           className={`bg-white border-l border-slate-200 flex-col overflow-hidden shrink-0 relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "studio" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
-            <h2 className="text-[13px] font-semibold text-slate-700">Studio</h2>
+            <h2 className="text-[13px] font-semibold text-slate-700">Skill</h2>
             <button
               onClick={() => setIsRightCollapsed(true)}
               className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -2554,6 +2468,62 @@ export default function NotebookPage() {
                   <ListChecks className="w-4 h-4 text-yellow-600 mb-2" />
                 )}
                 <div className="text-[11px] font-bold text-yellow-900">Action Items</div>
+              </button>
+
+              {/* SWOT Analysis */}
+              <button
+                onClick={() => handleStudioAction("swot")}
+                disabled={isGenerating.swot}
+                className="bg-[#f0fdf4] hover:bg-emerald-100 border border-emerald-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+              >
+                {isGenerating.swot ? (
+                  <Loader2 className="w-4 h-4 text-emerald-600 mb-2 animate-spin" />
+                ) : (
+                  <Table2 className="w-4 h-4 text-emerald-600 mb-2" />
+                )}
+                <div className="text-[11px] font-bold text-emerald-900">SWOT</div>
+              </button>
+
+              {/* Recommendations */}
+              <button
+                onClick={() => handleStudioAction("recommendations")}
+                disabled={isGenerating.recommendations}
+                className="bg-[#faf5ff] hover:bg-purple-100 border border-purple-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+              >
+                {isGenerating.recommendations ? (
+                  <Loader2 className="w-4 h-4 text-purple-600 mb-2 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4 text-purple-600 mb-2" />
+                )}
+                <div className="text-[11px] font-bold text-purple-900">Recommend</div>
+              </button>
+
+              {/* Risk Analysis */}
+              <button
+                onClick={() => handleStudioAction("risk_analysis")}
+                disabled={isGenerating.risk_analysis}
+                className="bg-[#fff7ed] hover:bg-orange-100 border border-orange-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+              >
+                {isGenerating.risk_analysis ? (
+                  <Loader2 className="w-4 h-4 text-orange-600 mb-2 animate-spin" />
+                ) : (
+                  <Shield className="w-4 h-4 text-orange-600 mb-2" />
+                )}
+                <div className="text-[11px] font-bold text-orange-900">Risk</div>
+              </button>
+
+              {/* Decision Support */}
+              <button
+                onClick={() => handleStudioAction("decision_support")}
+                disabled={isGenerating.decision_support}
+                className="bg-[#eff6ff] hover:bg-blue-100 border border-blue-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+              >
+                {isGenerating.decision_support ? (
+                  <Loader2 className="w-4 h-4 text-blue-600 mb-2 animate-spin" />
+                ) : (
+                  <ListChecks className="w-4 h-4 text-blue-600 mb-2" />
+                )}
+                <div className="text-[11px] font-bold text-blue-900">Decision</div>
               </button>
             </div>
 
@@ -2700,6 +2670,36 @@ export default function NotebookPage() {
             </div>
             </div>
           </div>
+
+          {/* Team Members (for shared notebooks) */}
+          {notebook?.is_shared && (
+            <div className="px-4 py-3 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[11px] font-bold text-slate-400 tracking-wider">TEAM ({members.length})</h3>
+                {(notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
+                  <button
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="text-[11px] text-[#5b8c15] hover:text-[#4a7311] font-medium flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Invite
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1">
+                {members.map((member) => (
+                  <div key={member.user_id} className="flex items-center gap-2 py-1 group">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shrink-0 ${member.status === "pending" ? "bg-slate-200 text-slate-500" : "bg-[#5b8c15] text-white"}`}>
+                      {(member.name || member.email || "U").charAt(0).toUpperCase()}
+                    </div>
+                    <span className={`text-[11px] flex-1 truncate ${member.status === "pending" ? "text-slate-400 italic" : "text-slate-700"}`}>
+                      {member.name || member.email}
+                    </span>
+                    <span className="text-[10px] text-slate-400 capitalize shrink-0">{member.role}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Add Note Button */}
           <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none">
