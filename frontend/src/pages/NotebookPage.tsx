@@ -703,7 +703,7 @@ export default function NotebookPage() {
     if (!userScrolledUpRef.current) {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamingContent, isStreaming]);
+  }, [messages, streamingContent, isStreaming, thinkingSteps]);
   // Reset scroll lock when streaming starts or ends
   useEffect(() => {
     if (isStreaming) {
