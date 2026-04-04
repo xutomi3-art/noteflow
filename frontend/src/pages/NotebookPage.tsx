@@ -1488,7 +1488,7 @@ export default function NotebookPage() {
         {/* Left Panel: Sources */}
         <section
           style={!isMobile && !isLeftCollapsed ? { width: effectiveLeftWidth } : undefined}
-          className={`bg-white border-r border-slate-200 flex-col overflow-hidden shrink-0 transition-all duration-300 ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
+          className={`bg-white border-r border-slate-200 flex-col overflow-hidden shrink-0 ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
             <h2 className="text-[13px] font-semibold text-slate-700">Sources</h2>
