@@ -2349,12 +2349,40 @@ export default function NotebookPage() {
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-10 pb-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] px-8 md:px-8 px-3 select-none">
             <div className="max-w-3xl mx-auto">
               <div
-                className={`relative bg-white border rounded-2xl shadow-sm flex items-center px-2 py-2 transition-all ${
+                className={`relative bg-white border rounded-2xl shadow-sm px-2 py-2 transition-all ${
                   hasProcessingSelected || (readySources.length === 0 && !meetingActive)
                     ? "border-slate-100 bg-slate-50/50"
                     : "border-slate-200 focus-within:ring-2 focus-within:ring-[#5b8c15]/20 focus-within:border-[#5b8c15]"
                 }`}
               >
+                {/* Toolbar: Think / Internet / Sources */}
+                <div className="flex items-center gap-1.5 mb-1 md:hidden px-1">
+                  <button
+                    type="button"
+                    onClick={() => setDeepThinking(!deepThinking)}
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors whitespace-nowrap ${
+                      deepThinking ? "bg-purple-600 text-white" : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    <Sparkles className="w-2.5 h-2.5 inline-block mr-0.5 -mt-px" />
+                    {deepThinking ? "Think" : "Think Off"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors whitespace-nowrap ${
+                      webSearchEnabled ? "bg-[#5b8c15] text-white" : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    <Globe className="w-2.5 h-2.5 inline-block mr-0.5 -mt-px" />
+                    {webSearchEnabled ? "Internet" : "Internet Off"}
+                  </button>
+                  <span className="text-[10px] text-slate-400 font-medium ml-auto">
+                    {selectedCount} sources
+                  </span>
+                </div>
+                {/* Input row */}
+                <div className="flex items-center">
                 <input
                   type="text"
                   placeholder={
@@ -2374,16 +2402,14 @@ export default function NotebookPage() {
                   onKeyDown={handleKeyDown}
                   disabled={hasProcessingSelected || (readySources.length === 0 && !meetingActive && !otherMeetingActive && !hasSharedChat)}
                 />
-                <div className="flex items-center gap-2 pr-1">
+                {/* Desktop toolbar — hidden on mobile (shown in row above) */}
+                <div className="hidden md:flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setDeepThinking(!deepThinking)}
-                    className={`hidden md:inline-flex text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
-                      deepThinking
-                        ? "bg-purple-600 text-white"
-                        : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
+                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
+                      deepThinking ? "bg-purple-600 text-white" : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
                     }`}
-                    title={deepThinking ? "Deep Thinking is on — queries are decomposed for multi-angle retrieval" : "Enable Deep Thinking for complex questions"}
                   >
                     <Sparkles className="w-3 h-3 inline-block mr-1 -mt-px" />
                     {deepThinking ? "Thinking" : "Think Off"}
@@ -2391,18 +2417,19 @@ export default function NotebookPage() {
                   <button
                     type="button"
                     onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                    className={`hidden md:inline-flex text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
-                      webSearchEnabled
-                        ? "bg-[#5b8c15] text-white"
-                        : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
+                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
+                      webSearchEnabled ? "bg-[#5b8c15] text-white" : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
                     }`}
                   >
                     <Globe className="w-3 h-3 inline-block mr-1 -mt-px" />
                     Internet {webSearchEnabled ? "On" : "Off"}
                   </button>
-                  <span className="hidden md:inline text-[11px] text-slate-400 font-medium px-2">
+                  <span className="text-[11px] text-slate-400 font-medium px-2">
                     {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
                   </span>
+                </div>
+                {/* Send button */}
+                <div className="flex items-center pr-1 shrink-0">
                   {isStreaming && !chatInput.trim() ? (
                     <button
                       className="w-9 h-9 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
@@ -2424,6 +2451,7 @@ export default function NotebookPage() {
                     </button>
                   )}
                 </div>
+                </div>{/* close input row */}
               </div>
               <div className="text-center mt-3 text-[10px] text-slate-400">
                 AI can be inaccurate; please double-check its responses.
