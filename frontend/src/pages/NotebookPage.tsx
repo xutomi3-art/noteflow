@@ -398,6 +398,7 @@ export default function NotebookPage() {
   const [newSkillAllNb, setNewSkillAllNb] = useState(true);
   const [newSkillShared, setNewSkillShared] = useState(false);
   const [isCreatingSkill, setIsCreatingSkill] = useState(false);
+  const [rightSkillFlex, setRightSkillFlex] = useState(2); // Skills:Team = 2:1
   const meetTranscriptRef = useRef<HTMLDivElement>(null);
   const liveTranscriptRef = useRef<HTMLDivElement>(null);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
@@ -2424,7 +2425,8 @@ export default function NotebookPage() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto pb-24">
+          <div className={`flex-1 flex flex-col ${notebook?.is_shared ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <div className="overflow-y-auto" style={notebook?.is_shared ? { flex: rightSkillFlex } : { flex: 1 }}>
             <div className="grid grid-cols-2 gap-2.5 mb-4 select-none sticky top-0 bg-white z-10 p-4 pb-2">
               {/* Summary */}
               <button
@@ -2726,9 +2728,52 @@ export default function NotebookPage() {
             </div>
           </div>
 
+          </div>{/* close skills scrollable area */}
+
+          {/* Divider between Skills and Team */}
+          {notebook?.is_shared && (
+            <div
+              className="h-3 cursor-row-resize bg-slate-50 hover:bg-slate-200 active:bg-slate-300 transition-colors shrink-0 flex items-center justify-center group border-y border-slate-100 select-none"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const startY = e.clientY;
+                const section = e.currentTarget.closest('section');
+                const skillsEl = e.currentTarget.previousElementSibling as HTMLElement | null;
+                const teamEl = e.currentTarget.nextElementSibling as HTMLElement | null;
+                if (!skillsEl || !teamEl) return;
+                const startSkillH = skillsEl.getBoundingClientRect().height;
+                const startTeamH = teamEl.getBoundingClientRect().height;
+                const total = startSkillH + startTeamH;
+                document.body.style.cursor = 'row-resize';
+                document.body.style.userSelect = 'none';
+                const onMove = (ev: MouseEvent) => {
+                  const delta = ev.clientY - startY;
+                  const newSkill = Math.max(80, Math.min(total - 80, startSkillH + delta));
+                  const ratio = newSkill / (total - newSkill);
+                  skillsEl.style.flex = `${ratio} 1 0%`;
+                  teamEl.style.flex = '1 1 0%';
+                };
+                const onUp = () => {
+                  document.body.style.cursor = '';
+                  document.body.style.userSelect = '';
+                  const finalH = skillsEl.getBoundingClientRect().height;
+                  const finalTeamH = teamEl.getBoundingClientRect().height;
+                  setRightSkillFlex(finalH / (finalTeamH || 1));
+                  document.removeEventListener('mousemove', onMove);
+                  document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+              }}
+            >
+              <div className="w-8 h-0.5 rounded-full bg-slate-300 group-hover:bg-slate-400 transition-colors" />
+            </div>
+          )}
+
           {/* Team Members (for shared notebooks) */}
           {notebook?.is_shared && (
-            <div className="px-4 py-3 border-t border-slate-100">
+            <div className="px-4 py-3 overflow-y-auto" style={{ flex: 1 }}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[11px] font-bold text-slate-400 tracking-wider">TEAM ({members.length})</h3>
                 {(notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
