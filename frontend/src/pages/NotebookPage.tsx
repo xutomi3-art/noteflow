@@ -1556,7 +1556,7 @@ export default function NotebookPage() {
               </div>
             </div>
           ) : (
-          <div className={`p-4 flex-1 flex flex-col ${notebook?.is_shared ? "overflow-hidden" : "overflow-y-auto"}`} onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
+          <div className={`p-4 flex flex-col ${notebook?.is_shared ? "overflow-hidden" : "overflow-y-auto flex-1"}`} style={notebook?.is_shared ? { flex: sourceFlex } : undefined} onPaste={notebook?.user_role !== "viewer" ? handlePaste : undefined}>
             {notebook?.user_role !== "viewer" && (
               <button
                 onClick={() => setShowAddSourceModal(true)}
@@ -1688,7 +1688,7 @@ export default function NotebookPage() {
               />
             </div>
 
-            <div className="space-y-1 overflow-y-auto min-h-0" data-sources-list style={{ flex: notebook?.is_shared ? sourceFlex : 1 }}>
+            <div className="space-y-1 overflow-y-auto min-h-0 flex-1" data-sources-list>
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
@@ -1879,8 +1879,9 @@ export default function NotebookPage() {
                 e.preventDefault();
                 e.stopPropagation();
                 const startY = e.clientY;
-                const srcEl = e.currentTarget.previousElementSibling as HTMLElement | null;
-                const teamEl = e.currentTarget.nextElementSibling as HTMLElement | null;
+                const section = e.currentTarget.closest('section');
+                const srcEl = section?.querySelector('[data-sources-list]') as HTMLElement | null;
+                const teamEl = section?.querySelector('[data-team-list]') as HTMLElement | null;
                 if (!srcEl || !teamEl) return;
                 const startSrcH = srcEl.getBoundingClientRect().height;
                 const startTeamH = teamEl.getBoundingClientRect().height;
