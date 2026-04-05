@@ -385,7 +385,7 @@ export default function NotebookPage() {
   const [newSkillShared, setNewSkillShared] = useState(false);
   const [isCreatingSkill, setIsCreatingSkill] = useState(false);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
-  const [rightSkillFlex, setRightSkillFlex] = useState(2); // Skills:Team = 2:1
+  const [rightSkillFlex, setRightSkillFlex] = useState(3); // Skills:Team = 3:1 (75%:25%)
   const meetTranscriptRef = useRef<HTMLDivElement>(null);
   const liveTranscriptRef = useRef<HTMLDivElement>(null);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
@@ -2722,7 +2722,7 @@ export default function NotebookPage() {
 
           {/* Team Members (for shared notebooks) */}
           {notebook?.is_shared && (
-            <div className="px-4 py-3 overflow-y-auto shrink-0">
+            <div className="px-4 py-3 overflow-y-auto" style={{ flex: 1, minHeight: 120 }}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[11px] font-bold text-slate-400 tracking-wider">TEAM ({members.length})</h3>
                 {(notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
