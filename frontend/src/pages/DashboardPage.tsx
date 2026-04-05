@@ -631,10 +631,10 @@ export default function DashboardPage() {
                 <div
                   key={notebook.id}
                   onClick={() => handleOpenNotebook(notebook)}
-                  className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative"
+                  className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative"
                 >
                   <div
-                    className="h-36 relative flex items-center justify-center group-hover:opacity-90 transition-opacity"
+                    className="h-36 relative flex items-center justify-center group-hover:opacity-90 transition-opacity rounded-t-2xl overflow-hidden"
                     style={{ backgroundColor: cardColor(notebook) }}
                   >
                     <div className="absolute top-4 left-4 flex items-center gap-2">
