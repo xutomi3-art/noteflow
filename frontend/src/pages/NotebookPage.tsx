@@ -2428,7 +2428,7 @@ export default function NotebookPage() {
 
           <div className={`flex-1 flex flex-col ${notebook?.is_shared ? "overflow-hidden" : "overflow-y-auto"}`}>
           <div className="overflow-y-auto" style={notebook?.is_shared ? { flex: rightSkillFlex } : { flex: 1 }}>
-            <div className="grid grid-cols-2 gap-2.5 mb-4 select-none sticky top-0 bg-white z-10 p-4 pb-2">
+            <div className="grid grid-cols-2 gap-2.5 mb-4 select-none p-4 pb-2">
               {skillDisabled && (
                 <div className="col-span-2 text-[11px] text-amber-600 bg-amber-50 rounded-lg px-3 py-1.5 text-center">
                   Select at least one source to use Skills
