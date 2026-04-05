@@ -2560,8 +2560,8 @@ export default function NotebookPage() {
                         await executeCustomSkill(id, skill.id, Array.from(selectedIds));
                         await fetchHistory(id);
                       }}
-                      disabled={isGenerating[skill.id]}
-                      className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 cursor-pointer transition-colors text-left group relative"
+                      disabled={isGenerating[skill.id] || skillDisabled}
+                      className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 cursor-pointer transition-colors text-left group relative disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isGenerating[skill.id] ? (
                         <Loader2 className="w-4 h-4 text-slate-500 mb-2 animate-spin" />
