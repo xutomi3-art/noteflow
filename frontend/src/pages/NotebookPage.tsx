@@ -2267,6 +2267,29 @@ export default function NotebookPage() {
                   </div>
                 )}
 
+                {/* Skill generating indicator */}
+                {(() => {
+                  const generatingSkill = Object.entries(isGenerating).find(([, v]) => v);
+                  if (!generatingSkill) return null;
+                  const skillLabels: Record<string, string> = {
+                    summary: "Summary", faq: "FAQ", mindmap: "Mind Map", action_items: "Action Items",
+                    swot: "SWOT Analysis", recommendations: "Recommendations", risk_analysis: "Risk Analysis",
+                    decision_support: "Decision Support", study_guide: "Study Guide",
+                  };
+                  const [skillKey] = generatingSkill;
+                  const label = skillLabels[skillKey] || customSkills.find(s => s.id === skillKey)?.name || "Skill";
+                  return (
+                    <div className="flex justify-start">
+                      <div className="rounded-xl border border-indigo-200/60 bg-indigo-50/30 px-4 py-3 max-w-[90%]">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
+                          <span className="text-[12px] font-medium text-indigo-700">Generating {label}...</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div ref={chatEndRef} />
               </div>
             </div>
