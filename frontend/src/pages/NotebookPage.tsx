@@ -1479,7 +1479,7 @@ export default function NotebookPage() {
           [
             { key: "sources" as const, label: "Sources", icon: <Files className="w-4 h-4" /> },
             { key: "chat" as const, label: "Chat", icon: <MessageSquare className="w-4 h-4" /> },
-            { key: "studio" as const, label: "Skill", icon: <Sparkles className="w-4 h-4" /> },
+            { key: "studio" as const, label: "Skills", icon: <Sparkles className="w-4 h-4" /> },
           ] as const
         ).map((tab) => (
           <button
@@ -2417,7 +2417,7 @@ export default function NotebookPage() {
           className={`bg-white border-l border-slate-200 flex-col overflow-hidden shrink-0 relative ${!isDragging ? "transition-all duration-300" : ""} ${isRightCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "studio" ? "flex w-full" : "hidden") : "flex"}`}
         >
           <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
-            <h2 className="text-[13px] font-semibold text-slate-700">Skill</h2>
+            <h2 className="text-[13px] font-semibold text-slate-700">Skills</h2>
             <button
               onClick={() => setIsRightCollapsed(true)}
               className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -2569,7 +2569,7 @@ export default function NotebookPage() {
                         <span className="text-sm mb-2 block">{skill.icon}</span>
                       )}
                       <div className="text-[11px] font-bold text-slate-700 truncate">{skill.name}</div>
-                      {skill.created_by === user?.id && (
+                      {(skill.created_by === user?.id || notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
                         <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
                           <button
                             onClick={(e) => {

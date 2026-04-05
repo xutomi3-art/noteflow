@@ -818,13 +818,34 @@ async def list_custom_skills(
     """List custom skills visible in this notebook for the current user."""
     nb_uuid = uuid.UUID(notebook_id)
 
-    stmt = select(CustomSkill).where(
-        or_(
-            (CustomSkill.created_by == user.id) & (CustomSkill.all_notebooks == True),
-            (CustomSkill.created_by == user.id) & (CustomSkill.notebook_id == nb_uuid),
-            (CustomSkill.notebook_id == nb_uuid) & (CustomSkill.shared_with_team == True),
+    # Find all members of the current notebook (including owner) to resolve team-shared skills
+    member_stmt = select(NotebookMember.user_id).where(NotebookMember.notebook_id == nb_uuid)
+    member_result = await db.execute(member_stmt)
+    member_ids = {row[0] for row in member_result}
+    # Also include the notebook owner (not always in notebook_members table)
+    nb = await db.get(Notebook, nb_uuid)
+    if nb:
+        member_ids.add(nb.owner_id)
+
+    # Skills visible to this user in this notebook:
+    # 1. My skills with all_notebooks=True (visible everywhere)
+    # 2. My skills created in this notebook
+    # 3. Team-shared skills created in this notebook
+    # 4. Team-shared skills where the creator is also a member of this notebook
+    #    (covers the case where creator has all_notebooks=true and shared from another notebook)
+    conditions = [
+        (CustomSkill.created_by == user.id) & (CustomSkill.all_notebooks == True),
+        (CustomSkill.created_by == user.id) & (CustomSkill.notebook_id == nb_uuid),
+        (CustomSkill.notebook_id == nb_uuid) & (CustomSkill.shared_with_team == True),
+    ]
+    if member_ids:
+        conditions.append(
+            (CustomSkill.shared_with_team == True)
+            & (CustomSkill.all_notebooks == True)
+            & (CustomSkill.created_by.in_(member_ids))
         )
-    )
+
+    stmt = select(CustomSkill).where(or_(*conditions))
     result = await db.execute(stmt)
     skills = result.scalars().all()
 
@@ -879,10 +900,15 @@ async def update_custom_skill(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update a custom skill (only the creator can edit)."""
+    """Update a custom skill (creator or notebook owner/editor)."""
     skill = await db.get(CustomSkill, uuid.UUID(skill_id))
-    if not skill or skill.created_by != user.id:
+    if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    # Allow creator, or notebook owner/editor for shared skills
+    if skill.created_by != user.id:
+        can_edit = await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, "rename")
+        if not can_edit:
+            raise HTTPException(status_code=403, detail="No permission to edit this skill")
     if body.name is not None:
         skill.name = body.name.strip()
     if body.prompt is not None:
@@ -904,10 +930,14 @@ async def delete_custom_skill(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a custom skill (only the creator can delete)."""
+    """Delete a custom skill (creator or notebook owner/editor)."""
     skill = await db.get(CustomSkill, uuid.UUID(skill_id))
-    if not skill or skill.created_by != user.id:
+    if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if skill.created_by != user.id:
+        can_delete = await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, "rename")
+        if not can_delete:
+            raise HTTPException(status_code=403, detail="No permission to delete this skill")
     await db.delete(skill)
     await db.commit()
     return {"data": {"message": "Skill deleted"}}
