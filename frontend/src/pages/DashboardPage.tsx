@@ -643,17 +643,17 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-                      {notebook.user_role === 'owner' && (
-                        <div className="relative" ref={openMenuId === notebook.id ? menuRef : undefined}>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
-                            className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
-                            title="More options"
-                          >
-                            <MoreHorizontal className="w-3.5 h-3.5 text-slate-400" />
-                          </button>
-                          {openMenuId === notebook.id && (
-                            <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                      <div className="relative" ref={openMenuId === notebook.id ? menuRef : undefined}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === notebook.id ? null : notebook.id); }}
+                          className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
+                          title="More options"
+                        >
+                          <MoreHorizontal className="w-3.5 h-3.5 text-slate-400" />
+                        </button>
+                        {openMenuId === notebook.id && (
+                          <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                            {notebook.user_role === 'owner' && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -666,6 +666,8 @@ export default function DashboardPage() {
                                 <Pencil className="w-3.5 h-3.5" />
                                 Rename
                               </button>
+                            )}
+                            {notebook.user_role === 'owner' && (
                               <button
                                 onClick={(e) => { setOpenMenuId(null); handleDeleteNotebook(notebook, e); }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -673,10 +675,19 @@ export default function DashboardPage() {
                                 <Trash2 className="w-3.5 h-3.5" />
                                 Delete
                               </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                            {notebook.user_role !== 'owner' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 transition-colors"
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                                {notebook.user_role === 'editor' ? 'Editor' : 'Viewer'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={(e) => toggleStarred(notebook.id, e)}
                         className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
