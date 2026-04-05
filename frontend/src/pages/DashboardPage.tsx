@@ -672,7 +672,7 @@ export default function DashboardPage() {
                     </h3>
                     )}
                     <div className="text-[13px] text-slate-500 font-medium">
-                      {notebook.user_role !== 'owner' ? `Shared with you` : `${notebook.member_count} ${notebook.member_count === 1 ? 'member' : 'members'}`}
+                      {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
                     </div>
                     </div>
                     {notebook.user_role === 'owner' && (
