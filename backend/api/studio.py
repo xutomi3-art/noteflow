@@ -773,90 +773,7 @@ class StudioRequest(BaseModel):
     source_ids: list[str] | None = None
 
 
-@router.post("/{content_type}")
-async def generate_content(
-    notebook_id: str,
-    content_type: str,
-    body: StudioRequest = Body(default=StudioRequest()),
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, "view"):
-        raise HTTPException(status_code=403, detail="No access to this notebook")
-
-    if content_type not in PROMPTS:
-        raise HTTPException(status_code=400, detail=f"Invalid type. Allowed: {list(PROMPTS.keys())}")
-
-    source_ids = body.source_ids if body else None
-    logger.info("Studio %s: received source_ids=%s", content_type, source_ids)
-    t_start = time.time()
-
-    # If there's an active meeting, prioritize live transcript
-    from backend.meeting.service import get_live_transcript_for_notebook_async
-    live_transcript = await get_live_transcript_for_notebook_async(notebook_id)
-    if live_transcript:
-        context = live_transcript
-        logger.info("Studio %s: using live meeting transcript (%d chars)", content_type, len(context))
-    else:
-        context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
-
-    t_context = time.time()
-    if not context:
-        raise HTTPException(status_code=400, detail="No ready sources available for generation")
-
-    logger.info("Studio %s: context retrieval %.1fs, %d chars", content_type, t_context - t_start, len(context))
-
-    lang = _detect_language(context)
-    prompt = PROMPTS[content_type].format(context=context)
-    if content_type == "mindmap":
-        system_msg = f"You are an expert at creating mind map structures from documents. Return ONLY valid JSON. You MUST write all labels in {lang}."
-    else:
-        system_msg = f"You are a helpful assistant that generates content from source documents. You MUST write your entire response in {lang}. Do NOT use any other language."
-    messages = [
-        {"role": "system", "content": system_msg},
-        {"role": "user", "content": prompt},
-    ]
-    content = await qwen_client.generate(messages)
-    t_llm = time.time()
-
-    logger.info("Skill %s: LLM generation %.1fs, %d chars output. Total: %.1fs", content_type, t_llm - t_context, len(content), t_llm - t_start)
-
-    # Save as ChatMessage for display in Chat panel
-    from backend.models.chat_message import ChatMessage
-
-    skill_labels = {
-        "summary": "Summary", "faq": "FAQ", "action_items": "Action Items",
-        "swot": "SWOT Analysis", "recommendations": "Recommendations",
-        "risk_analysis": "Risk Analysis", "decision_support": "Decision Support",
-        "study_guide": "Study Guide", "mindmap": "Mind Map",
-    }
-    if True:
-        label = skill_labels.get(content_type, content_type.replace("_", " ").title())
-
-        # Extract first 150 chars as collapsed summary
-        lines = [l for l in content.split("\n") if l.strip() and not l.strip().startswith("#")]
-        collapsed = lines[0][:150] if lines else content[:150]
-
-        msg = ChatMessage(
-            notebook_id=uuid.UUID(notebook_id),
-            user_id=user.id,
-            role="assistant",
-            content=content,
-            citations=[],
-            msg_metadata={
-                "type": "skill_output",
-                "skill_type": content_type,
-                "skill_label": label,
-                "collapsed_summary": collapsed,
-            },
-        )
-        db.add(msg)
-        await db.commit()
-
-    return {"content": content}
-
-
-# ── Custom Skills CRUD ─────────────────────────────────────────
+# ── Custom Skills CRUD (must be before /{content_type} catch-all) ──
 
 from backend.models.custom_skill import CustomSkill
 from backend.models.notebook_member import NotebookMember
@@ -901,24 +818,16 @@ async def list_custom_skills(
     """List custom skills visible in this notebook for the current user."""
     nb_uuid = uuid.UUID(notebook_id)
 
-    # Skills visible to this user in this notebook:
-    # 1. My skills with all_notebooks=True (visible everywhere)
-    # 2. My skills created in this notebook
-    # 3. Team-shared skills in this notebook (if I'm a member)
     stmt = select(CustomSkill).where(
         or_(
-            # My global skills
             (CustomSkill.created_by == user.id) & (CustomSkill.all_notebooks == True),
-            # My skills in this notebook
             (CustomSkill.created_by == user.id) & (CustomSkill.notebook_id == nb_uuid),
-            # Team-shared skills in this notebook
             (CustomSkill.notebook_id == nb_uuid) & (CustomSkill.shared_with_team == True),
         )
     )
     result = await db.execute(stmt)
     skills = result.scalars().all()
 
-    # Deduplicate (a skill could match multiple conditions)
     seen = set()
     unique = []
     for s in skills:
@@ -1060,3 +969,93 @@ async def execute_custom_skill(
     await db.commit()
 
     return {"content": content}
+
+
+# ── Generic content generation (catch-all, must be LAST) ──────
+
+@router.post("/{content_type}")
+async def generate_content(
+    notebook_id: str,
+    content_type: str,
+    body: StudioRequest = Body(default=StudioRequest()),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, "view"):
+        raise HTTPException(status_code=403, detail="No access to this notebook")
+
+    if content_type not in PROMPTS:
+        raise HTTPException(status_code=400, detail=f"Invalid type. Allowed: {list(PROMPTS.keys())}")
+
+    source_ids = body.source_ids if body else None
+    logger.info("Studio %s: received source_ids=%s", content_type, source_ids)
+    t_start = time.time()
+
+    # If there's an active meeting, prioritize live transcript
+    from backend.meeting.service import get_live_transcript_for_notebook_async
+    live_transcript = await get_live_transcript_for_notebook_async(notebook_id)
+    if live_transcript:
+        context = live_transcript
+        logger.info("Studio %s: using live meeting transcript (%d chars)", content_type, len(context))
+    else:
+        context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
+
+    t_context = time.time()
+    if not context:
+        raise HTTPException(status_code=400, detail="No ready sources available for generation")
+
+    logger.info("Studio %s: context retrieval %.1fs, %d chars", content_type, t_context - t_start, len(context))
+
+    lang = _detect_language(context)
+    prompt = PROMPTS[content_type].format(context=context)
+    if content_type == "mindmap":
+        system_msg = f"You are an expert at creating mind map structures from documents. Return ONLY valid JSON. You MUST write all labels in {lang}."
+    else:
+        system_msg = f"You are a helpful assistant that generates content from source documents. You MUST write your entire response in {lang}. Do NOT use any other language."
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": prompt},
+    ]
+    content = await qwen_client.generate(messages)
+    t_llm = time.time()
+
+    logger.info("Skill %s: LLM generation %.1fs, %d chars output. Total: %.1fs", content_type, t_llm - t_context, len(content), t_llm - t_start)
+
+    # Save as ChatMessage for display in Chat panel
+    from backend.models.chat_message import ChatMessage
+
+    skill_labels = {
+        "summary": "Summary", "faq": "FAQ", "action_items": "Action Items",
+        "swot": "SWOT Analysis", "recommendations": "Recommendations",
+        "risk_analysis": "Risk Analysis", "decision_support": "Decision Support",
+        "study_guide": "Study Guide", "mindmap": "Mind Map",
+    }
+    if True:
+        label = skill_labels.get(content_type, content_type.replace("_", " ").title())
+
+        # Extract collapsed summary
+        if content_type == "mindmap":
+            collapsed = "Click to view mind map"
+        else:
+            lines = [l for l in content.split("\n") if l.strip() and not l.strip().startswith("#") and not l.strip().startswith("```")]
+            collapsed = lines[0][:150] if lines else content[:100]
+
+        msg = ChatMessage(
+            notebook_id=uuid.UUID(notebook_id),
+            user_id=user.id,
+            role="assistant",
+            content=content,
+            citations=[],
+            msg_metadata={
+                "type": "skill_output",
+                "skill_type": content_type,
+                "skill_label": label,
+                "collapsed_summary": collapsed,
+            },
+        )
+        db.add(msg)
+        await db.commit()
+
+    return {"content": content}
+
+
