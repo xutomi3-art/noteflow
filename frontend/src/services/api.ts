@@ -520,6 +520,13 @@ class ApiClient {
     });
   }
 
+  async updateCustomSkill(notebookId: string, skillId: string, data: { name?: string; prompt?: string; all_notebooks?: boolean; shared_with_team?: boolean }): Promise<void> {
+    await this.request(`/notebooks/${notebookId}/studio/custom-skills/${skillId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
   async deleteCustomSkill(notebookId: string, skillId: string): Promise<void> {
     await this.request(`/notebooks/${notebookId}/studio/custom-skills/${skillId}`, { method: "DELETE" });
   }
