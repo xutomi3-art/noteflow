@@ -2722,7 +2722,7 @@ export default function NotebookPage() {
 
           {/* Team Members (for shared notebooks) */}
           {notebook?.is_shared && (
-            <div className="px-4 py-3 overflow-y-auto shrink-0" style={{ maxHeight: '25%' }}>
+            <div className="px-4 py-3 overflow-y-auto shrink-0" style={{ height: '25%' }}>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-[11px] font-bold text-slate-400 tracking-wider">TEAM ({members.length})</h3>
                 {(notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
