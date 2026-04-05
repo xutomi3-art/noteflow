@@ -499,7 +499,7 @@ export default function DashboardPage() {
                 <div
                   key={notebook.id}
                   onClick={() => handleOpenNotebook(notebook)}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative"
+                  className={`bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative ${openMenuId === notebook.id ? "z-40" : ""}`}
                 >
                   <div
                     className="h-36 flex items-center justify-center text-5xl group-hover:opacity-90 transition-opacity relative rounded-t-2xl overflow-hidden"
@@ -625,7 +625,7 @@ export default function DashboardPage() {
                 <div
                   key={notebook.id}
                   onClick={() => handleOpenNotebook(notebook)}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative"
+                  className={`bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer group relative ${openMenuId === notebook.id ? "z-40" : ""}`}
                 >
                   <div
                     className="h-36 relative flex items-center justify-center group-hover:opacity-90 transition-opacity rounded-t-2xl overflow-hidden"
