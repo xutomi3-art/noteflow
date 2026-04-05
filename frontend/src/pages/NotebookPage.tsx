@@ -1114,6 +1114,8 @@ export default function NotebookPage() {
           setPodcastLoading(false);
         }
       } else {
+        // Reset scroll lock so chat scrolls to show the loading indicator
+        userScrolledUpRef.current = false;
         await generateContent(id, action, Array.from(selectedIds));
         // Refresh chat history so the skill output message appears in Chat
         await fetchHistory(id);
