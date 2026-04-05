@@ -183,8 +183,8 @@ export default function DashboardPage() {
     }
   );
 
-  const displayedPersonal = showAllPersonal ? sortedPersonal : sortedPersonal.slice(0, 4);
-  const displayedTeam = showAllTeam ? sortedTeam : sortedTeam.slice(0, 4);
+  const displayedPersonal = showAllPersonal ? sortedPersonal : sortedPersonal.slice(0, 8);
+  const displayedTeam = showAllTeam ? sortedTeam : sortedTeam.slice(0, 8);
 
   const toggleStarred = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -593,7 +593,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {personalNotebooks.length > 4 && (
+          {personalNotebooks.length > 8 && (
             <div className="mt-8 flex justify-end">
               <button
                 onClick={() => setShowAllPersonal(!showAllPersonal)}
@@ -731,7 +731,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {teamNotebooks.length > 4 && (
+          {teamNotebooks.length > 8 && (
             <div className="mt-8 flex justify-end">
               <button
                 onClick={() => setShowAllTeam(!showAllTeam)}
