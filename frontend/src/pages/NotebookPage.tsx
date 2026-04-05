@@ -2460,11 +2460,16 @@ export default function NotebookPage() {
           <div className={`flex-1 flex flex-col ${notebook?.is_shared ? "overflow-hidden" : "overflow-y-auto"}`}>
           <div className="overflow-y-auto" style={notebook?.is_shared ? { flex: rightSkillFlex } : { flex: 1 }}>
             <div className="grid grid-cols-2 gap-2.5 mb-4 select-none sticky top-0 bg-white z-10 p-4 pb-2">
+              {skillDisabled && (
+                <div className="col-span-2 text-[11px] text-amber-600 bg-amber-50 rounded-lg px-3 py-1.5 text-center">
+                  Select at least one source to use Skills
+                </div>
+              )}
               {/* Summary */}
               <button
                 onClick={() => handleStudioAction("summary")}
                 disabled={isGenerating.summary || skillDisabled}
-                className="bg-[#eef2ff] hover:bg-indigo-100 border border-indigo-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#eef2ff] hover:bg-indigo-100 border border-indigo-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.summary ? (
                   <Loader2 className="w-4 h-4 text-indigo-600 mb-2 animate-spin" />
@@ -2478,7 +2483,7 @@ export default function NotebookPage() {
               <button
                 onClick={() => handleStudioAction("faq")}
                 disabled={isGenerating.faq || skillDisabled}
-                className="bg-[#ecfeff] hover:bg-cyan-100 border border-cyan-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#ecfeff] hover:bg-cyan-100 border border-cyan-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.faq ? (
                   <Loader2 className="w-4 h-4 text-cyan-600 mb-2 animate-spin" />
@@ -2492,7 +2497,7 @@ export default function NotebookPage() {
               <button
                 onClick={() => handleStudioAction("mindmap")}
                 disabled={isGenerating.mindmap || skillDisabled}
-                className="bg-[#fdf2f8] hover:bg-pink-100 border border-pink-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#fdf2f8] hover:bg-pink-100 border border-pink-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.mindmap ? (
                   <Loader2 className="w-4 h-4 text-pink-600 mb-2 animate-spin" />
@@ -2506,7 +2511,7 @@ export default function NotebookPage() {
               <button
                 onClick={() => handleStudioAction("action_items")}
                 disabled={isGenerating.action_items || skillDisabled}
-                className="bg-[#fef9c3] hover:bg-yellow-100 border border-yellow-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#fef9c3] hover:bg-yellow-100 border border-yellow-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.action_items ? (
                   <Loader2 className="w-4 h-4 text-yellow-600 mb-2 animate-spin" />
@@ -2520,7 +2525,7 @@ export default function NotebookPage() {
               <button
                 onClick={() => handleStudioAction("swot")}
                 disabled={isGenerating.swot || skillDisabled}
-                className="bg-[#f0fdf4] hover:bg-emerald-100 border border-emerald-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#f0fdf4] hover:bg-emerald-100 border border-emerald-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.swot ? (
                   <Loader2 className="w-4 h-4 text-emerald-600 mb-2 animate-spin" />
@@ -2534,7 +2539,7 @@ export default function NotebookPage() {
               <button
                 onClick={() => handleStudioAction("recommendations")}
                 disabled={isGenerating.recommendations || skillDisabled}
-                className="bg-[#faf5ff] hover:bg-purple-100 border border-purple-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#faf5ff] hover:bg-purple-100 border border-purple-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.recommendations ? (
                   <Loader2 className="w-4 h-4 text-purple-600 mb-2 animate-spin" />
@@ -2548,7 +2553,7 @@ export default function NotebookPage() {
               <button
                 onClick={() => handleStudioAction("risk_analysis")}
                 disabled={isGenerating.risk_analysis || skillDisabled}
-                className="bg-[#fff7ed] hover:bg-orange-100 border border-orange-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#fff7ed] hover:bg-orange-100 border border-orange-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.risk_analysis ? (
                   <Loader2 className="w-4 h-4 text-orange-600 mb-2 animate-spin" />
@@ -2562,7 +2567,7 @@ export default function NotebookPage() {
               <button
                 onClick={() => handleStudioAction("decision_support")}
                 disabled={isGenerating.decision_support || skillDisabled}
-                className="bg-[#eff6ff] hover:bg-blue-100 border border-blue-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
+                className="bg-[#eff6ff] hover:bg-blue-100 border border-blue-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {isGenerating.decision_support ? (
                   <Loader2 className="w-4 h-4 text-blue-600 mb-2 animate-spin" />
