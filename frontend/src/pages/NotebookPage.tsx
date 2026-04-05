@@ -716,7 +716,7 @@ export default function NotebookPage() {
     if (!userScrolledUpRef.current) {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamingContent, isStreaming, thinkingSteps]);
+  }, [messages, streamingContent, isStreaming, thinkingSteps, isGenerating]);
   // Reset scroll lock when streaming starts or ends
   useEffect(() => {
     if (isStreaming) {
@@ -1114,9 +1114,7 @@ export default function NotebookPage() {
       } else {
         await generateContent(id, action, Array.from(selectedIds));
         // Refresh chat history so the skill output message appears in Chat
-        if (action !== "mindmap") {
-          await fetchHistory(id);
-        }
+        await fetchHistory(id);
       }
     },
     [id, generateContent, selectedIds, fetchHistory],
@@ -2267,19 +2265,16 @@ export default function NotebookPage() {
                   </div>
                 )}
 
-                {/* Skill generating indicator */}
-                {(() => {
-                  const generatingSkill = Object.entries(isGenerating).find(([, v]) => v);
-                  if (!generatingSkill) return null;
+                {/* Skill generating indicators — show ALL that are generating */}
+                {Object.entries(isGenerating).filter(([, v]) => v).map(([skillKey]) => {
                   const skillLabels: Record<string, string> = {
                     summary: "Summary", faq: "FAQ", mindmap: "Mind Map", action_items: "Action Items",
                     swot: "SWOT Analysis", recommendations: "Recommendations", risk_analysis: "Risk Analysis",
                     decision_support: "Decision Support", study_guide: "Study Guide",
                   };
-                  const [skillKey] = generatingSkill;
                   const label = skillLabels[skillKey] || customSkills.find(s => s.id === skillKey)?.name || "Skill";
                   return (
-                    <div className="flex justify-start">
+                    <div key={skillKey} className="flex justify-start">
                       <div className="rounded-xl border border-indigo-200/60 bg-indigo-50/30 px-4 py-3 max-w-[90%]">
                         <div className="flex items-center gap-2">
                           <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
@@ -2288,7 +2283,7 @@ export default function NotebookPage() {
                       </div>
                     </div>
                   );
-                })()}
+                })}
 
                 <div ref={chatEndRef} />
               </div>

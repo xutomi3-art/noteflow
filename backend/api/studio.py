@@ -821,16 +821,16 @@ async def generate_content(
 
     logger.info("Skill %s: LLM generation %.1fs, %d chars output. Total: %.1fs", content_type, t_llm - t_context, len(content), t_llm - t_start)
 
-    # Save as ChatMessage for display in Chat panel (skip mindmap — it's JSON)
-    if content_type != "mindmap":
-        from backend.models.chat_message import ChatMessage
+    # Save as ChatMessage for display in Chat panel
+    from backend.models.chat_message import ChatMessage
 
-        skill_labels = {
-            "summary": "Summary", "faq": "FAQ", "action_items": "Action Items",
-            "swot": "SWOT Analysis", "recommendations": "Recommendations",
-            "risk_analysis": "Risk Analysis", "decision_support": "Decision Support",
-            "study_guide": "Study Guide",
-        }
+    skill_labels = {
+        "summary": "Summary", "faq": "FAQ", "action_items": "Action Items",
+        "swot": "SWOT Analysis", "recommendations": "Recommendations",
+        "risk_analysis": "Risk Analysis", "decision_support": "Decision Support",
+        "study_guide": "Study Guide", "mindmap": "Mind Map",
+    }
+    if True:
         label = skill_labels.get(content_type, content_type.replace("_", " ").title())
 
         # Extract first 150 chars as collapsed summary
