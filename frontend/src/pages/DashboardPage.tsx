@@ -564,7 +564,7 @@ export default function DashboardPage() {
                         <MoreHorizontal className="w-4 h-4" />
                       </button>
                       {openMenuId === notebook.id && (
-                        <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                        <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -626,7 +626,7 @@ export default function DashboardPage() {
               No team notebooks yet. Create one or get invited to join.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 overflow-visible">
               {displayedTeam.map((notebook) => (
                 <div
                   key={notebook.id}
@@ -700,7 +700,7 @@ export default function DashboardPage() {
                         <MoreHorizontal className="w-4 h-4" />
                       </button>
                       {openMenuId === notebook.id && (
-                        <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30">
+                        <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
                           {notebook.user_role === 'owner' && (
                             <button
                               onClick={(e) => {
