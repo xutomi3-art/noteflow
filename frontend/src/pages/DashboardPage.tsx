@@ -681,6 +681,7 @@ export default function DashboardPage() {
                       {notebook.user_role !== 'owner' ? `Shared with you` : `${notebook.member_count} ${notebook.member_count === 1 ? 'member' : 'members'}`}
                     </div>
                     </div>
+                    {notebook.user_role === 'owner' && (
                     <div
                       className="relative flex-shrink-0 ml-2 self-end"
                       ref={openMenuId === notebook.id ? menuRef : undefined}
@@ -701,36 +702,29 @@ export default function DashboardPage() {
                       </button>
                       {openMenuId === notebook.id && (
                         <div className="absolute top-full right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
-                          {notebook.user_role === 'owner' ? (
-                            <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenMenuId(null);
-                                  setEditingNameValue(notebook.name);
-                                  setEditingNameId(notebook.id);
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                                Rename
-                              </button>
-                              <button
-                                onClick={(e) => { setOpenMenuId(null); handleDeleteNotebook(notebook, e); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                Delete
-                              </button>
-                            </>
-                          ) : (
-                            <div className="px-3 py-2 text-sm text-slate-500">
-                              Role: <span className="capitalize font-medium">{notebook.user_role}</span>
-                            </div>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(null);
+                              setEditingNameValue(notebook.name);
+                              setEditingNameId(notebook.id);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Rename
+                          </button>
+                          <button
+                            onClick={(e) => { setOpenMenuId(null); handleDeleteNotebook(notebook, e); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
+                          </button>
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 </div>
               ))}
