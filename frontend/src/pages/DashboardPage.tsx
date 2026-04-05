@@ -511,7 +511,7 @@ export default function DashboardPage() {
                     className="h-36 flex items-center justify-center text-5xl group-hover:opacity-90 transition-opacity relative rounded-t-2xl overflow-hidden"
                     style={{ backgroundColor: cardColor(notebook) }}
                   >
-                    <div className="absolute top-3 right-3 z-10">
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
                       <button
                         onClick={(e) => toggleStarred(notebook.id, e)}
                         className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
