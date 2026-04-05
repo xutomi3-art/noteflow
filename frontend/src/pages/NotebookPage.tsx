@@ -1095,6 +1095,8 @@ export default function NotebookPage() {
     [handleSaveNote, clearContent],
   );
 
+  const skillDisabled = selectedIds.size === 0 && !meetingActive;
+
   const handleStudioAction = useCallback(
     async (action: string) => {
       if (!id) return;
@@ -2105,13 +2107,25 @@ export default function NotebookPage() {
                       </div>
                     ) : msg.metadata?.type === "skill_output" ? (
                       <div className="flex justify-start">
-                        <MeetingMinutesMessage
-                          message={{...msg, metadata: {...msg.metadata, title: msg.metadata?.skill_label || "Skill Output", collapsed_summary: msg.metadata?.collapsed_summary || ""}}}
-                          onSave={() => handleSaveMessageAsNote(msg)}
-                          isSaved={savedMessageIds.has(msg.id)}
-                          onCopy={() => handleCopyMessage(msg.id, msg.content)}
-                          isCopied={copiedMessageIds.has(msg.id)}
-                        />
+                        {msg.metadata?.skill_type === "mindmap" ? (
+                          <div className="w-full max-w-[90%]">
+                            <div className="rounded-xl border border-pink-200/60 bg-pink-50/30 px-4 py-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Network className="w-3.5 h-3.5 text-pink-500" />
+                                <span className="text-[12px] font-semibold text-pink-700">Mind Map</span>
+                              </div>
+                              <MindMapContent content={msg.content} />
+                            </div>
+                          </div>
+                        ) : (
+                          <MeetingMinutesMessage
+                            message={{...msg, metadata: {...msg.metadata, title: msg.metadata?.skill_label || "Skill Output", collapsed_summary: msg.metadata?.collapsed_summary || ""}}}
+                            onSave={() => handleSaveMessageAsNote(msg)}
+                            isSaved={savedMessageIds.has(msg.id)}
+                            onCopy={() => handleCopyMessage(msg.id, msg.content)}
+                            isCopied={copiedMessageIds.has(msg.id)}
+                          />
+                        )}
                       </div>
                     ) : msg.role === "user" ? (
                       <div className={`flex ${msg.user_name && msg.user_id !== user?.id ? "justify-start" : "justify-end"}`}>
@@ -2449,7 +2463,7 @@ export default function NotebookPage() {
               {/* Summary */}
               <button
                 onClick={() => handleStudioAction("summary")}
-                disabled={isGenerating.summary}
+                disabled={isGenerating.summary || skillDisabled}
                 className="bg-[#eef2ff] hover:bg-indigo-100 border border-indigo-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.summary ? (
@@ -2463,7 +2477,7 @@ export default function NotebookPage() {
               {/* FAQ */}
               <button
                 onClick={() => handleStudioAction("faq")}
-                disabled={isGenerating.faq}
+                disabled={isGenerating.faq || skillDisabled}
                 className="bg-[#ecfeff] hover:bg-cyan-100 border border-cyan-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.faq ? (
@@ -2477,7 +2491,7 @@ export default function NotebookPage() {
               {/* Mind Map */}
               <button
                 onClick={() => handleStudioAction("mindmap")}
-                disabled={isGenerating.mindmap}
+                disabled={isGenerating.mindmap || skillDisabled}
                 className="bg-[#fdf2f8] hover:bg-pink-100 border border-pink-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.mindmap ? (
@@ -2491,7 +2505,7 @@ export default function NotebookPage() {
               {/* Action Items */}
               <button
                 onClick={() => handleStudioAction("action_items")}
-                disabled={isGenerating.action_items}
+                disabled={isGenerating.action_items || skillDisabled}
                 className="bg-[#fef9c3] hover:bg-yellow-100 border border-yellow-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.action_items ? (
@@ -2505,7 +2519,7 @@ export default function NotebookPage() {
               {/* SWOT Analysis */}
               <button
                 onClick={() => handleStudioAction("swot")}
-                disabled={isGenerating.swot}
+                disabled={isGenerating.swot || skillDisabled}
                 className="bg-[#f0fdf4] hover:bg-emerald-100 border border-emerald-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.swot ? (
@@ -2519,7 +2533,7 @@ export default function NotebookPage() {
               {/* Recommendations */}
               <button
                 onClick={() => handleStudioAction("recommendations")}
-                disabled={isGenerating.recommendations}
+                disabled={isGenerating.recommendations || skillDisabled}
                 className="bg-[#faf5ff] hover:bg-purple-100 border border-purple-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.recommendations ? (
@@ -2533,7 +2547,7 @@ export default function NotebookPage() {
               {/* Risk Analysis */}
               <button
                 onClick={() => handleStudioAction("risk_analysis")}
-                disabled={isGenerating.risk_analysis}
+                disabled={isGenerating.risk_analysis || skillDisabled}
                 className="bg-[#fff7ed] hover:bg-orange-100 border border-orange-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.risk_analysis ? (
@@ -2547,7 +2561,7 @@ export default function NotebookPage() {
               {/* Decision Support */}
               <button
                 onClick={() => handleStudioAction("decision_support")}
-                disabled={isGenerating.decision_support}
+                disabled={isGenerating.decision_support || skillDisabled}
                 className="bg-[#eff6ff] hover:bg-blue-100 border border-blue-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left"
               >
                 {isGenerating.decision_support ? (
@@ -2609,80 +2623,7 @@ export default function NotebookPage() {
             <div className="px-4">
             {/* PDF Viewer modal is rendered outside this panel — see below */}
 
-            {/* Generated Content Display */}
-            {(studioContent.summary || studioContent.faq || studioContent.mindmap || studioContent.action_items) && (
-              <div className="mb-6 space-y-4">
-                {studioContent.summary && (
-                  <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-bold text-indigo-600">SUMMARY</h4>
-                      <button
-                        onClick={() => handleMinimizeStudioContent("summary", studioContent.summary, "Summary")}
-                        className="text-indigo-400 hover:text-indigo-600 transition-colors p-0.5"
-                        title="Save to notes and minimize"
-                      >
-                        <Minimize2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <MarkdownContent
-                      content={studioContent.summary}
-                      className="text-[13px] text-slate-700 leading-relaxed"
-                    />
-                  </div>
-                )}
-                {studioContent.faq && (
-                  <div className="p-3 bg-cyan-50 rounded-xl border border-cyan-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-bold text-cyan-600">FAQ</h4>
-                      <button
-                        onClick={() => handleMinimizeStudioContent("faq", studioContent.faq, "FAQ")}
-                        className="text-cyan-400 hover:text-cyan-600 transition-colors p-0.5"
-                        title="Save to notes and minimize"
-                      >
-                        <Minimize2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <MarkdownContent
-                      content={studioContent.faq}
-                      className="text-[13px] text-slate-700 leading-relaxed"
-                    />
-                  </div>
-                )}
-                {studioContent.mindmap && (
-                  <div className="p-3 bg-pink-50 rounded-xl border border-pink-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-bold text-pink-600">MIND MAP</h4>
-                      <button
-                        onClick={() => handleMinimizeStudioContent("mindmap", studioContent.mindmap, "Mind Map")}
-                        className="text-pink-400 hover:text-pink-600 transition-colors p-0.5"
-                        title="Save to notes and minimize"
-                      >
-                        <Minimize2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <MindMapContent content={studioContent.mindmap} />
-                  </div>
-                )}
-                {studioContent.action_items && (
-                  <div className="p-3 bg-yellow-50 rounded-xl border border-yellow-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-bold text-yellow-600">ACTION ITEMS</h4>
-                      <button
-                        onClick={() => handleMinimizeStudioContent("action_items", studioContent.action_items, "Action Items")}
-                        className="text-yellow-500 hover:text-yellow-700 transition-colors p-0.5"
-                        title="Save to notes and minimize"
-                      >
-                        <Minimize2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <MarkdownContent
-                      content={studioContent.action_items}
-                      className="text-[13px] text-slate-700 leading-relaxed"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Generated content now displayed in Chat panel */}
 
             {/* Saved Notes — hidden, available in Chat history */}
             <div className="hidden">
