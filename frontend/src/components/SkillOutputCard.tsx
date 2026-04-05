@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, BookmarkPlus, Copy, Check } from "lucide-react";
 import type { ChatMessage } from "@/types/api";
 import MarkdownContent from "./MarkdownContent";
+import MindMapContent from "./MindMapContent";
 
 const SKILL_COLORS: Record<string, { border: string; bg: string; text: string }> = {
   summary: { border: "border-indigo-200/60", bg: "bg-indigo-50/30", text: "text-indigo-700" },
@@ -69,7 +70,11 @@ export default function SkillOutputCard({ message, onSave, isSaved, onCopy, isCo
           <>
             <div className="px-4 pb-4 border-t border-slate-100/50">
               <div className="mt-3 prose prose-sm max-w-none text-[13px] text-slate-700">
-                <MarkdownContent content={message.content} />
+                {skillType === "mindmap" ? (
+                  <MindMapContent content={message.content} />
+                ) : (
+                  <MarkdownContent content={message.content} />
+                )}
               </div>
             </div>
 

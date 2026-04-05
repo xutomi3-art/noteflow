@@ -283,7 +283,7 @@ export default function DashboardPage() {
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     try { new URL(url); } catch {
-      setUrlError('请输入有效的域名或网址');
+      setUrlError('Please enter a valid domain or URL');
       return;
     }
     if (pendingUrls.includes(url)) {
@@ -916,14 +916,14 @@ export default function DashboardPage() {
                 {showCustomPrompt && (
                   <div className="mt-3">
                     <textarea
-                      placeholder={"e.g. 你是一名法律顾问，回答要简洁专业\ne.g. 事实类问题严格基于文档，建议类问题可以发散思考\ne.g. Always respond with bullet points, keep it under 3 sentences"}
+                      placeholder={"e.g. You are a legal consultant, respond concisely and professionally\ne.g. For factual questions, strictly base answers on documents; for advisory questions, think broadly\ne.g. Always respond with bullet points, keep it under 3 sentences"}
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
                       rows={4}
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
                     />
                     <div className="mt-1 flex items-center justify-between">
-                      <p className="text-xs text-slate-400">设定 AI 在此笔记本中的回答风格和角色</p>
+                      <p className="text-xs text-slate-400">Set the AI's response style and role for this notebook</p>
                       <button
                         type="button"
                         onClick={async () => {

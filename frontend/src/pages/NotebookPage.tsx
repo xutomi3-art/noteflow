@@ -52,6 +52,7 @@ import type { Notebook, Source, ChatMessage } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
 import MeetingMinutesMessage from "@/components/MeetingMinutesMessage";
 import SkillOutputCard from "@/components/SkillOutputCard";
+import MindMapContent from "@/components/MindMapContent";
 import FeedbackModal from "@/components/FeedbackModal";
 import PptConfigModal from "@/components/PptConfigModal";
 import type { PptConfig } from "@/components/PptConfigModal";
@@ -103,25 +104,7 @@ function statusLabel(status: Source["status"], progress?: number | null): string
 
 
 /** Renders mind map content: JSON as visual mind map, otherwise markdown */
-function MindMapContent({ content }: { content: string }) {
-  let raw = content.trim();
-  // Strip ```json fences
-  if (raw.startsWith("```")) {
-    raw = raw.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return <MindMap data={parsed} />;
-  } catch {
-    return (
-      <MarkdownContent
-        content={content}
-        className="text-[13px] text-slate-700 leading-relaxed"
-      />
-    );
-  }
-}
+// MindMapContent moved to @/components/MindMapContent
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -834,7 +817,7 @@ export default function NotebookPage() {
     let normalizedUrl = urlInput.trim();
     if (!/^https?:\/\//i.test(normalizedUrl)) normalizedUrl = "https://" + normalizedUrl;
     try { new URL(normalizedUrl); } catch {
-      setUrlError("请输入有效的域名或网址");
+      setUrlError("Please enter a valid domain or URL");
       return;
     }
     setIsAddingUrl(true);
@@ -893,7 +876,7 @@ export default function NotebookPage() {
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     try { new URL(url); } catch {
-      setModalUrlError('请输入有效的域名或网址');
+      setModalUrlError('Please enter a valid domain or URL');
       return;
     }
     if (modalUrls.includes(url)) { setModalUrlInput(''); setModalUrlError(null); return; }
@@ -3156,7 +3139,7 @@ export default function NotebookPage() {
               />
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-xs text-slate-400">
-                  设定回答风格、角色、语气等，AI 将按此响应
+                  Set response style, role, tone, etc. AI will respond accordingly
                 </p>
                 <button
                   onClick={async () => {
