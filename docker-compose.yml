@@ -52,7 +52,7 @@ services:
       - QWEN_API_KEY=${QWEN_API_KEY:-}
       - RAGFLOW_BASE_URL=http://ragflow-server:9380
       - RAGFLOW_API_KEY=${RAGFLOW_API_KEY:-}
-      - MINERU_BASE_URL=${MINERU_BASE_URL:-http://cloud.jototech.cn:17860}
+      - MINERU_BASE_URL=${MINERU_BASE_URL:-http://10.200.0.102:17860}
       - UPLOAD_DIR=/app/uploads
       - LLM_BASE_URL=${LLM_BASE_URL:-http://10.200.0.102:8100/v1}
       - LLM_MODEL=${LLM_MODEL:-Qwen3.5-35B}

@@ -23,7 +23,7 @@ services:
     ports:
       - "8100:8000"
     environment:
-      - MINERU_BASE_URL=http://cloud.jototech.cn:17860
+      - MINERU_BASE_URL=http://10.200.0.102:17860
       - RAGFLOW_BASE_URL=http://ragflow-server:9380
       - RAGFLOW_API_KEY=ragflow-noteflow-test-414efb401590babe09c1c21bca79490a
 

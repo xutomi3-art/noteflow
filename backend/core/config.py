@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     LLM_VISION_API_KEY: str = ""
 
     # MinerU
-    MINERU_BASE_URL: str = "http://cloud.jototech.cn:17860"
+    MINERU_BASE_URL: str = "http://10.200.0.102:17860"
 
     # Docmee (文多多 AiPPT)
     DOCMEE_API_KEY: str = ""

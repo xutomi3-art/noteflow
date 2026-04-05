@@ -35,6 +35,7 @@ import {
   Upload,
   Link as LinkIcon,
   ChevronRight,
+  ChevronDown,
   ChevronUp,
   Bug,
   Shield,
@@ -50,6 +51,7 @@ import { api } from "@/services/api";
 import type { Notebook, Source, ChatMessage } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
 import MeetingMinutesMessage from "@/components/MeetingMinutesMessage";
+import SkillOutputCard from "@/components/SkillOutputCard";
 import FeedbackModal from "@/components/FeedbackModal";
 import PptConfigModal from "@/components/PptConfigModal";
 import type { PptConfig } from "@/components/PptConfigModal";
@@ -480,15 +482,7 @@ export default function NotebookPage() {
   } = useStudioStore();
   const { members, fetchMembers, removeMember } = useSharingStore();
 
-  // Auto-expand Studio panel when new content appears
-  const prevContentCountRef = useRef(0);
-  useEffect(() => {
-    const contentCount = Object.values(studioContent).filter(v => v && typeof v === "string" && v.length > 0).length;
-    if (contentCount > prevContentCountRef.current && !isRightCollapsed) {
-      setRightWidth(w => Math.max(w, Math.min(520, window.innerWidth * 0.35)));
-    }
-    prevContentCountRef.current = contentCount;
-  }, [studioContent, isRightCollapsed]);
+  // Skill output now goes to Chat, no auto-expand needed
 
   // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -2109,25 +2103,13 @@ export default function NotebookPage() {
                       </div>
                     ) : msg.metadata?.type === "skill_output" ? (
                       <div className="flex justify-start">
-                        {msg.metadata?.skill_type === "mindmap" ? (
-                          <div className="w-full max-w-[90%]">
-                            <div className="rounded-xl border border-pink-200/60 bg-pink-50/30 px-4 py-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Network className="w-3.5 h-3.5 text-pink-500" />
-                                <span className="text-[12px] font-semibold text-pink-700">Mind Map</span>
-                              </div>
-                              <MindMapContent content={msg.content} />
-                            </div>
-                          </div>
-                        ) : (
-                          <MeetingMinutesMessage
-                            message={{...msg, metadata: {...msg.metadata, title: msg.metadata?.skill_label || "Skill Output", collapsed_summary: msg.metadata?.collapsed_summary || ""}}}
-                            onSave={() => handleSaveMessageAsNote(msg)}
-                            isSaved={savedMessageIds.has(msg.id)}
-                            onCopy={() => handleCopyMessage(msg.id, msg.content)}
-                            isCopied={copiedMessageIds.has(msg.id)}
-                          />
-                        )}
+                        <SkillOutputCard
+                          message={msg}
+                          onSave={() => handleSaveMessageAsNote(msg)}
+                          isSaved={savedMessageIds.has(msg.id)}
+                          onCopy={() => handleCopyMessage(msg.id, msg.content)}
+                          isCopied={copiedMessageIds.has(msg.id)}
+                        />
                       </div>
                     ) : msg.role === "user" ? (
                       <div className={`flex ${msg.user_name && msg.user_id !== user?.id ? "justify-start" : "justify-end"}`}>
@@ -3096,7 +3078,7 @@ export default function NotebookPage() {
                   <h4 className="text-[13px] font-semibold text-slate-800">Notebook Persona</h4>
                   {notebook.custom_prompt && <span className="text-[10px] px-1.5 py-0.5 bg-[#5b8c15]/10 text-[#5b8c15] rounded font-medium">Active</span>}
                 </div>
-                <p className="text-[11px] text-slate-400 mb-2">设定 AI 在此笔记本中的回答风格和角色</p>
+                <p className="text-[11px] text-slate-400 mb-2">Set the AI's response style and role for this notebook</p>
                 <button
                   onClick={() => {
                     setAIInstructionsValue(notebook.custom_prompt || "");
@@ -3119,7 +3101,7 @@ export default function NotebookPage() {
                   <Sparkles className="w-3.5 h-3.5 text-purple-500" />
                   <h4 className="text-[13px] font-semibold text-slate-800">Meeting AI Suggestions</h4>
                 </div>
-                <p className="text-[11px] text-slate-400 mb-1">AI 在会议中自动给出决策、行动项等建议</p>
+                <p className="text-[11px] text-slate-400 mb-1">AI automatically provides decisions, action items, and suggestions during meetings</p>
                 <p className="text-[11px] text-slate-500 font-medium mb-2">Frequency</p>
                 <div className="flex items-center gap-2">
                   {(["high", "medium", "low", "off"] as const).map((level) => (
@@ -3161,13 +3143,13 @@ export default function NotebookPage() {
                 <Sparkles className="w-4 h-4 text-[#5b8c15]" />
                 <h3 className="text-base font-semibold text-slate-900">Notebook Persona</h3>
               </div>
-              <p className="text-xs text-slate-400 mt-1">设定 AI 在此笔记本中的回答风格和角色</p>
+              <p className="text-xs text-slate-400 mt-1">Set the AI's response style and role for this notebook</p>
             </div>
             <div className="px-5 py-4">
               <textarea
                 value={aiInstructionsValue}
                 onChange={(e) => setAIInstructionsValue(e.target.value)}
-                placeholder={"e.g. 你是一名法律顾问，回答要简洁专业\ne.g. 事实类问题严格基于文档，建议类问题可以发散思考\ne.g. Always respond with bullet points, keep it under 3 sentences"}
+                placeholder={"e.g. You are a legal consultant, respond concisely and professionally\ne.g. For factual questions, strictly base answers on documents; for advisory questions, think broadly\ne.g. Always respond with bullet points, keep it under 3 sentences"}
                 rows={6}
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
                 autoFocus
