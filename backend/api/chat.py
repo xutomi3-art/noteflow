@@ -373,37 +373,46 @@ async def chat_multi(
     if req.web_search:
         search_context = await web_search(req.message)
 
-    # Source context (for uploaded documents)
+    # RAG retrieval from notebook sources
     source_context = ""
-    if req.source_ids:
+    try:
         from backend.models.source import Source
-        src_uuids = [uuid.UUID(sid) for sid in req.source_ids]
-        src_result = await db.execute(
-            select(Source).where(Source.id.in_(src_uuids), Source.status == "ready")
-        )
-        sources = src_result.scalars().all()
+        from backend.services.ragflow_client import ragflow_client
+        from backend.core.config import settings
+
+        if req.source_ids:
+            src_uuids = [uuid.UUID(sid) for sid in req.source_ids]
+            src_result = await db.execute(
+                select(Source).where(Source.id.in_(src_uuids), Source.status == "ready")
+            )
+        else:
+            src_result = await db.execute(
+                select(Source).where(Source.notebook_id == uuid.UUID(notebook_id), Source.status == "ready")
+            )
+        sources = list(src_result.scalars().all())
+
         if sources:
-            from backend.services.ragflow_client import ragflow_client
-            chunks = []
-            for src in sources:
-                try:
-                    if src.ragflow_dataset_id and src.ragflow_doc_id:
-                        doc_chunks = await ragflow_client.get_document_chunks(
-                            src.ragflow_dataset_id, src.ragflow_doc_id
-                        )
-                        for c in doc_chunks[:20]:
-                            chunks.append(f"[{src.filename}] {c.get('content', '')}")
-                except Exception:
-                    pass
-            if chunks:
-                source_context = "\n\n".join(chunks)
+            dataset_ids = list(set(s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id))
+            if dataset_ids:
+                chunks = await ragflow_client.retrieve(
+                    dataset_ids, req.message, top_k=settings.RAG_TOP_K,
+                )
+                if chunks:
+                    context_parts = []
+                    for i, chunk in enumerate(chunks, 1):
+                        text = chunk.get("content_with_weight", chunk.get("content", ""))
+                        doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "unknown"))
+                        context_parts.append(f"[{i}] ({doc_name}): {text}")
+                    source_context = "\n\n".join(context_parts)
+    except Exception as e:
+        logger.warning("RAG retrieval failed in multi-chat: %s", e)
 
     # Build messages
     system_content = "You are a helpful AI assistant."
+    if source_context:
+        system_content += f"\n\nUse the following document excerpts to answer the user's question. Cite sources using [1][2] etc:\n{source_context[:15000]}"
     if search_context:
         system_content += f"\n\nWeb search results:\n{search_context}"
-    if source_context:
-        system_content += f"\n\nUploaded document content:\n{source_context[:15000]}"
 
     # Check for image attachments
     has_images = req.attachments and any(a.type.startswith("image/") for a in (req.attachments or []))
@@ -638,37 +647,49 @@ async def chat_multi_stream(
     if req.web_search:
         search_context = await web_search(req.message)
 
-    # Source context
+    # RAG retrieval from notebook sources (same as regular chat)
     source_context = ""
-    if req.source_ids:
+    try:
         from backend.models.source import Source
-        src_uuids = [uuid.UUID(sid) for sid in req.source_ids]
-        src_result = await db.execute(
-            select(Source).where(Source.id.in_(src_uuids), Source.status == "ready")
-        )
-        sources = src_result.scalars().all()
+        from backend.services.ragflow_client import ragflow_client
+        from backend.core.config import settings
+
+        # Get all ready sources in this notebook (or filter by source_ids if provided)
+        if req.source_ids:
+            src_uuids = [uuid.UUID(sid) for sid in req.source_ids]
+            src_result = await db.execute(
+                select(Source).where(Source.id.in_(src_uuids), Source.status == "ready")
+            )
+        else:
+            src_result = await db.execute(
+                select(Source).where(Source.notebook_id == uuid.UUID(notebook_id), Source.status == "ready")
+            )
+        sources = list(src_result.scalars().all())
+
         if sources:
-            from backend.services.ragflow_client import ragflow_client
-            chunks = []
-            for src in sources:
-                try:
-                    if src.ragflow_dataset_id and src.ragflow_doc_id:
-                        doc_chunks = await ragflow_client.get_document_chunks(
-                            src.ragflow_dataset_id, src.ragflow_doc_id
-                        )
-                        for c in doc_chunks[:20]:
-                            chunks.append(f"[{src.filename}] {c.get('content', '')}")
-                except Exception:
-                    pass
-            if chunks:
-                source_context = "\n\n".join(chunks)
+            dataset_ids = list(set(s.ragflow_dataset_id for s in sources if s.ragflow_dataset_id))
+            if dataset_ids:
+                # Vector retrieval using the user's query
+                chunks = await ragflow_client.retrieve(
+                    dataset_ids, req.message, top_k=settings.RAG_TOP_K,
+                )
+                if chunks:
+                    # Build context with source attribution
+                    context_parts = []
+                    for i, chunk in enumerate(chunks, 1):
+                        text = chunk.get("content_with_weight", chunk.get("content", ""))
+                        doc_name = chunk.get("document_keyword", chunk.get("docnm_kwd", "unknown"))
+                        context_parts.append(f"[{i}] ({doc_name}): {text}")
+                    source_context = "\n\n".join(context_parts)
+    except Exception as e:
+        logger.warning("RAG retrieval failed in multi-chat stream: %s", e)
 
     # Build messages
     system_content = "You are a helpful AI assistant."
+    if source_context:
+        system_content += f"\n\nUse the following document excerpts to answer the user's question. Cite sources using [1][2] etc:\n{source_context[:15000]}"
     if search_context:
         system_content += f"\n\nWeb search results:\n{search_context}"
-    if source_context:
-        system_content += f"\n\nUploaded document content:\n{source_context[:15000]}"
 
     has_images = req.attachments and any(a.type.startswith("image/") for a in (req.attachments or []))
     if has_images:
