@@ -122,8 +122,9 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     streamingRef.current = { ...initialStreaming };
     setStreamingContent({ ...initialStreaming });
 
-    // Convert image attachments to base64
+    // Process attachments: images → base64, documents → upload as source
     const imgAtts: Array<{ name: string; type: string; data: string }> = [];
+    const docSourceIds: string[] = [];
     for (const att of currentAttachments) {
       if (att.file.type.startsWith("image/")) {
         const b64 = await new Promise<string>((resolve) => {
@@ -132,6 +133,14 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
           reader.readAsDataURL(att.file);
         });
         imgAtts.push({ name: att.name, type: att.file.type, data: b64 });
+      } else {
+        // Upload document as source
+        try {
+          const source = await api.uploadSource(notebookId, att.file);
+          if (source?.id) docSourceIds.push(source.id);
+        } catch (e) {
+          console.warn("Upload failed:", e);
+        }
       }
     }
 
@@ -143,6 +152,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
         modelIds: activeModels.map((m) => m.id),
         sessionId: activeSessionId || undefined,
         attachments: imgAtts.length > 0 ? imgAtts : undefined,
+        sourceIds: docSourceIds.length > 0 ? docSourceIds : undefined,
       },
       {
         onToken: (modelId, token) => {
@@ -370,9 +380,9 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
       </div>
 
       {/* Main */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* Panels */}
-        <div className={`flex-1 ${expandedModelId ? "" : `grid ${gridCols}`} gap-px bg-slate-200 overflow-hidden`}>
+        <div className={`flex-1 min-h-0 relative ${expandedModelId ? "" : `grid ${gridCols}`} gap-px bg-slate-200 overflow-hidden`}>
           {activeModels.map((model) => {
             const messages = modelChats[model.id] || [];
             const streaming = streamingContent[model.id];
