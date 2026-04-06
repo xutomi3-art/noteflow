@@ -539,6 +539,7 @@ export default function DashboardPage() {
                         {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
                       </div>
                     </div>
+                    {!notebook.is_just_chat && (
                     <div
                       className="relative flex-shrink-0 ml-2 self-end"
                       ref={openMenuId === notebook.id ? menuRef : undefined}
@@ -581,6 +582,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -675,7 +677,7 @@ export default function DashboardPage() {
                       {formatRelativeDate(notebook.created_at)} <span className="mx-1.5 text-slate-300">&bull;</span> {notebook.source_count} {notebook.source_count === 1 ? 'source' : 'sources'}
                     </div>
                     </div>
-                    {notebook.user_role === 'owner' && (
+                    {notebook.user_role === 'owner' && !notebook.is_just_chat && (
                     <div
                       className="relative flex-shrink-0 ml-2 self-end"
                       ref={openMenuId === notebook.id ? menuRef : undefined}
