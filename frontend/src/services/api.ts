@@ -154,6 +154,10 @@ class ApiClient {
   }
 
   // Sources
+  async getSources(notebookId: string): Promise<Source[]> {
+    return this.request(`/notebooks/${notebookId}/sources`);
+  }
+
   uploadSource(
     notebookId: string,
     file: File,

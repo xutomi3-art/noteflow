@@ -29,6 +29,7 @@ export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, on
   const [copied, setCopied] = useState(false);
   const [showLinkSection, setShowLinkSection] = useState(false);
   const [invitedEmails, setInvitedEmails] = useState<InvitedEmail[]>([]);
+  const [recentEmails, setRecentEmails] = useState<string[]>([]);
 
   useEffect(() => {
     if (isOpen && notebookId) {
@@ -38,6 +39,10 @@ export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, on
       setShowLinkSection(false);
       setEmailInput("");
       setInvitedEmails([]);
+      try {
+        const stored = JSON.parse(localStorage.getItem("noteflow_recent_invites") || "[]");
+        setRecentEmails(Array.isArray(stored) ? stored.slice(0, 5) : []);
+      } catch { setRecentEmails([]); }
     }
   }, [isOpen, notebookId, fetchMembers]);
 
@@ -62,6 +67,13 @@ export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, on
       setInvitedEmails((prev) =>
         prev.map((e) => (e.email === email ? { ...e, status: "sent" } : e)),
       );
+      // Save to recent invites
+      try {
+        const stored: string[] = JSON.parse(localStorage.getItem("noteflow_recent_invites") || "[]");
+        const updated = [email, ...stored.filter(e => e !== email)].slice(0, 5);
+        localStorage.setItem("noteflow_recent_invites", JSON.stringify(updated));
+        setRecentEmails(updated);
+      } catch { /* ignore */ }
       fetchMembers(notebookId);
       onMemberAdded?.();
     } catch {
@@ -229,6 +241,28 @@ export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, on
               </button>
             </div>
           </div>
+
+          {/* Recent Invitees — quick pick */}
+          {recentEmails.length > 0 && (() => {
+            const currentMemberEmails = new Set(members.map(m => m.email));
+            const currentInvitedEmails = new Set(invitedEmails.map(e => e.email));
+            const available = recentEmails.filter(e => !currentMemberEmails.has(e) && !currentInvitedEmails.has(e));
+            if (available.length === 0) return null;
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {available.map(email => (
+                  <button
+                    key={email}
+                    onClick={() => { setEmailInput(email); }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 hover:bg-[#5b8c15]/5 hover:border-[#5b8c15]/30 hover:text-[#5b8c15] transition-colors"
+                  >
+                    <Mail className="w-3 h-3 opacity-50" />
+                    {email}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Invited Emails List */}
           {invitedEmails.length > 0 && (

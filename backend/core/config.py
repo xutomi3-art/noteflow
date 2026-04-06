@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     VOLCENGINE_ASR_ACCESS_KEY: str = ""  # Access Token from console
     PUBLIC_BASE_URL: str = ""  # Public URL for audio file serving (e.g. http://47.116.199.160)
 
+    # Serper (Web Search for Just Chat)
+    SERPER_API_KEY: str = "c9b525b6a34a410f75ef951cddeacfa614d9f297"
+
     # Web Scraper (Jina Reader)
     WEB_SCRAPER_REMOVE_SELECTOR: str = "nav, footer, header, aside, .ads, .sidebar, .advertisement, .ad-wrapper, .recommend, .comments, .comment-section, [role='banner'], [role='navigation'], [role='complementary']"
 

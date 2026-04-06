@@ -76,6 +76,7 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
             owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, custom_prompt=nb.custom_prompt, user_role=role,
             source_count=source_count, member_count=member_count,
             created_at=nb.created_at, updated_at=nb.updated_at, joined_at=None,
+            is_just_chat=nb.is_just_chat,
         ))
     for row in shared_rows:
         nb, source_count, role, member_count, joined_at = row
@@ -84,9 +85,11 @@ async def list_notebooks(db: AsyncSession, user_id: uuid.UUID) -> list[NotebookR
             owner_id=str(nb.owner_id), is_shared=nb.is_shared, shared_chat=nb.shared_chat, custom_prompt=nb.custom_prompt, user_role=role,
             source_count=source_count, member_count=member_count,
             created_at=nb.created_at, updated_at=nb.updated_at, joined_at=joined_at,
+            is_just_chat=nb.is_just_chat,
         ))
 
-    results.sort(key=lambda r: r.updated_at, reverse=True)
+    # Just Chat always first, then by updated_at
+    results.sort(key=lambda r: (not r.is_just_chat, -r.updated_at.timestamp()))
     return results
 
 

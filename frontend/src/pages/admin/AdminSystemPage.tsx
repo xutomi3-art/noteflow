@@ -14,6 +14,7 @@ const SERVICE_LABELS: Record<string, string> = {
   vision_llm: 'Vision LLM',
   embedding: 'Embedding',
   rerank: 'Rerank',
+  asr: 'ASR (Speech Recognition)',
 };
 
 const SERVICE_DESCRIPTIONS: Record<string, string> = {
@@ -28,6 +29,7 @@ const SERVICE_DESCRIPTIONS: Record<string, string> = {
   vision_llm: 'Image/chart analysis in PDFs',
   embedding: 'Text → vector conversion (BGE-M3)',
   rerank: 'Search result re-ranking (gte-rerank)',
+  asr: 'Meeting transcription (Qwen3-ASR)',
 };
 
 interface ConfigField {

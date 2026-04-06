@@ -305,7 +305,7 @@ class VolcengineASRClient:
 
 WHISPER_IDLE_TIMEOUT = 1800  # 30 minutes — auto-end meeting if no speech
 WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
-WHISPER_MAX_AUDIO_SECS = 55  # FireRedASR-AED supports up to 60s, leave 5s margin
+WHISPER_MAX_AUDIO_SECS = 30  # Force flush after 30s of continuous speech
 WHISPER_SILENCE_MS = 1000  # silence duration (ms) to trigger sentence boundary (1s)
 WHISPER_SILENCE_THRESHOLD = 200  # PCM RMS below this = silence
 WHISPER_SPEECH_RATIO = 0.05  # at least 5% of samples must exceed peak threshold
@@ -386,12 +386,20 @@ _VALID_SHORT_RESPONSES = {
 
 
 def _is_hallucination(text: str) -> bool:
-    """Detect ASR hallucination: repetitive or known garbage patterns."""
+    """Detect ASR hallucination: repetitive or known garbage patterns.
+
+    Only filters short texts (<50 chars). Longer texts are kept even if
+    they contain suspicious patterns, because real speech mixed with
+    hallucination is better than losing the entire transcript.
+    """
     text = text.strip()
     if not text:
         return True
     # Allow valid short Chinese responses
     if text in _VALID_SHORT_RESPONSES:
+        return False
+    # Long text (50+ chars) — always keep, too risky to discard real speech
+    if len(text) >= 50:
         return False
     # Single char — usually garbage (unless in whitelist above)
     if len(text) == 1:
@@ -401,7 +409,6 @@ def _is_hallucination(text: str) -> bool:
     if len(stripped) >= 4 and len(set(stripped)) == 1:
         return True
     # Short phrase repeats — only check short texts (< 30 chars)
-    # Long texts with repeated words (e.g. "要有...要有...要有...") are normal speech
     if len(text) < 30:
         for phrase_len in range(2, min(10, len(text) // 3 + 1)):
             phrase = text[:phrase_len]

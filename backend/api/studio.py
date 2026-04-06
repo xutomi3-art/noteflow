@@ -446,6 +446,7 @@ class PptGenerateRequest(BaseModel):
     audience: str = ""
     language: str = "zh"
     length: str = "medium"
+    source_ids: list[str] | None = None
 
 
 _FALLBACK_GENERATION_OPTIONS = {
@@ -540,14 +541,49 @@ async def generate_ppt(
 
     # Try Docmee first
     if await docmee_client.is_available() and cfg.template_id:
-        ppt_info = await docmee_client.generate_ppt(
-            content=context[:1000],
-            template_id=cfg.template_id,
-            scene=cfg.scene,
-            audience=cfg.audience,
-            lang=cfg.language,
-            length=cfg.length,
-        )
+        ppt_info = None
+
+        # If source_ids provided, try file-based generation (type=2)
+        if cfg.source_ids:
+            source_uuids = [uuid.UUID(sid) for sid in cfg.source_ids]
+            src_result = await db.execute(
+                select(Source).where(
+                    Source.notebook_id == notebook_id,
+                    Source.id.in_(source_uuids),
+                    Source.storage_url.isnot(None),
+                )
+            )
+            src_records = src_result.scalars().all()
+            file_paths: list[tuple[str, str]] = []
+            for src in src_records:
+                fpath = src.storage_url
+                if fpath and not os.path.isabs(fpath):
+                    fpath = os.path.join(settings.UPLOAD_DIR, fpath) if not fpath.startswith(str(settings.UPLOAD_DIR)) else fpath
+                if fpath and os.path.isfile(fpath):
+                    file_paths.append((fpath, src.filename))
+                else:
+                    logger.warning("PPT file-gen: file not found for source %s: %s", src.id, fpath)
+            if file_paths:
+                logger.info("PPT file-gen: uploading %d files to Docmee", len(file_paths))
+                ppt_info = await docmee_client.generate_ppt_from_files(
+                    file_paths=file_paths,
+                    template_id=cfg.template_id,
+                    scene=cfg.scene,
+                    audience=cfg.audience,
+                    lang=cfg.language,
+                    length=cfg.length,
+                )
+
+        # Fall back to text-based generation (type=1) if file-based didn't work
+        if ppt_info is None:
+            ppt_info = await docmee_client.generate_ppt(
+                content=context[:1000],
+                template_id=cfg.template_id,
+                scene=cfg.scene,
+                audience=cfg.audience,
+                lang=cfg.language,
+                length=cfg.length,
+            )
         if ppt_info:
             ppt_id = ppt_info.get("id", "")
             pptx_bytes = await docmee_client.download_pptx(ppt_id, lang=cfg.language)
@@ -771,6 +807,7 @@ async def generate_podcast(
 
 class StudioRequest(BaseModel):
     source_ids: list[str] | None = None
+    session_id: str | None = None
 
 
 # ── Custom Skills CRUD (must be before /{content_type} catch-all) ──
@@ -988,6 +1025,7 @@ async def execute_custom_skill(
         role="assistant",
         content=content,
         citations=[],
+        session_id=uuid.UUID(body.session_id) if body and body.session_id else None,
         msg_metadata={
             "type": "skill_output",
             "skill_type": str(skill.id),
@@ -1076,6 +1114,7 @@ async def generate_content(
             role="assistant",
             content=content,
             citations=[],
+            session_id=uuid.UUID(body.session_id) if body and body.session_id else None,
             msg_metadata={
                 "type": "skill_output",
                 "skill_type": content_type,

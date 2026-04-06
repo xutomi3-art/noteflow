@@ -7,7 +7,7 @@ import time
 import uuid
 from typing import AsyncGenerator
 
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.chat_log import ChatLog
@@ -348,6 +348,7 @@ async def stream_chat(
     source_ids: list[str] | None = None,
     web_search: bool = False,
     deep_thinking: bool = False,
+    session_id: uuid.UUID | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream AI response with citations. Yields SSE-formatted data."""
     # Initialize timing variables
@@ -380,6 +381,7 @@ async def stream_chat(
             role="user",
             content=message,
             citations=[],
+            session_id=session_id,
         )
         db.add(user_msg)
         await db.commit()
@@ -604,7 +606,7 @@ The uploaded documents do not contain information relevant to this question. Ple
         # RAG best practice: 5-10 rounds. More history dilutes retrieval relevance.
         MAX_HISTORY_ROUNDS = 10
         MAX_HISTORY_CHARS = 20000
-        history = await get_chat_history(db, notebook_id, user_id)
+        history = await get_chat_history(db, notebook_id, user_id, session_id=session_id)
         history = [h for h in history if h.id != user_msg.id]
         # If last assistant message was an error, skip all history to avoid content filter loops
         last_assistant = next((h for h in reversed(history) if h.role == "assistant"), None)
@@ -733,6 +735,7 @@ Follow these rules strictly:
             role="assistant",
             content=full_response,
             citations=used_citations,
+            session_id=session_id,
         )
         db.add(assistant_msg)
         await db.commit()
@@ -768,6 +771,32 @@ Follow these rules strictly:
 
         # 7. Send completion event with citations
         yield f"data: {json.dumps({'type': 'done', 'id': str(assistant_msg.id), 'citations': used_citations})}\n\n"
+
+        # 7b. Auto-name session if this is the first message
+        if session_id:
+            try:
+                from backend.models.session import Session as SessionModel
+                msg_count = (await db.execute(
+                    select(func.count()).where(
+                        ChatMessage.session_id == session_id,
+                        ChatMessage.role == "user",
+                    )
+                )).scalar() or 0
+                if msg_count <= 1:
+                    title_messages = [
+                        {"role": "system", "content": "Generate a short title (max 6 words) for this chat session based on the user's message. Return ONLY the title, no quotes or punctuation."},
+                        {"role": "user", "content": message[:200]},
+                    ]
+                    title = await qwen_client.generate(title_messages)
+                    title = title.strip().strip('"').strip("'")[:60]
+                    if title:
+                        sess = await db.get(SessionModel, session_id)
+                        if sess:
+                            sess.name = title
+                            await db.commit()
+                            yield f"data: {json.dumps({'type': 'session_renamed', 'session_id': str(session_id), 'name': title})}\n\n"
+            except Exception as e:
+                logger.warning("Failed to auto-name session: %s", e)
 
         # Broadcast assistant response to team in shared chat mode
         if is_shared_chat:
@@ -813,13 +842,17 @@ Follow these rules strictly:
 async def get_chat_history(
     db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID,
     shared: bool = False,
+    session_id: uuid.UUID | None = None,
 ) -> list[ChatMessage]:
     """Get chat history for a notebook.
 
     If shared=True, returns all users' messages (last 40 = ~20 rounds).
     Otherwise, returns only the current user's messages.
+    If session_id is provided, filter to that session only.
     """
     query = select(ChatMessage).where(ChatMessage.notebook_id == notebook_id)
+    if session_id is not None:
+        query = query.where(ChatMessage.session_id == session_id)
     if not shared:
         query = query.where(ChatMessage.user_id == user_id)
     query = query.order_by(ChatMessage.created_at.asc())
@@ -827,6 +860,8 @@ async def get_chat_history(
         # Limit to last 40 messages (~20 Q&A rounds) for shared mode
         from sqlalchemy import func
         count_q = select(func.count()).where(ChatMessage.notebook_id == notebook_id)
+        if session_id is not None:
+            count_q = count_q.where(ChatMessage.session_id == session_id)
         total = (await db.execute(count_q)).scalar() or 0
         if total > 40:
             query = query.offset(total - 40)
@@ -835,27 +870,33 @@ async def get_chat_history(
 
 
 async def clear_chat_history(
-    db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID
+    db: AsyncSession, notebook_id: uuid.UUID, user_id: uuid.UUID,
+    session_id: uuid.UUID | None = None,
 ) -> None:
-    """Clear chat history for a notebook (per-user)."""
+    """Clear chat history for a notebook (per-user).
+
+    If session_id is provided, only clear messages in that session.
+    """
     # NULL out source_message_id on saved notes that reference these messages
     # to avoid FK violation when deleting chat messages
     from sqlalchemy import update as sql_update
-    msg_ids_result = await db.execute(
-        select(ChatMessage.id).where(
-            ChatMessage.notebook_id == notebook_id,
-            ChatMessage.user_id == user_id,
-        )
+    msg_query = select(ChatMessage.id).where(
+        ChatMessage.notebook_id == notebook_id,
+        ChatMessage.user_id == user_id,
     )
+    if session_id is not None:
+        msg_query = msg_query.where(ChatMessage.session_id == session_id)
+    msg_ids_result = await db.execute(msg_query)
     msg_ids = [r[0] for r in msg_ids_result.fetchall()]
     if msg_ids:
         await db.execute(
             sql_update(SavedNote).where(SavedNote.source_message_id.in_(msg_ids)).values(source_message_id=None)
         )
-    await db.execute(
-        delete(ChatMessage).where(
-            ChatMessage.notebook_id == notebook_id,
-            ChatMessage.user_id == user_id,
-        )
+    delete_query = delete(ChatMessage).where(
+        ChatMessage.notebook_id == notebook_id,
+        ChatMessage.user_id == user_id,
     )
+    if session_id is not None:
+        delete_query = delete_query.where(ChatMessage.session_id == session_id)
+    await db.execute(delete_query)
     await db.commit()

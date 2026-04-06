@@ -36,10 +36,10 @@ export default function SkillOutputCard({ message, onSave, isSaved, onCopy, isCo
   return (
     <div className="w-full max-w-[90%]">
       <div className={`rounded-xl border ${colors.border} ${colors.bg} overflow-hidden`}>
-        {/* Header — always visible */}
+        {/* Header — always visible, click to toggle */}
         <div
-          className={`flex items-start gap-3 px-4 py-3 ${!expanded ? "cursor-pointer" : ""}`}
-          onClick={() => !expanded && setExpanded(true)}
+          className="flex items-start gap-3 px-4 py-3 cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
         >
           <div className="flex-1 min-w-0">
             <span className="font-semibold text-[14px] text-slate-800">{label}</span>

@@ -96,6 +96,20 @@ async def _bump_notebook_updated_at(notebook_id: str) -> None:
 
 async def _create_default_notebooks(db: AsyncSession, user: User, background_tasks: BackgroundTasks | None = None) -> None:
     """Create default starter notebooks with demo sources, notes for a new user."""
+    # Create "Just Chat" notebook first (always appears at top)
+    from backend.models.notebook import Notebook as NotebookModel
+    just_chat = NotebookModel(
+        name="Just Chat",
+        emoji="💬",
+        cover_color="#6366F1",
+        owner_id=user.id,
+        is_just_chat=True,
+        is_shared=False,
+        shared_chat=False,
+    )
+    db.add(just_chat)
+    await db.commit()
+
     source_tasks: list[tuple[str, str, str, str, str]] = []  # (source_id, notebook_id, file_path, filename, file_type)
     getting_started_id: str | None = None
 

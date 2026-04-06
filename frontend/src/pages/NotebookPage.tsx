@@ -49,8 +49,9 @@ import { useStudioStore } from "@/stores/studio-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useSharingStore } from "@/stores/sharing-store";
 import { api } from "@/services/api";
-import type { Notebook, Source, ChatMessage } from "@/types/api";
+import type { Notebook, Source, ChatMessage, Session } from "@/types/api";
 import ShareModal from "@/components/sharing/ShareModal";
+import JustChat from "@/components/JustChat";
 import MeetingMinutesMessage from "@/components/MeetingMinutesMessage";
 import SkillOutputCard from "@/components/SkillOutputCard";
 import MindMapContent from "@/components/MindMapContent";
@@ -382,7 +383,7 @@ export default function NotebookPage() {
   const [newSkillName, setNewSkillName] = useState("");
   const [newSkillPrompt, setNewSkillPrompt] = useState("");
   const [newSkillAllNb, setNewSkillAllNb] = useState(true);
-  const [newSkillShared, setNewSkillShared] = useState(false);
+  const [newSkillShared, setNewSkillShared] = useState(true);
   const [isCreatingSkill, setIsCreatingSkill] = useState(false);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [rightSkillFlex, setRightSkillFlex] = useState(3); // Skills:Team = 3:1 (75%:25%)
@@ -407,6 +408,15 @@ export default function NotebookPage() {
   const uploadIdCounterRef = useRef(0);
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+
+  // Sessions
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [renameSessionValue, setRenameSessionValue] = useState("");
+  const [selectedPresetKey, setSelectedPresetKey] = useState<string>("balanced");
+  const [customPersonaDraft, setCustomPersonaDraft] = useState<string>("");
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
@@ -446,7 +456,7 @@ export default function NotebookPage() {
   const { user, logout } = useAuthStore();
   const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt, highlightSeq, raptorStatus, setOnMeetingUtterance } =
     useSourceStore();
-  const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, thinkingSteps, reset: resetChat } = useChatStore();
+  const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, thinkingSteps, reset: resetChat, currentSessionId, setCurrentSessionId, setOnSessionRenamed } = useChatStore();
   const {
     content: studioContent,
     isGenerating,
@@ -468,6 +478,14 @@ export default function NotebookPage() {
   const { members, fetchMembers, removeMember } = useSharingStore();
 
   // Skill output now goes to Chat, no auto-expand needed
+
+  // Register session rename callback (auto-naming after first message)
+  useEffect(() => {
+    setOnSessionRenamed((sessionId: string, name: string) => {
+      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name } : s));
+    });
+    return () => setOnSessionRenamed(null);
+  }, [setOnSessionRenamed]);
 
   // Refs
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -534,9 +552,20 @@ export default function NotebookPage() {
       // Only load data after permission check passes
       fetchSources(id);
       subscribeStatus(id);
-      fetchHistory(id);
       fetchNotes(id);
       fetchCustomSkills(id);
+      // Load sessions, select first, then fetch chat history for that session
+      api.getSessions(id).then(ss => {
+        if (cancelled) return;
+        setSessions(ss);
+        if (ss.length > 0) {
+          setActiveSessionId(ss[0].id);
+          setCurrentSessionId(ss[0].id);
+          fetchHistory(id, ss[0].id);
+        } else {
+          fetchHistory(id);
+        }
+      });
       api.getOverview(id).then(data => {
         if (!cancelled && data.overview) {
           // Defer overview update if chat is streaming to avoid interrupting SSE
@@ -729,9 +758,12 @@ export default function NotebookPage() {
     if (isStreaming) stopStream();
     // Reset scroll lock so chat scrolls to show the new question
     userScrolledUpRef.current = false;
-    sendMessage(id, chatInput.trim(), [...selectedIds], webSearchEnabled, deepThinking);
+    sendMessage(id, chatInput.trim(), [...selectedIds], webSearchEnabled, deepThinking, activeSessionId || undefined);
     setChatInput("");
-  }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled, deepThinking, isStreaming, stopStream]);
+    // Reset textarea height after sending
+    const ta = document.querySelector('textarea[placeholder]') as HTMLTextAreaElement | null;
+    if (ta) ta.style.height = "auto";
+  }, [id, canSend, chatInput, selectedIds, sendMessage, webSearchEnabled, deepThinking, isStreaming, stopStream, activeSessionId]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -958,9 +990,9 @@ export default function NotebookPage() {
   const handleSuggestedQuestion = useCallback(
     (q: string) => {
       if (!id || isStreaming) return;
-      sendMessage(id, q, [...selectedIds]);
+      sendMessage(id, q, [...selectedIds], false, false, activeSessionId || undefined);
     },
-    [id, isStreaming, selectedIds, sendMessage],
+    [id, isStreaming, selectedIds, sendMessage, activeSessionId],
   );
 
   const handleSaveNote = useCallback(
@@ -1095,12 +1127,12 @@ export default function NotebookPage() {
       } else {
         // Reset scroll lock so chat scrolls to show the loading indicator
         userScrolledUpRef.current = false;
-        await generateContent(id, action, Array.from(selectedIds));
+        await generateContent(id, action, Array.from(selectedIds), activeSessionId || undefined);
         // Refresh chat history so the skill output message appears in Chat
-        await fetchHistory(id);
+        await fetchHistory(id, activeSessionId || undefined);
       }
     },
-    [id, generateContent, selectedIds, fetchHistory],
+    [id, generateContent, selectedIds, fetchHistory, activeSessionId],
   );
 
   const handleDeleteSource = useCallback(
@@ -1324,6 +1356,15 @@ export default function NotebookPage() {
     );
   }
 
+  // Just Chat notebook — render dedicated multi-model chat UI
+  if (notebook?.is_just_chat && id) {
+    return (
+      <div className="h-dvh font-sans bg-[#e5e7eb] flex flex-col px-3 pb-3 overflow-hidden">
+        <JustChat notebookId={id} notebookName={notebook.name} />
+      </div>
+    );
+  }
+
   // Show loading while permission check is in progress — prevents flash of notebook content.
   // Check notebook.id matches URL id to prevent stale data flash on client-side navigation
   // (useEffect runs AFTER render, so stale notebook from previous route would flash for one frame).
@@ -1395,16 +1436,6 @@ export default function NotebookPage() {
               {notebook?.name || "Loading..."}
             </span>
           )}
-          {notebook && notebook.user_role !== "viewer" && (
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-              title="Notebook Settings"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Settings</span>
-            </button>
-          )}
         </div>
 
         <div className="flex items-center gap-4">
@@ -1416,13 +1447,37 @@ export default function NotebookPage() {
               <Users className="w-3.5 h-3.5" /> <span className="hidden md:inline">Share with Team</span>
             </button>
           )}
-          <button
-            onClick={() => setIsFeedbackOpen(true)}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-            title="Report Bug & Make a Wish"
-          >
-            <Bug className="w-4 h-4" />
-          </button>
+          {notebook && notebook.user_role !== "viewer" && (
+            <button
+              onClick={() => {
+                const cp = notebook?.custom_prompt || "";
+                const balancedPrompt = "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format.";
+                setAIInstructionsValue(cp || balancedPrompt);
+                if (!cp) {
+                  setSelectedPresetKey("balanced");
+                } else {
+                  // Detect if saved prompt matches a built-in preset
+                  const presetMap: Record<string, string> = {
+                    strict: "You are a precise, document-grounded research assistant.",
+                    advisor: "You are a senior strategic advisor with deep analytical expertise.",
+                    concise: "You are a concise, no-nonsense assistant optimized for speed and clarity:",
+                    teacher: "You are a patient, encouraging tutor who makes complex information accessible:",
+                  };
+                  const matched = Object.entries(presetMap).find(([, prefix]) => cp.startsWith(prefix));
+                  if (matched) {
+                    setSelectedPresetKey(matched[0]);
+                  } else {
+                    setSelectedPresetKey("custom");
+                    setCustomPersonaDraft(cp);
+                  }
+                }
+                setIsSettingsOpen(true);
+              }}
+              className="text-[13px] font-medium text-white bg-[#5b8c15] hover:bg-[#4a7311] px-4 py-1.5 rounded-full transition-colors shadow-sm"
+            >
+              Notebook Settings
+            </button>
+          )}
           <div className="text-right hidden md:block">
             <div className="font-semibold text-sm">{user?.name || "User"}</div>
             <div className="text-xs text-slate-500">{user?.email}</div>
@@ -1502,13 +1557,15 @@ export default function NotebookPage() {
         {/* Left Panel: Sources */}
         <section
           style={!isMobile && !isLeftCollapsed ? { width: effectiveLeftWidth } : undefined}
-          className={`bg-white border-r border-slate-200 flex-col overflow-hidden shrink-0 ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
+          className={`bg-white border-r border-slate-200 flex-col overflow-x-hidden overflow-y-hidden shrink-0 ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
         >
-          <div className="h-12 border-b border-slate-100 flex items-center justify-between px-4 shrink-0 select-none">
-            <h2 className="text-[13px] font-semibold text-slate-700">Sources</h2>
+          {/* Sources section */}
+          <div className="flex-[3] min-h-0 flex flex-col overflow-y-auto overflow-x-hidden">
+          <div className="h-10 px-3 flex items-center justify-between shrink-0">
+            <span className="text-[13px] font-semibold text-slate-700">Sources</span>
             <button
               onClick={() => setIsLeftCollapsed(true)}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded"
             >
               <PanelLeftClose className="w-4 h-4" />
             </button>
@@ -1726,13 +1783,12 @@ export default function NotebookPage() {
                 className="w-full flex items-center justify-center gap-2 py-2.5 mb-4 rounded-xl border border-[#5b8c15]/30 text-[#5b8c15] hover:bg-[#5b8c15]/5 transition-colors text-[13px] font-medium"
               >
                 <Mic className="w-4 h-4" />
-                New Meeting
+                Record Meeting
               </button>
             )}
 
-            <div className="flex items-center gap-3 p-2 mb-1 shrink-0">
+            <div className="flex items-center gap-3 p-2 pr-5 mb-1 shrink-0">
               <span className="text-[11px] font-medium text-slate-500 flex-1">Select all sources</span>
-              <div className="w-[18px] shrink-0" />
               <input
                 type="checkbox"
                 className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5 border-slate-300 cursor-pointer shrink-0"
@@ -1741,7 +1797,7 @@ export default function NotebookPage() {
               />
             </div>
 
-            <div className="space-y-1 overflow-y-auto min-h-0 flex-1" data-sources-list>
+            <div className="space-y-1 overflow-y-auto overflow-x-hidden min-h-0 flex-1" data-sources-list>
               {/* Pending uploads — shown inline with sources */}
               {pendingUploads.map((upload) => {
                 // Get linked source's processing status
@@ -1925,6 +1981,113 @@ export default function NotebookPage() {
           )}
 
           {/* Team section moved to right Skill panel */}
+          </div>{/* end Sources section wrapper */}
+
+          {/* Chats */}
+          <div className="border-t border-slate-100 flex-[1] min-h-0 flex flex-col overflow-hidden">
+            <div className="h-10 px-3 flex items-center shrink-0">
+              <span className="text-[13px] font-semibold text-slate-700">Chats</span>
+            </div>
+            <div className="px-2 pb-2 flex flex-col gap-0.5 flex-1 min-h-0 overflow-y-auto">
+              <button
+                onClick={async () => {
+                  if (!id) return;
+                  setIsCreatingSession(true);
+                  try {
+                    const count = sessions.length + 1;
+                    const s = await api.createSession(id, `Chat ${count}`);
+                    setSessions(prev => [s, ...prev]);
+                    setActiveSessionId(s.id);
+                    setCurrentSessionId(s.id);
+                    resetChat();
+                  } finally {
+                    setIsCreatingSession(false);
+                  }
+                }}
+                disabled={isCreatingSession}
+                className="flex items-center justify-center gap-1.5 py-1.5 mb-1 rounded-lg border border-dashed border-slate-200 text-[13px] font-medium text-slate-600 hover:text-[#5b8c15] hover:border-[#5b8c15]/40 transition-colors shrink-0"
+              >
+                <Plus className="w-3 h-3" />
+                {isCreatingSession ? "Creating..." : "New Chat"}
+              </button>
+              {sessions.map(s => (
+                <div
+                  key={s.id}
+                  className={`group flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors text-[12px] ${
+                    activeSessionId === s.id
+                      ? "bg-[#5b8c15]/10 text-[#5b8c15] font-medium"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                  onClick={() => {
+                    if (activeSessionId === s.id) return;
+                    setActiveSessionId(s.id);
+                    setCurrentSessionId(s.id);
+                    if (id) fetchHistory(id, s.id);
+                  }}
+                >
+                  <MessageSquare className="w-3 h-3 shrink-0 opacity-60" />
+                  {renamingSessionId === s.id ? (
+                    <input
+                      autoFocus
+                      className="flex-1 min-w-0 bg-white border border-slate-200 rounded px-1 py-0 text-[12px] outline-none focus:border-[#5b8c15]"
+                      value={renameSessionValue}
+                      onChange={e => setRenameSessionValue(e.target.value)}
+                      onBlur={async () => {
+                        if (id && renameSessionValue.trim()) {
+                          const updated = await api.renameSession(id, s.id, renameSessionValue.trim());
+                          setSessions(prev => prev.map(x => x.id === s.id ? updated : x));
+                        }
+                        setRenamingSessionId(null);
+                      }}
+                      onKeyDown={async e => {
+                        if (e.key === "Enter" && id && renameSessionValue.trim()) {
+                          const updated = await api.renameSession(id, s.id, renameSessionValue.trim());
+                          setSessions(prev => prev.map(x => x.id === s.id ? updated : x));
+                          setRenamingSessionId(null);
+                        } else if (e.key === "Escape") {
+                          setRenamingSessionId(null);
+                        }
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="flex-1 truncate">{s.name}</span>
+                  )}
+                  {renamingSessionId !== s.id && (
+                    <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                      <button
+                        className="p-0.5 rounded hover:bg-slate-200 transition-colors"
+                        onClick={e => { e.stopPropagation(); setRenamingSessionId(s.id); setRenameSessionValue(s.name); }}
+                        title="Rename"
+                      >
+                        <Pencil className="w-2.5 h-2.5 text-slate-400" />
+                      </button>
+                      {sessions.length > 1 && (
+                        <button
+                          className="p-0.5 rounded hover:bg-red-50 transition-colors"
+                          onClick={async e => {
+                            e.stopPropagation();
+                            if (!id) return;
+                            await api.deleteSession(id, s.id);
+                            const remaining = sessions.filter(x => x.id !== s.id);
+                            setSessions(remaining);
+                            if (activeSessionId === s.id && remaining.length > 0) {
+                              setActiveSessionId(remaining[0].id);
+                              setCurrentSessionId(remaining[0].id);
+                              fetchHistory(id, remaining[0].id);
+                            }
+                          }}
+                          title="Delete session"
+                        >
+                          <X className="w-2.5 h-2.5 text-slate-400 hover:text-red-500" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         {/* Left Drag Handle */}
@@ -1960,7 +2123,7 @@ export default function NotebookPage() {
                     <span className="text-[11px] text-slate-500">Clear chat?</span>
                     <button
                       className="text-[11px] font-medium text-red-600 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50"
-                      onClick={() => { if (id) { clearHistory(id); setShowClearConfirm(false); } }}
+                      onClick={() => { if (id) { clearHistory(id, activeSessionId || undefined); setShowClearConfirm(false); } }}
                     >
                       Yes
                     </button>
@@ -1986,7 +2149,7 @@ export default function NotebookPage() {
 
           <div
             ref={chatScrollRef}
-            className="flex-1 overflow-y-auto p-8 pb-32"
+            className="flex-1 overflow-y-auto p-8 pb-4"
             onScroll={() => {
               const el = chatScrollRef.current;
               if (!el) return;
@@ -2274,7 +2437,7 @@ export default function NotebookPage() {
           </div>
 
           {/* Chat Input Area */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-10 pb-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] px-8 md:px-8 px-3 select-none">
+          <div className="shrink-0 bg-white pt-3 pb-4 pb-[max(1rem,env(safe-area-inset-bottom))] px-8 md:px-8 px-3 select-none">
             <div className="max-w-3xl mx-auto">
               <div
                 className={`relative bg-white border rounded-2xl shadow-sm px-2 py-2 transition-all ${
@@ -2293,26 +2456,16 @@ export default function NotebookPage() {
                     }`}
                   >
                     <Sparkles className="w-2.5 h-2.5 inline-block mr-0.5 -mt-px" />
-                    {deepThinking ? "Think" : "Think Off"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full transition-colors whitespace-nowrap ${
-                      webSearchEnabled ? "bg-[#5b8c15] text-white" : "bg-slate-100 text-slate-400"
-                    }`}
-                  >
-                    <Globe className="w-2.5 h-2.5 inline-block mr-0.5 -mt-px" />
-                    {webSearchEnabled ? "Internet" : "Internet Off"}
+                    {deepThinking ? "Thinking" : "Thinking Off"}
                   </button>
                   <span className="text-[10px] text-slate-400 font-medium ml-auto">
                     {selectedCount} sources
                   </span>
                 </div>
-                {/* Input row */}
+                {/* Input area */}
                 <div className="flex items-center">
-                <input
-                  type="text"
+                <div className="flex flex-col flex-1">
+                <textarea
                   placeholder={
                     meetingActive || otherMeetingActive
                       ? "Ask about the meeting..."
@@ -2324,40 +2477,38 @@ export default function NotebookPage() {
                             ? "Waiting for sources to finish processing..."
                             : "Start typing..."
                   }
-                  className="flex-1 bg-transparent border-none outline-none px-4 text-[14px] text-slate-700 disabled:cursor-not-allowed"
+                  className="w-full bg-transparent border-none outline-none px-4 text-[14px] text-slate-700 disabled:cursor-not-allowed resize-none leading-relaxed overflow-hidden"
+                  style={{ minHeight: "48px", maxHeight: "150px" }}
+                  rows={2}
                   value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
+                  onChange={(e) => {
+                    setChatInput(e.target.value);
+                    const el = e.target;
+                    el.style.height = "auto";
+                    el.style.height = Math.min(el.scrollHeight, 150) + "px";
+                  }}
                   onKeyDown={handleKeyDown}
                   disabled={hasProcessingSelected || (readySources.length === 0 && !meetingActive && !otherMeetingActive && !hasSharedChat)}
                 />
-                {/* Desktop toolbar — hidden on mobile (shown in row above) */}
-                <div className="hidden md:flex items-center gap-2">
+                {/* Desktop toolbar — below textarea */}
+                <div className="hidden md:flex items-center gap-2 px-4 pb-1">
                   <button
                     type="button"
                     onClick={() => setDeepThinking(!deepThinking)}
-                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
+                    className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full transition-colors whitespace-nowrap ${
                       deepThinking ? "bg-purple-600 text-white" : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
                     }`}
                   >
                     <Sparkles className="w-3 h-3 inline-block mr-1 -mt-px" />
-                    {deepThinking ? "Thinking" : "Think Off"}
+                    {deepThinking ? "Thinking" : "Thinking Off"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${
-                      webSearchEnabled ? "bg-[#5b8c15] text-white" : "bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-500"
-                    }`}
-                  >
-                    <Globe className="w-3 h-3 inline-block mr-1 -mt-px" />
-                    Internet {webSearchEnabled ? "On" : "Off"}
-                  </button>
-                  <span className="text-[11px] text-slate-400 font-medium px-2">
+                  <span className="text-[11px] text-slate-400 font-medium">
                     {selectedCount} {selectedCount === 1 ? 'source' : 'sources'}
                   </span>
                 </div>
+                </div>
                 {/* Send button */}
-                <div className="flex items-center pr-1 shrink-0">
+                <div className="flex items-center pr-2 shrink-0 self-center">
                   {isStreaming && !chatInput.trim() ? (
                     <button
                       className="w-9 h-9 rounded-full flex items-center justify-center transition-colors bg-red-600 text-white hover:bg-red-700"
@@ -2448,34 +2599,6 @@ export default function NotebookPage() {
                 <div className="text-[11px] font-bold text-indigo-900">Summary</div>
               </button>
 
-              {/* FAQ */}
-              <button
-                onClick={() => handleStudioAction("faq")}
-                disabled={isGenerating.faq || skillDisabled}
-                className="bg-[#ecfeff] hover:bg-cyan-100 border border-cyan-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isGenerating.faq ? (
-                  <Loader2 className="w-4 h-4 text-cyan-600 mb-2 animate-spin" />
-                ) : (
-                  <FileText className="w-4 h-4 text-cyan-600 mb-2" />
-                )}
-                <div className="text-[11px] font-bold text-cyan-900">FAQ</div>
-              </button>
-
-              {/* Mind Map */}
-              <button
-                onClick={() => handleStudioAction("mindmap")}
-                disabled={isGenerating.mindmap || skillDisabled}
-                className="bg-[#fdf2f8] hover:bg-pink-100 border border-pink-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {isGenerating.mindmap ? (
-                  <Loader2 className="w-4 h-4 text-pink-600 mb-2 animate-spin" />
-                ) : (
-                  <Network className="w-4 h-4 text-pink-600 mb-2" />
-                )}
-                <div className="text-[11px] font-bold text-pink-900">Mind Map</div>
-              </button>
-
               {/* Action Items */}
               <button
                 onClick={() => handleStudioAction("action_items")}
@@ -2501,7 +2624,7 @@ export default function NotebookPage() {
                 ) : (
                   <Table2 className="w-4 h-4 text-emerald-600 mb-2" />
                 )}
-                <div className="text-[11px] font-bold text-emerald-900">SWOT</div>
+                <div className="text-[11px] font-bold text-emerald-900">SWOT Analysis</div>
               </button>
 
               {/* Recommendations */}
@@ -2515,35 +2638,35 @@ export default function NotebookPage() {
                 ) : (
                   <Sparkles className="w-4 h-4 text-purple-600 mb-2" />
                 )}
-                <div className="text-[11px] font-bold text-purple-900">Recommend</div>
+                <div className="text-[11px] font-bold text-purple-900">Recommendations</div>
               </button>
 
-              {/* Risk Analysis */}
+              {/* Mind Map */}
               <button
-                onClick={() => handleStudioAction("risk_analysis")}
-                disabled={isGenerating.risk_analysis || skillDisabled}
-                className="bg-[#fff7ed] hover:bg-orange-100 border border-orange-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={() => handleStudioAction("mindmap")}
+                disabled={isGenerating.mindmap || skillDisabled}
+                className="bg-[#fdf2f8] hover:bg-pink-100 border border-pink-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isGenerating.risk_analysis ? (
-                  <Loader2 className="w-4 h-4 text-orange-600 mb-2 animate-spin" />
+                {isGenerating.mindmap ? (
+                  <Loader2 className="w-4 h-4 text-pink-600 mb-2 animate-spin" />
                 ) : (
-                  <Shield className="w-4 h-4 text-orange-600 mb-2" />
+                  <Network className="w-4 h-4 text-pink-600 mb-2" />
                 )}
-                <div className="text-[11px] font-bold text-orange-900">Risk</div>
+                <div className="text-[11px] font-bold text-pink-900">Mind Map</div>
               </button>
 
-              {/* Decision Support */}
+              {/* Presentation */}
               <button
-                onClick={() => handleStudioAction("decision_support")}
-                disabled={isGenerating.decision_support || skillDisabled}
-                className="bg-[#eff6ff] hover:bg-blue-100 border border-blue-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={() => handleStudioAction("ppt")}
+                disabled={pptLoading || skillDisabled}
+                className="bg-[#fff1f2] hover:bg-rose-100 border border-rose-100 rounded-xl p-3 cursor-pointer transition-colors group relative text-left disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {isGenerating.decision_support ? (
-                  <Loader2 className="w-4 h-4 text-blue-600 mb-2 animate-spin" />
+                {pptLoading ? (
+                  <Loader2 className="w-4 h-4 text-rose-600 mb-2 animate-spin" />
                 ) : (
-                  <ListChecks className="w-4 h-4 text-blue-600 mb-2" />
+                  <Presentation className="w-4 h-4 text-rose-600 mb-2" />
                 )}
-                <div className="text-[11px] font-bold text-blue-900">Decision</div>
+                <div className="text-[11px] font-bold text-rose-900">Presentation</div>
               </button>
             </div>
 
@@ -2557,8 +2680,8 @@ export default function NotebookPage() {
                       key={skill.id}
                       onClick={async () => {
                         if (!id) return;
-                        await executeCustomSkill(id, skill.id, Array.from(selectedIds));
-                        await fetchHistory(id);
+                        await executeCustomSkill(id, skill.id, Array.from(selectedIds), activeSessionId || undefined);
+                        await fetchHistory(id, activeSessionId || undefined);
                       }}
                       disabled={isGenerating[skill.id] || skillDisabled}
                       className="bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 cursor-pointer transition-colors text-left group relative disabled:opacity-40 disabled:cursor-not-allowed"
@@ -2805,7 +2928,7 @@ export default function NotebookPage() {
           await api.toggleSharedChat(id, enabled);
           const nb = await api.getNotebook(id);
           setNotebook(nb);
-          if (enabled) fetchHistory(id);
+          if (enabled) fetchHistory(id, activeSessionId || undefined);
         }}
         onMemberAdded={() => {
           if (id) {
@@ -2818,6 +2941,8 @@ export default function NotebookPage() {
         isOpen={pptModalOpen}
         onClose={() => setPptModalOpen(false)}
         isGenerating={pptLoading}
+        sourceIds={[...selectedIds]}
+        sources={sources.filter(s => selectedIds.has(s.id) && s.status === "ready").map(s => ({ id: s.id, filename: s.filename, file_size: s.file_size }))}
         onGenerate={(config: PptConfig) => {
           if (!id) return;
           setPptModalOpen(false);
@@ -2884,7 +3009,7 @@ export default function NotebookPage() {
             >
               <Upload className="w-10 h-10 text-slate-300 mb-4" />
               <h3 className="text-xl font-semibold text-slate-900 mb-2">Drag & drop your files here</h3>
-              <p className="text-sm text-slate-400 mb-1">or paste an image from clipboard (Ctrl+V / Cmd+V)</p>
+              <p className="text-sm text-slate-400 mb-1">or paste an image from clipboard</p>
               <p className="text-sm text-slate-500 mb-1">
                 pdf, images, docs, audio,{' '}
                 <span className="relative group/tip inline-block">
@@ -3019,7 +3144,25 @@ export default function NotebookPage() {
                   rows={5}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">The documents will be automatically appended to your prompt.</p>
+                <div className="mt-1 flex items-center justify-between">
+                  <p className="text-[10px] text-slate-400">The documents will be automatically appended to your prompt.</p>
+                  <button
+                    onClick={async () => {
+                      if (!newSkillPrompt.trim()) return;
+                      setIsOptimizing(true);
+                      try {
+                        const optimized = await api.optimizePrompt(newSkillPrompt.trim());
+                        setNewSkillPrompt(optimized);
+                      } catch { /* silently fail */ }
+                      finally { setIsOptimizing(false); }
+                    }}
+                    disabled={isOptimizing || !newSkillPrompt.trim()}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {isOptimizing ? "Optimizing..." : "AI Optimize"}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -3067,7 +3210,7 @@ export default function NotebookPage() {
       {/* Notebook Settings Modal */}
       {isSettingsOpen && notebook && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setIsSettingsOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-[500px] max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-[540px] max-h-[85vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4 text-slate-500" />
@@ -3078,63 +3221,152 @@ export default function NotebookPage() {
               </button>
             </div>
             <div className="overflow-y-auto max-h-[calc(80vh-60px)]">
-              {/* Notebook Persona Section */}
+              {/* Notebook Persona Section — inline editor */}
               <div className="px-5 py-4 border-b border-slate-50">
                 <div className="flex items-center gap-2 mb-2">
                   <Sparkles className="w-3.5 h-3.5 text-[#5b8c15]" />
                   <h4 className="text-[13px] font-semibold text-slate-800">Notebook Persona</h4>
-                  {notebook.custom_prompt && <span className="text-[10px] px-1.5 py-0.5 bg-[#5b8c15]/10 text-[#5b8c15] rounded font-medium">Active</span>}
-                </div>
-                <p className="text-[11px] text-slate-400 mb-2">Set the AI's response style and role for this notebook</p>
-                <button
-                  onClick={() => {
-                    setAIInstructionsValue(notebook.custom_prompt || "");
-                    setIsAIInstructionsOpen(true);
-                    setIsSettingsOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2.5 rounded-xl border border-slate-200 hover:border-[#5b8c15]/40 hover:bg-slate-50 transition-colors"
-                >
                   {notebook.custom_prompt ? (
-                    <p className="text-[12px] text-slate-600 line-clamp-2">{notebook.custom_prompt}</p>
-                  ) : (
-                    <p className="text-[12px] text-slate-400 italic">Click to set persona...</p>
-                  )}
-                </button>
+                    <span className="text-[10px] px-1.5 py-0.5 bg-[#5b8c15]/10 text-[#5b8c15] rounded font-medium">
+                      {selectedPresetKey === "balanced" ? "Default" : selectedPresetKey === "custom" ? "Customized" : selectedPresetKey.charAt(0).toUpperCase() + selectedPresetKey.slice(1)}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-[11px] text-slate-400 mb-3">Set the AI's response style and role for this notebook</p>
+                {(() => {
+                  const PRESETS: { key: string; label: string; description: string; prompt: string }[] = [
+                    { key: "balanced", label: "Balanced", description: "Default", prompt: "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format." },
+                    { key: "strict", label: "Strict", description: "Sources only", prompt: "You are a precise, document-grounded research assistant.\n\n1. Answer ONLY based on information explicitly stated in the provided documents. Do not infer, speculate, or add external knowledge — even for advisory questions.\n2. If the documents do not contain the answer, state clearly: \"The provided documents do not contain this information.\" Do not attempt to guess or fill gaps with general knowledge.\n3. If you cannot cite a claim, do not say it. Every statement must be traceable to a specific source.\n4. When multiple documents discuss the same topic, compare and note any differences or contradictions between them.\n5. Preserve the original terminology and phrasing from the documents — do not paraphrase key terms.\n6. If a question is ambiguous, ask for clarification rather than assuming intent.\n7. When presenting information, clearly separate what the documents state from any logical inferences." },
+                    { key: "advisor", label: "Advisor", description: "Strategic", prompt: "You are a senior strategic advisor with deep analytical expertise. Your role is to help decision-makers:\n\n1. Go beyond summarizing — provide critical analysis, identify patterns, and surface non-obvious insights that the reader might miss.\n2. For every key finding, assess its implications: What does this mean? What are the risks? What opportunities does it create?\n3. Provide actionable recommendations with clear reasoning. Frame suggestions as \"Consider...\", \"Recommend...\", or \"Priority action:...\"\n4. When relevant, present pros/cons analysis or risk-reward tradeoffs in structured format (tables or bullet points).\n5. Connect information across multiple documents to build a comprehensive picture — don't treat each source in isolation.\n6. Flag any gaps in the available information that would affect decision quality.\n7. Prioritize insights by impact and urgency. Lead with the most important findings.\n8. Add your own expert interpretation on top of document evidence — the user expects analysis, not just summaries." },
+                    { key: "concise", label: "Concise", description: "Brief", prompt: "You are a concise, no-nonsense assistant optimized for speed and clarity:\n\n1. Keep every response under 150 words unless the user explicitly asks for more detail.\n2. Use bullet points as the default format. No lengthy paragraphs.\n3. Lead with the direct answer in the first sentence — no preamble or context-setting.\n4. Maximum 3-5 bullet points per response. Each bullet should be one clear, complete thought.\n5. Use bold for key terms, numbers, and names to make scanning easy.\n6. Skip pleasantries, filler phrases (\"Great question!\", \"Based on the documents...\"), and restating the question.\n7. If the answer requires nuance, give the short answer first, then add a \"Details:\" section only if necessary.\n8. For yes/no questions, start with \"Yes\" or \"No\" immediately." },
+                    { key: "teacher", label: "Teacher", description: "Tutor", prompt: "You are a patient, encouraging tutor who makes complex information accessible:\n\n1. Explain concepts step by step, building from simple to complex. Never assume prior knowledge.\n2. Use analogies and real-world examples to make abstract ideas concrete.\n3. Break long explanations into numbered steps or clearly labeled sections.\n4. After explaining a concept, briefly summarize the key takeaway in one sentence.\n5. When introducing technical terms or jargon from the documents, define them in simple language.\n6. Use questions to guide thinking: \"Notice how...\" or \"Consider why this matters...\"\n7. If the topic is complex, offer to break it into smaller parts: \"Let me explain this in three parts...\"\n8. Encourage deeper exploration: suggest follow-up questions the user might want to ask.\n9. Use a warm, supportive tone — treat every question as a good question." },
+                    { key: "custom", label: "Custom", description: "Your own", prompt: "" },
+                  ];
+                  const isCustom = selectedPresetKey === "custom";
+                  const isReadOnly = !isCustom;
+                  return (
+                    <>
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {PRESETS.map(p => (
+                          <button
+                            key={p.key}
+                            onClick={() => {
+                              if (selectedPresetKey === "custom") {
+                                setCustomPersonaDraft(aiInstructionsValue);
+                              }
+                              setSelectedPresetKey(p.key);
+                              if (p.key === "custom") {
+                                setAIInstructionsValue(customPersonaDraft);
+                              } else {
+                                setAIInstructionsValue(p.prompt);
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${
+                              selectedPresetKey === p.key
+                                ? "bg-[#5b8c15] text-white border-[#5b8c15]"
+                                : "bg-white text-slate-600 border-slate-200 hover:border-[#5b8c15]/40 hover:text-[#5b8c15]"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={aiInstructionsValue}
+                        onChange={(e) => { if (isCustom) setAIInstructionsValue(e.target.value); }}
+                        placeholder={isCustom ? "Write your custom persona instructions here..." : ""}
+                        rows={6}
+                        readOnly={isReadOnly}
+                        className={`w-full px-3 py-2.5 rounded-xl border border-slate-200 text-[12px] outline-none transition-all resize-none ${
+                          isReadOnly ? "bg-slate-50 text-slate-400 cursor-default" : "bg-white text-slate-900 focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                        }`}
+                      />
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <p className="text-[10px] text-slate-400">
+                          {isCustom ? "Edit or use AI Optimize" : "Click a preset to preview, then Apply"}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          {isCustom && (
+                            <button
+                              onClick={async () => {
+                                if (!aiInstructionsValue.trim()) return;
+                                setIsOptimizing(true);
+                                try {
+                                  const optimized = await api.optimizePrompt(aiInstructionsValue.trim());
+                                  setAIInstructionsValue(optimized);
+                                } catch { /* silently fail */ }
+                                finally { setIsOptimizing(false); }
+                              }}
+                              disabled={isOptimizing || !aiInstructionsValue.trim()}
+                              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <Sparkles className="w-2.5 h-2.5" />
+                              {isOptimizing ? "..." : "AI Optimize"}
+                            </button>
+                          )}
+                          <button
+                            onClick={async () => {
+                              if (!id) return;
+                              setIsSavingInstructions(true);
+                              try {
+                                const promptToSave = selectedPresetKey === "balanced" ? "" : aiInstructionsValue.trim();
+                                const updated = await api.updateNotebook(id, { custom_prompt: promptToSave });
+                                setNotebook(updated);
+                              } catch { /* silently fail */ }
+                              finally { setIsSavingInstructions(false); }
+                            }}
+                            disabled={isSavingInstructions || (isCustom && !aiInstructionsValue.trim())}
+                            className="px-3 py-1 text-[11px] font-medium text-white bg-[#5b8c15] hover:bg-[#4a7311] rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            {isSavingInstructions ? "Saving..." : isCustom ? "Save Persona" : "Apply"}
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
-              {/* Meeting AI Suggestions Section */}
+              {/* Meeting AI Insights Section */}
               <div className="px-5 py-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                  <h4 className="text-[13px] font-semibold text-slate-800">Meeting AI Suggestions</h4>
+                  <h4 className="text-[13px] font-semibold text-slate-800">Meeting AI Insights</h4>
                 </div>
-                <p className="text-[11px] text-slate-400 mb-1">AI automatically provides decisions, action items, and suggestions during meetings</p>
-                <p className="text-[11px] text-slate-500 font-medium mb-2">Frequency</p>
-                <div className="flex items-center gap-2">
-                  {(["high", "medium", "low", "off"] as const).map((level) => (
-                    <button
-                      key={level}
-                      onClick={async () => {
-                        if (!id) return;
-                        const updated = await api.updateNotebook(id, { suggestion_level: level });
-                        setNotebook(updated);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
-                        notebook.suggestion_level === level
-                          ? "bg-purple-100 text-purple-700 border border-purple-300"
-                          : "bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      {level === "high" ? "High" : level === "medium" ? "Medium" : level === "low" ? "Low" : "Off"}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-slate-400 mt-2">
-                  {notebook.suggestion_level === "off" ? "Suggestions disabled" :
-                   notebook.suggestion_level === "high" ? "~6 suggestions per hour" :
-                   notebook.suggestion_level === "low" ? "~1 suggestion per hour" :
-                   "~3 suggestions per hour (default)"}
-                </p>
+                <p className="text-[11px] text-slate-400 mb-1">AI automatically surfaces key decisions, action items, and insights during meetings</p>
+                <p className="text-[11px] text-slate-500 font-medium mb-3">Frequency</p>
+                {(() => {
+                  const levels = ["off", "low", "medium", "high"] as const;
+                  const idx = levels.indexOf(notebook.suggestion_level as typeof levels[number]);
+                  const currentIdx = idx >= 0 ? idx : 2;
+                  const labels = ["Off", "Low", "Medium", "High"];
+                  const descriptions = ["Insights disabled", "Every ~30 min", "Every ~20 min (default)", "Every ~10 min"];
+                  return (
+                    <div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={3}
+                        step={1}
+                        value={currentIdx}
+                        onChange={async (e) => {
+                          if (!id) return;
+                          const level = levels[Number(e.target.value)];
+                          const updated = await api.updateNotebook(id, { suggestion_level: level });
+                          setNotebook(updated);
+                        }}
+                        className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-purple-500"
+                        style={{ background: `linear-gradient(to right, #a855f7 0%, #a855f7 ${(currentIdx / 3) * 100}%, #e2e8f0 ${(currentIdx / 3) * 100}%, #e2e8f0 100%)` }}
+                      />
+                      <div className="flex justify-between mt-1.5">
+                        {labels.map((l, i) => (
+                          <span key={l} className={`text-[10px] ${currentIdx === i ? "text-purple-600 font-semibold" : "text-slate-400"}`}>{l}</span>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">{descriptions[currentIdx]}</p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -3142,9 +3374,39 @@ export default function NotebookPage() {
       )}
 
       {/* AI Instructions Modal */}
-      {isAIInstructionsOpen && (
+      {isAIInstructionsOpen && (() => {
+        const PERSONA_PRESETS: { key: string; label: string; description: string; prompt: string }[] = [
+          {
+            key: "balanced", label: "Balanced", description: "Default behavior",
+            prompt: "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format.",
+          },
+          {
+            key: "strict", label: "Strict", description: "Only from sources",
+            prompt: "You are a precise, document-grounded research assistant.\n\n1. Answer ONLY based on information explicitly stated in the provided documents. Do not infer, speculate, or add external knowledge — even for advisory questions.\n2. If the documents do not contain the answer, state clearly: \"The provided documents do not contain this information.\" Do not attempt to guess or fill gaps with general knowledge.\n3. If you cannot cite a claim, do not say it. Every statement must be traceable to a specific source.\n4. When multiple documents discuss the same topic, compare and note any differences or contradictions between them.\n5. Preserve the original terminology and phrasing from the documents — do not paraphrase key terms.\n6. If a question is ambiguous, ask for clarification rather than assuming intent.\n7. When presenting information, clearly separate what the documents state from any logical inferences.",
+          },
+          {
+            key: "advisor", label: "Advisor", description: "Strategic insights",
+            prompt: "You are a senior strategic advisor with deep analytical expertise. Your role is to help decision-makers:\n\n1. Go beyond summarizing — provide critical analysis, identify patterns, and surface non-obvious insights that the reader might miss.\n2. For every key finding, assess its implications: What does this mean? What are the risks? What opportunities does it create?\n3. Provide actionable recommendations with clear reasoning. Frame suggestions as \"Consider...\", \"Recommend...\", or \"Priority action:...\"\n4. When relevant, present pros/cons analysis or risk-reward tradeoffs in structured format (tables or bullet points).\n5. Connect information across multiple documents to build a comprehensive picture — don't treat each source in isolation.\n6. Flag any gaps in the available information that would affect decision quality.\n7. Prioritize insights by impact and urgency. Lead with the most important findings.\n8. Add your own expert interpretation on top of document evidence — the user expects analysis, not just summaries.",
+          },
+          {
+            key: "concise", label: "Concise", description: "Brief answers",
+            prompt: "You are a concise, no-nonsense assistant optimized for speed and clarity:\n\n1. Keep every response under 150 words unless the user explicitly asks for more detail.\n2. Use bullet points as the default format. No lengthy paragraphs.\n3. Lead with the direct answer in the first sentence — no preamble or context-setting.\n4. Maximum 3-5 bullet points per response. Each bullet should be one clear, complete thought.\n5. Use bold for key terms, numbers, and names to make scanning easy.\n6. Skip pleasantries, filler phrases (\"Great question!\", \"Based on the documents...\"), and restating the question.\n7. If the answer requires nuance, give the short answer first, then add a \"Details:\" section only if necessary.\n8. For yes/no questions, start with \"Yes\" or \"No\" immediately.",
+          },
+          {
+            key: "teacher", label: "Teacher", description: "Step-by-step tutor",
+            prompt: "You are a patient, encouraging tutor who makes complex information accessible:\n\n1. Explain concepts step by step, building from simple to complex. Never assume prior knowledge.\n2. Use analogies and real-world examples to make abstract ideas concrete.\n3. Break long explanations into numbered steps or clearly labeled sections.\n4. After explaining a concept, briefly summarize the key takeaway in one sentence.\n5. When introducing technical terms or jargon from the documents, define them in simple language.\n6. Use questions to guide thinking: \"Notice how...\" or \"Consider why this matters...\"\n7. If the topic is complex, offer to break it into smaller parts: \"Let me explain this in three parts...\"\n8. Encourage deeper exploration: suggest follow-up questions the user might want to ask.\n9. Use a warm, supportive tone — treat every question as a good question.",
+          },
+          {
+            key: "custom", label: "Custom", description: "Write your own",
+            prompt: "",
+          },
+        ];
+
+        const isBalanced = selectedPresetKey === "balanced";
+
+        return (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setIsAIInstructionsOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-[480px] max-h-[70vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-[540px] max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#5b8c15]" />
@@ -3153,37 +3415,67 @@ export default function NotebookPage() {
               <p className="text-xs text-slate-400 mt-1">Set the AI's response style and role for this notebook</p>
             </div>
             <div className="px-5 py-4">
+              {/* Preset pills */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {PERSONA_PRESETS.map(p => (
+                  <button
+                    key={p.key}
+                    onClick={() => {
+                      setSelectedPresetKey(p.key);
+                      if (p.key === "custom") {
+                        setAIInstructionsValue("");
+                      } else {
+                        setAIInstructionsValue(p.prompt);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors border ${
+                      selectedPresetKey === p.key
+                        ? "bg-[#5b8c15] text-white border-[#5b8c15]"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-[#5b8c15]/40 hover:text-[#5b8c15]"
+                    }`}
+                  >
+                    {p.label}
+                    <span className={`ml-1 text-[10px] ${selectedPresetKey === p.key ? "text-white/70" : "text-slate-400"}`}>
+                      {p.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
               <textarea
                 value={aiInstructionsValue}
                 onChange={(e) => setAIInstructionsValue(e.target.value)}
-                placeholder={"e.g. You are a legal consultant, respond concisely and professionally\ne.g. For factual questions, strictly base answers on documents; for advisory questions, think broadly\ne.g. Always respond with bullet points, keep it under 3 sentences"}
-                rows={6}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
-                autoFocus
+                placeholder={selectedPresetKey === "custom" ? "Write your custom persona instructions here..." : ""}
+                rows={8}
+                readOnly={isBalanced}
+                className={`w-full px-4 py-3 rounded-xl border border-slate-200 text-sm outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none ${
+                  isBalanced ? "bg-slate-50 text-slate-500" : "bg-white text-slate-900"
+                }`}
               />
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-xs text-slate-400">
-                  Set response style, role, tone, etc. AI will respond accordingly
+                  {isBalanced ? "System default — select another preset or Custom to customize" : "Edit the prompt or use AI Optimize to improve it"}
                 </p>
-                <button
-                  onClick={async () => {
-                    if (!aiInstructionsValue.trim()) return;
-                    setIsOptimizing(true);
-                    try {
-                      const optimized = await api.optimizePrompt(aiInstructionsValue.trim());
-                      setAIInstructionsValue(optimized);
-                    } catch {
-                      // silently fail
-                    } finally {
-                      setIsOptimizing(false);
-                    }
-                  }}
-                  disabled={isOptimizing || !aiInstructionsValue.trim()}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  {isOptimizing ? "Optimizing..." : "AI Optimize"}
-                </button>
+                {!isBalanced && (
+                  <button
+                    onClick={async () => {
+                      if (!aiInstructionsValue.trim()) return;
+                      setIsOptimizing(true);
+                      try {
+                        const optimized = await api.optimizePrompt(aiInstructionsValue.trim());
+                        setAIInstructionsValue(optimized);
+                      } catch {
+                        // silently fail
+                      } finally {
+                        setIsOptimizing(false);
+                      }
+                    }}
+                    disabled={isOptimizing || !aiInstructionsValue.trim()}
+                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#5b8c15] bg-[#5b8c15]/10 hover:bg-[#5b8c15]/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {isOptimizing ? "Optimizing..." : "AI Optimize"}
+                  </button>
+                )}
               </div>
             </div>
             <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
@@ -3198,7 +3490,9 @@ export default function NotebookPage() {
                   if (!id) return;
                   setIsSavingInstructions(true);
                   try {
-                    const updated = await api.updateNotebook(id, { custom_prompt: aiInstructionsValue.trim() || "" });
+                    // Balanced preset clears custom_prompt (uses system default)
+                    const promptToSave = isBalanced ? "" : aiInstructionsValue.trim();
+                    const updated = await api.updateNotebook(id, { custom_prompt: promptToSave });
                     setNotebook(updated);
                     setIsAIInstructionsOpen(false);
                   } catch {
@@ -3215,7 +3509,8 @@ export default function NotebookPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Hotwords Modal */}
       {showHotwords && (
@@ -3225,9 +3520,35 @@ export default function NotebookPage() {
               <h3 className="text-base font-semibold text-slate-900">ASR Hotwords</h3>
               <p className="text-xs text-slate-400 mt-0.5">Add proper nouns, brand names, or technical terms to improve transcription accuracy</p>
             </div>
+            {/* Industry presets */}
+            <div className="px-5 py-3 border-b border-slate-100">
+              <p className="text-[11px] text-slate-500 mb-2">Load industry preset</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["AI", "Education", "Finance", "Healthcare"] as const).map(industry => (
+                  <button
+                    key={industry}
+                    onClick={() => {
+                      const presets: Record<string, string[]> = {
+                        AI: ["GPT-4o","GPT-4","Claude","Gemini","LLaMA","Qwen","DeepSeek","Mistral","ChatGPT","Copilot","Dify","LangChain","LlamaIndex","RAG","LLM","NLP","Transformer","BERT","LoRA","QLoRA","Fine-tuning","Embedding","Vector Database","Pinecone","Weaviate","Milvus","ChromaDB","FAISS","Prompt Engineering","Chain-of-Thought","ReAct","AutoGPT","Agent","Multi-Agent","MCP","Function Calling","Tool Use","Tokenizer","Attention","Diffusion","Stable Diffusion","Midjourney","DALL-E","ComfyUI","TensorFlow","PyTorch","Hugging Face","ONNX","vLLM","Ollama"],
+                        Education: ["IB","AP","A-Level","SAT","ACT","IELTS","TOEFL","GPA","IGCSE","MYP","PYP","Diploma Programme","Common App","Naviance","PowerSchool","Schoology","Canvas","Google Classroom","Turnitin","Managebac","WASC","CIS","NEASC","EARCOS","ACAMIS","SAS","ISB","HKIS","TAS","Curriculum","Rubric","Differentiation","Scaffolding","Formative Assessment","Summative Assessment","IEP","EAL","ESL","STEAM","SEL","Homeroom","Advisory","Capstone","Extended Essay","CAS","TOK","Internal Assessment","College Counseling","Transcript","Valedictorian"],
+                        Finance: ["ROI","EBITDA","P&L","GAAP","IFRS","IPO","M&A","PE Ratio","EPS","NAV","AUM","ETF","Hedge Fund","Venture Capital","Series A","Series B","Unicorn","Cap Table","Convertible Note","SAFE","Term Sheet","Due Diligence","LBO","DCF","WACC","Beta","Alpha","Sharpe Ratio","Yield Curve","Treasury","Fed Rate","Basis Points","Forex","Swap","Derivative","Compliance","KYC","AML","Basel III","Fintech","DeFi","Stablecoin","SWIFT","ACH","SEPA","Wire Transfer","Escrow","Amortization","Depreciation","Working Capital"],
+                        Healthcare: ["EHR","EMR","HIPAA","FDA","ICD-10","CPT","DRG","Telemedicine","Telehealth","mRNA","CRISPR","Biomarker","Clinical Trial","Phase III","Placebo","Double-Blind","IRB","Informed Consent","Adverse Event","Pharmacovigilance","GMP","GCP","CRO","CMO","API","Biosimilar","Monoclonal Antibody","Immunotherapy","CAR-T","PD-1","Oncology","Radiology","Pathology","MRI","CT Scan","Ultrasound","CBC","A1C","BMI","ICU","OR","ER","Triage","Diagnosis","Prognosis","Contraindication","Comorbidity","Epidemiology","WHO","CDC"],
+                      };
+                      const preset = presets[industry] || [];
+                      const merged = [...new Set([...hotwords, ...preset])];
+                      saveHotwords(merged);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 hover:bg-[#5b8c15]/5 hover:border-[#5b8c15]/30 hover:text-[#5b8c15] transition-colors"
+                  >
+                    {industry}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="px-5 py-3 max-h-[40vh] overflow-y-auto">
               {hotwords.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">No hotwords yet</p>
+                <p className="text-sm text-slate-400 text-center py-4">No hotwords yet — select an industry preset or add manually</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {hotwords.map((w) => (

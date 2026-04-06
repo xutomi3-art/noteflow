@@ -38,8 +38,15 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
   // Expanded panel
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
 
-  // Attachments (pasted images / uploaded files shown as thumbnails)
-  const [attachments, setAttachments] = useState<Array<{ name: string; url: string; file: File }>>([]);
+  // Attachments: images stay local, documents get uploaded as sources
+  const [attachments, setAttachments] = useState<Array<{
+    name: string;
+    url: string;
+    file: File;
+    isImage: boolean;
+    sourceId?: string;
+    status?: "uploading" | "parsing" | "vectorizing" | "ready" | "failed";
+  }>>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,25 +129,19 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     streamingRef.current = { ...initialStreaming };
     setStreamingContent({ ...initialStreaming });
 
-    // Process attachments: images → base64, documents → upload as source
+    // Images → base64, documents already uploaded as sources
     const imgAtts: Array<{ name: string; type: string; data: string }> = [];
     const docSourceIds: string[] = [];
     for (const att of currentAttachments) {
-      if (att.file.type.startsWith("image/")) {
+      if (att.isImage) {
         const b64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string).split(",")[1]);
           reader.readAsDataURL(att.file);
         });
         imgAtts.push({ name: att.name, type: att.file.type, data: b64 });
-      } else {
-        // Upload document as source
-        try {
-          const source = await api.uploadSource(notebookId, att.file);
-          if (source?.id) docSourceIds.push(source.id);
-        } catch (e) {
-          console.warn("Upload failed:", e);
-        }
+      } else if (att.sourceId) {
+        docSourceIds.push(att.sourceId);
       }
     }
 
@@ -222,6 +223,38 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     switchSession(s.id);
   };
 
+  // Upload document as source and poll status
+  const uploadDocAsSource = useCallback(async (file: File, idx: number) => {
+    try {
+      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "uploading" } : a));
+      const source = await api.uploadSource(notebookId, file);
+      if (!source?.id) return;
+      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, sourceId: source.id, status: "parsing" } : a));
+      // Poll for ready status
+      const poll = setInterval(async () => {
+        try {
+          const sources = await api.getSources(notebookId);
+          const src = sources.find((s: any) => s.id === source.id);
+          if (src) {
+            if (src.status === "ready") {
+              clearInterval(poll);
+              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "ready" } : a));
+            } else if (src.status === "failed") {
+              clearInterval(poll);
+              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "failed" } : a));
+            } else {
+              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: src.status as any } : a));
+            }
+          }
+        } catch { /* ignore */ }
+      }, 3000);
+      // Timeout after 5 min
+      setTimeout(() => clearInterval(poll), 300000);
+    } catch {
+      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "failed" } : a));
+    }
+  }, [notebookId]);
+
   // Paste image handler
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
@@ -231,20 +264,26 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
         const file = item.getAsFile();
         if (!file || file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB"); return; }
         const url = URL.createObjectURL(file);
-        setAttachments((prev) => [...prev, { name: file.name || `image-${Date.now()}.png`, url, file }]);
+        setAttachments((prev) => [...prev, { name: file.name || `image-${Date.now()}.png`, url, file, isImage: true }]);
         return;
       }
     }
   }, []);
 
-  // File upload handler
+  // File upload handler — images stay local, docs upload immediately
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
     for (const file of Array.from(files)) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name} exceeds 10MB limit`); continue; }
       const url = URL.createObjectURL(file);
-      setAttachments((prev) => [...prev, { name: file.name, url, file }]);
+      const isImage = file.type.startsWith("image/");
+      const newIdx = attachments.length;
+      setAttachments((prev) => [...prev, { name: file.name, url, file, isImage, status: isImage ? undefined : "uploading" }]);
+      if (!isImage) {
+        // Upload document as source immediately
+        setTimeout(() => uploadDocAsSource(file, newIdx), 100);
+      }
     }
     e.target.value = "";
   };
@@ -441,23 +480,35 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
           {/* Attachment preview */}
           {attachments.length > 0 && (
             <div className="flex gap-2 mb-2 max-w-4xl mx-auto flex-wrap">
-              {attachments.map((a, i) => {
-                const isImage = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(a.name) || a.name.startsWith("pasted-image");
-                return (
-                  <div key={i} className="relative group">
-                    {isImage ? (
-                      <img src={a.url} alt={a.name} className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-lg border border-slate-200 bg-slate-50 flex flex-col items-center justify-center p-1">
+              {attachments.map((a, i) => (
+                <div key={i} className="relative group">
+                  {a.isImage ? (
+                    <img src={a.url} alt={a.name} className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                  ) : (
+                    <div className={`w-20 h-16 rounded-lg border flex flex-col items-center justify-center p-1 ${
+                      a.status === "ready" ? "border-green-300 bg-green-50" :
+                      a.status === "failed" ? "border-red-300 bg-red-50" :
+                      "border-amber-300 bg-amber-50"
+                    }`}>
+                      {a.status && a.status !== "ready" && a.status !== "failed" ? (
+                        <Loader2 className="w-4 h-4 text-amber-500 animate-spin mb-0.5" />
+                      ) : a.status === "ready" ? (
+                        <Paperclip className="w-4 h-4 text-green-500 mb-0.5" />
+                      ) : a.status === "failed" ? (
+                        <X className="w-4 h-4 text-red-500 mb-0.5" />
+                      ) : (
                         <Paperclip className="w-4 h-4 text-slate-400 mb-0.5" />
-                        <span className="text-[8px] text-slate-500 text-center leading-tight truncate w-full">{a.name.split('.').pop()?.toUpperCase()}</span>
-                      </div>
-                    )}
-                    <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                      className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">×</button>
-                  </div>
-                );
-              })}
+                      )}
+                      <span className="text-[8px] text-slate-500 text-center leading-tight truncate w-full">{a.name.split('.').pop()?.toUpperCase()}</span>
+                      {a.status && a.status !== "ready" && a.status !== "failed" && (
+                        <span className="text-[7px] text-amber-600 mt-0.5">{a.status}...</span>
+                      )}
+                    </div>
+                  )}
+                  <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                </div>
+              ))}
             </div>
           )}
           <div className="max-w-4xl mx-auto flex items-end gap-2">
@@ -483,7 +534,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
                 <span className="text-[10px] text-slate-300">Enter to send, Shift+Enter for new line</span>
               </div>
             </div>
-            <button onClick={handleSend} disabled={!input.trim() || isLoading}
+            <button onClick={handleSend} disabled={!input.trim() || isLoading || attachments.some(a => !a.isImage && a.status !== "ready" && a.status !== undefined)}
               className="p-3 rounded-2xl bg-[#5b8c15] text-white hover:bg-[#4a7012] transition-colors disabled:opacity-40 shrink-0 mb-1">
               {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>

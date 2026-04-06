@@ -18,4 +18,5 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     citations: Mapped[dict] = mapped_column(JSONB, default=list)
     msg_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True, default=None)
+    session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

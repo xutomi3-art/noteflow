@@ -16,6 +16,7 @@ from backend.schemas.admin import (
 )
 from backend.services import admin_service, settings_service
 from backend.services.usage_service import get_usage_stats
+from backend.models.llm_model import LlmModel
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -459,3 +460,101 @@ async def update_feedback_status(
 
     await db.commit()
     return {"id": str(fb.id), "status": fb.status, "resolved_at": fb.resolved_at.isoformat() if fb.resolved_at else None}
+
+
+# ── LLM Models CRUD (for Just Chat multi-model) ──────────────────
+
+import uuid as _uuid
+from pydantic import BaseModel as _BaseModel
+
+
+class _LlmModelCreate(_BaseModel):
+    name: str
+    provider: str
+    model_id: str
+    base_url: str
+    api_key: str
+    supports_search: bool = False
+    search_type: str = "serper"
+    enabled: bool = True
+    sort_order: int = 0
+
+
+class _LlmModelUpdate(_BaseModel):
+    name: str | None = None
+    provider: str | None = None
+    model_id: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    supports_search: bool | None = None
+    search_type: str | None = None
+    enabled: bool | None = None
+    sort_order: int | None = None
+
+
+def _model_to_dict(m: LlmModel) -> dict:
+    return {
+        "id": str(m.id), "name": m.name, "provider": m.provider,
+        "model_id": m.model_id, "base_url": m.base_url,
+        "api_key": m.api_key[:8] + "..." if m.api_key and len(m.api_key) > 8 else m.api_key,
+        "supports_search": m.supports_search, "search_type": m.search_type,
+        "enabled": m.enabled, "sort_order": m.sort_order,
+    }
+
+
+@router.get("/llm-models")
+async def list_llm_models(
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(LlmModel).order_by(LlmModel.sort_order, LlmModel.created_at))
+    return [_model_to_dict(m) for m in result.scalars().all()]
+
+
+@router.post("/llm-models")
+async def create_llm_model(
+    body: _LlmModelCreate,
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    m = LlmModel(
+        name=body.name, provider=body.provider, model_id=body.model_id,
+        base_url=body.base_url, api_key=body.api_key,
+        supports_search=body.supports_search, search_type=body.search_type,
+        enabled=body.enabled, sort_order=body.sort_order,
+    )
+    db.add(m)
+    await db.commit()
+    await db.refresh(m)
+    return _model_to_dict(m)
+
+
+@router.patch("/llm-models/{model_id}")
+async def update_llm_model(
+    model_id: str,
+    body: _LlmModelUpdate,
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    m = await db.get(LlmModel, _uuid.UUID(model_id))
+    if not m:
+        raise HTTPException(status_code=404, detail="Model not found")
+    for field, val in body.model_dump(exclude_unset=True).items():
+        setattr(m, field, val)
+    await db.commit()
+    await db.refresh(m)
+    return _model_to_dict(m)
+
+
+@router.delete("/llm-models/{model_id}")
+async def delete_llm_model(
+    model_id: str,
+    _admin: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    m = await db.get(LlmModel, _uuid.UUID(model_id))
+    if not m:
+        raise HTTPException(status_code=404, detail="Model not found")
+    await db.delete(m)
+    await db.commit()
+    return {"data": {"message": "Model deleted"}}

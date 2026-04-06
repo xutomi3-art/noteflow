@@ -364,10 +364,11 @@ async def _generate_meeting_minutes(
     """Generate meeting minutes via LLM and save as a chat message."""
     import re
     from backend.models.chat_message import ChatMessage
+    from backend.models.session import Session
 
     # Skip if transcript too short
     clean = transcript.strip()
-    if len(clean) < 50:
+    if len(clean) < 100:
         logger.info("Transcript too short (%d chars), skipping minutes for %s", len(clean), meeting_id)
         return
 
@@ -405,14 +406,19 @@ async def _generate_meeting_minutes(
     summary_match = re.search(r"##\s*📋\s*会议概要\s*\n+(.*?)(?=\n##|\Z)", minutes_text, re.DOTALL)
     collapsed_summary = summary_match.group(1).strip()[:150] if summary_match else minutes_text[:100]
 
-    # Save as chat message
+    # Save as chat message (attach to latest session if one exists)
     async with async_session() as db:
+        latest_session = (await db.execute(
+            select(Session).where(Session.notebook_id == notebook_id).order_by(Session.created_at.desc()).limit(1)
+        )).scalar_one_or_none()
+
         msg = ChatMessage(
             notebook_id=notebook_id,
             user_id=user_id,
             role="assistant",
             content=minutes_text,
             citations=[],
+            session_id=latest_session.id if latest_session else None,
             msg_metadata={
                 "type": "meeting_minutes",
                 "meeting_id": str(meeting_id),
@@ -461,33 +467,35 @@ async def _generate_meeting_minutes_safe(
 # ── Meeting Live Suggestions ─────────────────────────────────────
 
 SUGGESTION_CONFIG = {
-    "high":   {"silence_secs": 10, "char_threshold": 600,  "min_interval": 480},
-    "medium": {"silence_secs": 15, "char_threshold": 1000, "min_interval": 1080},
-    "low":    {"silence_secs": 25, "char_threshold": 1500, "min_interval": 3000},
+    "high":   {"char_threshold": 2000, "min_interval": 600},    # ~10 min
+    "medium": {"char_threshold": 4000, "min_interval": 1200},   # ~20 min
+    "low":    {"char_threshold": 6000, "min_interval": 1800},   # ~30 min
 }
 
-_SUGGESTION_SYSTEM = """你是会议实时助手。根据会议对话内容，给出 2-3 条简短、有价值的建议。
-重点关注：
-- 需要确认或记录的决策
-- 讨论中可能遗漏的要点
-- 需要分配责任人的行动项
-- 值得进一步展开的问题
+_SUGGESTION_SYSTEM = """You are a real-time meeting analyst. Based on the meeting conversation, provide 2-3 brief, high-value insights.
+Focus on:
+- Decisions that need to be confirmed or recorded
+- Key points that may have been overlooked in the discussion
+- Action items that need an owner assigned
+- Questions worth exploring further
+- Potential risks or concerns raised (even implicitly)
+- Data points or facts that should be verified
 
-规则：
-- 每条不超过 50 字
-- 只提有价值的建议，宁缺毋滥
-- 如果对话太日常/无实质内容，返回空数组 []
-- 用对话的语言回答（中文对话用中文建议）
-- 用 JSON 数组: [{"type": "decision|action|question|insight", "text": "..."}]"""
+Rules:
+- Keep each insight under 80 words
+- Only surface insights when truly valuable — quality over quantity
+- If the conversation is casual or lacks substance, return an empty array []
+- Respond in the same language as the conversation (e.g. Chinese conversation → Chinese insights)
+- Return a JSON array: [{"type": "decision|action|question|insight|risk", "text": "..."}]"""
 
 
 def _build_suggestion_prompt(transcript: str, notebook_prompt: str = "") -> tuple[str, str]:
     """Build system + user messages for suggestion generation."""
     parts = [_SUGGESTION_SYSTEM]
     if notebook_prompt:
-        parts.append(f"Notebook 背景设定（请结合此角色给出建议）：\n{notebook_prompt}")
+        parts.append(f"Notebook context (incorporate this role when providing insights):\n{notebook_prompt}")
     system_msg = "\n\n".join(parts)
-    user_msg = f"以下是最近的会议对话，请给出建议：\n\n{transcript[-3000:]}"
+    user_msg = f"Here is the recent meeting conversation. Please provide insights:\n\n{transcript[-3000:]}"
     return system_msg, user_msg
 
 
@@ -512,8 +520,10 @@ async def generate_meeting_suggestion(
         max_tokens=400, temperature=0.3,
     )
 
+    logger.info("Meeting insight LLM raw result: %s", result[:300] if result else "empty")
+
     if not result or result.startswith("[Error"):
-        logger.warning("Meeting suggestion generation failed: %s", result[:100] if result else "empty")
+        logger.warning("Meeting insight generation failed: %s", result[:100] if result else "empty")
         return
 
     # Parse JSON — extract array from response
@@ -523,10 +533,14 @@ async def generate_meeting_suggestion(
         if clean.startswith("```"):
             clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         suggestions = _json.loads(clean)
-        if not isinstance(suggestions, list) or not suggestions:
+        if not isinstance(suggestions, list):
+            logger.warning("Meeting insight not a list: %s", result[:200])
+            return
+        if not suggestions:
+            logger.info("Meeting insight returned empty array (no actionable content)")
             return
     except (_json.JSONDecodeError, Exception):
-        logger.warning("Failed to parse suggestion JSON: %s", result[:200])
+        logger.warning("Failed to parse insight JSON: %s", result[:200])
         return
 
     # Format as markdown content

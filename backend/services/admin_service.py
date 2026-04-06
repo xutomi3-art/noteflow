@@ -334,6 +334,12 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     rerank_model = settings.RAG_RERANK_ID or "gte-rerank"
     services["rerank"]["message"] = rerank_model + (f" — {services['rerank']['message']}" if services["rerank"].get("message") else "")
 
+    # ASR (Qwen3-ASR via Xinference)
+    import os
+    asr_url = os.environ.get("QWEN3_ASR_URL", "http://10.200.0.102:9997/v1")
+    services["asr"] = await _check_http(f"{asr_url.rstrip('/')}/models")
+    services["asr"]["message"] = "Qwen3-ASR" + (f" — {services['asr']['message']}" if services["asr"].get("message") else "")
+
     return services
 
 

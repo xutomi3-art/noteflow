@@ -11,6 +11,7 @@ class NotebookCreate(BaseModel):
     cover_color: str = "#4A90D9"
     is_team: bool = False
     custom_prompt: str | None = None
+    is_just_chat: bool = False
 
     @field_validator('name')
     @classmethod
@@ -58,6 +59,7 @@ class NotebookResponse(BaseModel):
     member_count: int = 1
     created_at: datetime
     updated_at: datetime
+    is_just_chat: bool = False
     joined_at: datetime | None = None
 
     model_config = {"from_attributes": True}

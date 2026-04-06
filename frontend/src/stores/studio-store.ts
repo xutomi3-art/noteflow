@@ -19,7 +19,7 @@ interface StudioState {
   customSkills: CustomSkill[];
 
   setActiveTab: (tab: StudioState["activeTab"]) => void;
-  generateContent: (notebookId: string, contentType: string, sourceIds?: string[]) => Promise<void>;
+  generateContent: (notebookId: string, contentType: string, sourceIds?: string[], sessionId?: string) => Promise<void>;
   clearContent: (contentType: string) => void;
   fetchNotes: (notebookId: string) => Promise<void>;
   deleteNote: (notebookId: string, noteId: string) => Promise<void>;
@@ -28,7 +28,7 @@ interface StudioState {
   fetchCustomSkills: (notebookId: string) => Promise<void>;
   createCustomSkill: (notebookId: string, data: { name: string; prompt: string; icon?: string; all_notebooks?: boolean; shared_with_team?: boolean }) => Promise<CustomSkill>;
   deleteCustomSkill: (notebookId: string, skillId: string) => Promise<void>;
-  executeCustomSkill: (notebookId: string, skillId: string, sourceIds?: string[]) => Promise<void>;
+  executeCustomSkill: (notebookId: string, skillId: string, sourceIds?: string[], sessionId?: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -57,7 +57,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     });
   },
 
-  generateContent: async (notebookId: string, contentType: string, sourceIds?: string[]) => {
+  generateContent: async (notebookId: string, contentType: string, sourceIds?: string[], sessionId?: string) => {
     // Clear previous content (including error messages) before retrying
     set(state => {
       const content = { ...state.content };
@@ -65,7 +65,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       return { content, isGenerating: { ...state.isGenerating, [contentType]: true } };
     });
     try {
-      let content = await api.generateStudioContent(notebookId, contentType, sourceIds);
+      let content = await api.generateStudioContent(notebookId, contentType, sourceIds, sessionId);
       // Strip ```json fences from mindmap content so the frontend can parse it as JSON
       if (contentType === "mindmap") {
         const stripped = content.trim();
@@ -122,10 +122,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set(state => ({ customSkills: state.customSkills.filter(s => s.id !== skillId) }));
   },
 
-  executeCustomSkill: async (notebookId, skillId, sourceIds) => {
+  executeCustomSkill: async (notebookId, skillId, sourceIds, sessionId) => {
     set(state => ({ isGenerating: { ...state.isGenerating, [skillId]: true } }));
     try {
-      const content = await api.executeCustomSkill(notebookId, skillId, sourceIds);
+      const content = await api.executeCustomSkill(notebookId, skillId, sourceIds, sessionId);
       set(state => ({ content: { ...state.content, [skillId]: content } }));
     } catch (err) {
       set(state => ({ content: { ...state.content, [skillId]: `Error: ${err}` } }));

@@ -20,10 +20,14 @@ interface ChatState {
   deepThinking: boolean;
   thinkingSteps: ThinkingStep[];
 
-  fetchHistory: (notebookId: string) => Promise<void>;
-  sendMessage: (notebookId: string, message: string, sourceIds: string[], webSearch?: boolean, deepThinking?: boolean) => Promise<void>;
+  currentSessionId: string | null;
+  setCurrentSessionId: (sessionId: string | null) => void;
+  onSessionRenamed: ((sessionId: string, name: string) => void) | null;
+  setOnSessionRenamed: (cb: ((sessionId: string, name: string) => void) | null) => void;
+  fetchHistory: (notebookId: string, sessionId?: string) => Promise<void>;
+  sendMessage: (notebookId: string, message: string, sourceIds: string[], webSearch?: boolean, deepThinking?: boolean, sessionId?: string) => Promise<void>;
   stopStream: () => void;
-  clearHistory: (notebookId: string) => Promise<void>;
+  clearHistory: (notebookId: string, sessionId?: string) => Promise<void>;
   setDeepThinking: (enabled: boolean) => void;
   addSharedMessage: (msg: ChatMessage) => void;
   reset: () => void;
@@ -37,11 +41,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
   abortStream: null,
   deepThinking: false,
   thinkingSteps: [],
+  currentSessionId: null,
+  onSessionRenamed: null,
 
-  fetchHistory: async (notebookId: string) => {
+  setCurrentSessionId: (sessionId: string | null) => set({ currentSessionId: sessionId }),
+  setOnSessionRenamed: (cb) => set({ onSessionRenamed: cb }),
+
+  fetchHistory: async (notebookId: string, sessionId?: string) => {
     set({ isLoading: true });
     try {
-      const messages = await api.getChatHistory(notebookId);
+      const messages = await api.getChatHistory(notebookId, sessionId);
       set({ messages });
     } finally {
       set({ isLoading: false });
@@ -50,7 +59,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setDeepThinking: (enabled: boolean) => set({ deepThinking: enabled }),
 
-  sendMessage: async (notebookId: string, message: string, sourceIds: string[], webSearch: boolean = false, deepThinking: boolean = false) => {
+  sendMessage: async (notebookId: string, message: string, sourceIds: string[], webSearch: boolean = false, deepThinking: boolean = false, sessionId?: string) => {
     // Add optimistic user message
     const tempUserMsg: ChatMessage = {
       id: `temp-${Date.now()}`,
@@ -135,6 +144,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
         webSearch,
         deepThinking,
+        sessionId,
+        get().onSessionRenamed || undefined,
       );
 
       set({ abortStream: abort });
@@ -176,8 +187,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  clearHistory: async (notebookId: string) => {
-    await api.clearChatHistory(notebookId);
+  clearHistory: async (notebookId: string, sessionId?: string) => {
+    await api.clearChatHistory(notebookId, sessionId);
     set({ messages: [] });
   },
 

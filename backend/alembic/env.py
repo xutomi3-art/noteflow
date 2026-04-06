@@ -17,6 +17,7 @@ from backend.models.saved_note import SavedNote
 from backend.models.notebook_member import NotebookMember
 from backend.models.invite_link import InviteLink
 from backend.models.feedback import Feedback
+from backend.models.session import Session
 
 config = context.config
 if config.config_file_name is not None:

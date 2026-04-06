@@ -67,6 +67,7 @@ async def get_notebook(
             source_count=0,
             created_at=notebook.created_at,
             updated_at=notebook.updated_at,
+            is_just_chat=notebook.is_just_chat,
         )
     except ValueError:
         raise HTTPException(status_code=404, detail='Notebook not found')
@@ -165,6 +166,10 @@ async def delete_notebook(
 ):
     if not await permission_service.check_permission(db, uuid.UUID(notebook_id), user.id, 'delete'):
         raise HTTPException(status_code=403, detail='Only the owner can delete this notebook')
+    from backend.models.notebook import Notebook
+    nb = await db.get(Notebook, uuid.UUID(notebook_id))
+    if nb and nb.is_just_chat:
+        raise HTTPException(status_code=403, detail='Cannot delete Just Chat notebook')
     try:
         await notebook_service.delete_notebook(db, uuid.UUID(notebook_id), user.id)
         return {'data': {'message': 'Notebook deleted'}}

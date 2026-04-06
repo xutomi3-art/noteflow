@@ -217,6 +217,210 @@ class DocmeeClient:
             logger.error("Docmee generate_ppt error: %s", e)
             return None
 
+    async def generate_ppt_from_files(
+        self,
+        file_paths: list[tuple[str, str]],  # [(file_path, filename), ...]
+        template_id: str,
+        scene: str = "",
+        audience: str = "",
+        lang: str = "zh",
+        length: str = "medium",
+    ) -> dict[str, Any] | None:
+        """Full flow using type=2 (file upload): createTask → generateContent → generatePptx.
+
+        Returns pptInfo dict with id, subject, coverUrl, etc. or None on failure.
+        """
+        token = await self._create_token()
+        if not token:
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
+                # Step 1: Create task with type=2 (file upload)
+                files_data: list[tuple[str, tuple[str, bytes, str]]] = []
+                for fpath, fname in file_paths:
+                    try:
+                        with open(fpath, "rb") as f:
+                            file_bytes = f.read()
+                        # Guess content type from extension
+                        ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+                        content_type_map = {
+                            "pdf": "application/pdf",
+                            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                            "txt": "text/plain",
+                            "md": "text/markdown",
+                            "doc": "application/msword",
+                            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            "csv": "text/csv",
+                        }
+                        ct = content_type_map.get(ext, "application/octet-stream")
+                        files_data.append(("file", (fname, file_bytes, ct)))
+                    except Exception as e:
+                        logger.warning("Docmee: failed to read file %s: %s", fpath, e)
+                        continue
+
+                if not files_data:
+                    logger.error("Docmee generate_ppt_from_files: no valid files to upload")
+                    return None
+
+                resp = await client.post(
+                    f"{BASE_URL}/api/ppt/v2/createTask",
+                    headers={"token": token},
+                    data={"type": "2"},
+                    files=files_data,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error("Docmee createTask (type=2) failed: %s", data.get("message"))
+                    return None
+                task_id = data["data"]["id"]
+                logger.info("Docmee file-upload task created: %s", task_id)
+
+                # Step 2: Generate content/outline (non-streaming)
+                gen_body: dict[str, Any] = {
+                    "id": task_id,
+                    "stream": False,
+                    "length": length,
+                    "lang": lang,
+                }
+                if scene:
+                    gen_body["scene"] = scene
+                if audience:
+                    gen_body["audience"] = audience
+
+                resp = await client.post(
+                    f"{BASE_URL}/api/ppt/v2/generateContent",
+                    headers={"token": token},
+                    json=gen_body,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error("Docmee generateContent (file) failed: %s", data.get("message"))
+                    return None
+                markdown = data["data"].get("text") or data["data"].get("markdown", "")
+                if not markdown:
+                    logger.error("Docmee generateContent (file) returned no text/markdown")
+                    return None
+                logger.info("Docmee file content generated, markdown length: %d", len(markdown))
+
+                # Step 3: Generate PPT from outline + template
+                resp = await client.post(
+                    f"{BASE_URL}/api/ppt/v2/generatePptx",
+                    headers={"token": token},
+                    json={
+                        "id": task_id,
+                        "templateId": template_id,
+                        "markdown": markdown,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error("Docmee generatePptx (file) failed: %s", data.get("message"))
+                    return None
+                ppt_info = data["data"]["pptInfo"]
+                logger.info("Docmee PPT (file) generated: %s", ppt_info.get("id"))
+                return ppt_info
+
+        except Exception as e:
+            logger.error("Docmee generate_ppt_from_files error: %s", e)
+            return None
+
+    async def generate_ppt_from_files(
+        self,
+        file_paths: list[tuple[str, str]],  # [(abs_path, filename), ...]
+        template_id: str,
+        scene: str = "",
+        audience: str = "",
+        lang: str = "zh",
+        length: str = "medium",
+    ) -> dict[str, Any] | None:
+        """Generate PPT from uploaded files (type=2).
+
+        Returns pptInfo dict or None on failure.
+        """
+        token = await self._create_token()
+        if not token:
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
+                # Step 1: Create task with file upload (type=2)
+                files = []
+                for fpath, fname in file_paths:
+                    files.append(("file", (fname, open(fpath, "rb"))))
+                try:
+                    resp = await client.post(
+                        f"{BASE_URL}/api/ppt/v2/createTask",
+                        headers={"token": token},
+                        data={"type": "2"},
+                        files=files,
+                    )
+                finally:
+                    for _, (_, f) in files:
+                        f.close()
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error("Docmee createTask(files) failed: %s", data.get("message"))
+                    return None
+                task_id = data["data"]["id"]
+                logger.info("Docmee file task created: %s (%d files)", task_id, len(file_paths))
+
+                # Step 2: Generate content/outline
+                gen_body: dict[str, Any] = {
+                    "id": task_id,
+                    "stream": False,
+                    "length": length,
+                    "lang": lang,
+                }
+                if scene:
+                    gen_body["scene"] = scene
+                if audience:
+                    gen_body["audience"] = audience
+
+                resp = await client.post(
+                    f"{BASE_URL}/api/ppt/v2/generateContent",
+                    headers={"token": token},
+                    json=gen_body,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error("Docmee generateContent(files) failed: %s", data.get("message"))
+                    return None
+                markdown = data["data"].get("text") or data["data"].get("markdown", "")
+                if not markdown:
+                    logger.error("Docmee generateContent(files) returned no text/markdown")
+                    return None
+                logger.info("Docmee file content generated, markdown length: %d", len(markdown))
+
+                # Step 3: Generate PPT from outline + template
+                resp = await client.post(
+                    f"{BASE_URL}/api/ppt/v2/generatePptx",
+                    headers={"token": token},
+                    json={
+                        "id": task_id,
+                        "templateId": template_id,
+                        "markdown": markdown,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("code") != 0:
+                    logger.error("Docmee generatePptx(files) failed: %s", data.get("message"))
+                    return None
+                ppt_info = data["data"]["pptInfo"]
+                logger.info("Docmee PPT from files generated: %s", ppt_info.get("id"))
+                return ppt_info
+
+        except Exception as e:
+            logger.error("Docmee generate_ppt_from_files error: %s", e)
+            return None
+
     async def download_pptx(self, ppt_id: str, lang: str = "zh") -> bytes | None:
         """Download the generated PPTX file."""
         token = await self._create_token()

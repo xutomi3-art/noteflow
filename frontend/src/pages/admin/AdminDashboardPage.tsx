@@ -14,6 +14,7 @@ const SERVICE_LABELS: Record<string, string> = {
   vision_llm: 'Vision LLM',
   embedding: 'Embedding',
   rerank: 'Rerank',
+  asr: 'ASR (Speech Recognition)',
   // legacy keys
   llm: 'LLM',
   deepseek: 'DeepSeek',
@@ -57,33 +58,29 @@ export default function AdminDashboardPage() {
     <div className="max-w-5xl">
       <h2 className="text-2xl font-semibold text-gray-900 mb-6">Dashboard</h2>
 
-      {isLoading && !stats ? (
-        <div className="flex items-center gap-2 text-gray-400">
-          <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-transparent" />
-          Loading...
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {cards.map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: color + '15' }}>
-                  <Icon size={18} style={{ color }} />
-                </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {cards.map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 rounded-lg" style={{ backgroundColor: color + '15' }}>
+                <Icon size={18} style={{ color }} />
               </div>
-              <div className="text-2xl font-bold text-gray-900">{value}</div>
-              <div className="text-sm text-gray-500 mt-1">{label}</div>
             </div>
-          ))}
-        </div>
-      )}
+            {isLoading && !stats ? (
+              <div className="h-8 w-16 bg-gray-100 rounded animate-pulse" />
+            ) : (
+              <div className="text-2xl font-bold text-gray-900">{value}</div>
+            )}
+            <div className="text-sm text-gray-500 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
 
       {/* Host Resources */}
-      {resources && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Server Resources</h3>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Server Resources</h3>
+        {resources ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* CPU */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Cpu size={14} className="text-blue-500" />
@@ -92,7 +89,6 @@ export default function AdminDashboardPage() {
               </div>
               <PercentBar value={resources.host.cpu_percent} />
             </div>
-            {/* Memory */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <MemoryStick size={14} className="text-purple-500" />
@@ -103,7 +99,6 @@ export default function AdminDashboardPage() {
               </div>
               <PercentBar value={resources.host.memory_percent} />
             </div>
-            {/* Disk */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <HardDrive size={14} className="text-amber-500" />
@@ -115,18 +110,30 @@ export default function AdminDashboardPage() {
               <PercentBar value={resources.host.disk_percent} />
             </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {['CPU', 'Memory', 'Disk'].map(label => (
+              <div key={label}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm text-gray-600">{label}</span>
+                  <span className="ml-auto"><div className="h-4 w-10 bg-gray-100 rounded animate-pulse" /></span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full animate-pulse" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Container Resources */}
-      {resources && resources.containers.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">
-            <div className="flex items-center gap-2">
-              <Server size={14} className="text-gray-500" />
-              Containers
-            </div>
-          </h3>
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">
+          <div className="flex items-center gap-2">
+            <Server size={14} className="text-gray-500" />
+            Containers
+          </div>
+        </h3>
+        {resources && resources.containers.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -166,8 +173,18 @@ export default function AdminDashboardPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
+                <div className="flex-1 h-2 bg-gray-100 rounded-full animate-pulse" />
+                <div className="h-4 w-12 bg-gray-100 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Service Health Overview */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
@@ -187,7 +204,15 @@ export default function AdminDashboardPage() {
         </div>
         <div className="flex flex-wrap gap-3">
           {Object.keys(health).length === 0 ? (
-            <p className="text-sm text-gray-400">Loading...</p>
+            <>
+              {Object.keys(SERVICE_LABELS).slice(0, 12).map(k => (
+                <div key={k} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">
+                  <div className="w-2 h-2 rounded-full bg-gray-200 animate-pulse" />
+                  <span className="text-sm text-gray-400">{SERVICE_LABELS[k]}</span>
+                  <div className="h-3 w-8 bg-gray-200 rounded animate-pulse" />
+                </div>
+              ))}
+            </>
           ) : (
             Object.entries(health).map(([key, h]) => (
               <div key={key} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50">

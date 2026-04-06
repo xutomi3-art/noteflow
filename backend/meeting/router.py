@@ -42,22 +42,17 @@ async def _check_suggestion_trigger(session, meeting_id: str, notebook_id: str, 
 
     # Condition 3: minimum interval since last suggestion
     if session.suggestion_last_time > 0 and (now - session.suggestion_last_time) < config["min_interval"]:
+        logger.info("Insight skip: interval not met (%.0fs < %ds)", now - session.suggestion_last_time, config["min_interval"])
         return
 
     # Condition 2: accumulated enough new chars
     total_chars = sum(len(u.text) for u in session.utterances if u.is_final and u.text.strip() != "...")
     new_chars = total_chars - session.suggestion_last_char_count
     if new_chars < config["char_threshold"]:
+        logger.info("Insight skip: chars not met (%d < %d, total_final=%d, utterances=%d)", new_chars, config["char_threshold"], total_chars, len(session.utterances))
         return
 
-    # Condition 1: detect silence — check if latest audio buffer activity suggests a pause
-    # We use a simple heuristic: if the last utterance was > N seconds ago (based on session timing)
-    if session.utterances:
-        last_utt_time = session.utterances[-1].end_time_ms / 1000.0
-        session_elapsed = now - session.session_start
-        silence_since_last = session_elapsed - last_utt_time
-        if silence_since_last < config["silence_secs"]:
-            return  # Not enough silence yet
+    # Silence check removed — chars + interval are sufficient triggers
 
     # All 3 conditions met — trigger!
     session.suggestion_last_time = now
@@ -65,7 +60,7 @@ async def _check_suggestion_trigger(session, meeting_id: str, notebook_id: str, 
 
     # Build transcript from recent utterances
     recent = [u for u in session.utterances if u.is_final and u.text.strip() != "..."][-15:]
-    transcript = "\n".join(f"{u.wall_time or ''} {u.text}" for u in recent)
+    transcript = "\n".join(u.text for u in recent)
 
     logger.info("Triggering meeting suggestion for %s (level=%s, new_chars=%d)", meeting_id, level, new_chars)
     asyncio.create_task(_generate_suggestion_safe(meeting_id, notebook_id, user_id, transcript, custom_prompt))
@@ -301,6 +296,7 @@ async def websocket_audio(
 
     async def send_transcripts():
         """Receive ASR results and send to client. Auto-reconnects ASR on failure."""
+        nonlocal session
         max_reconnects = 50  # ~2.5 hours at 3 min intervals
         reconnect_count = 0
 
@@ -338,9 +334,12 @@ async def websocket_audio(
                         "sequence": utterance.sequence,
                     })
 
-                    # Check if we should generate AI suggestions
+                    # Check if we should generate AI insights
                     if utterance.is_final and utterance.text.strip() and utterance.text.strip() != "...":
-                        await _check_suggestion_trigger(session, meeting_id, notebook_id, user_id)
+                        logger.info("Checking insight trigger: is_final=%s, text=%s", utterance.is_final, utterance.text[:30])
+                        await _check_suggestion_trigger(session, meeting_id, notebook_id, str(meeting.created_by) if meeting else "")
+                    elif not utterance.is_final:
+                        pass  # partial utterance, skip
             except Exception as e:
                 logger.error("Meeting ASR error: %s", e)
 

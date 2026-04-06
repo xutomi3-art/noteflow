@@ -8,6 +8,13 @@ export interface PptConfig {
   audience: string;
   language: string;
   length: "short" | "medium" | "long";
+  source_ids?: string[];
+}
+
+interface SourceInfo {
+  id: string;
+  filename: string;
+  file_size: number | null;
 }
 
 interface PptConfigModalProps {
@@ -15,6 +22,8 @@ interface PptConfigModalProps {
   onClose: () => void;
   onGenerate: (config: PptConfig) => void;
   isGenerating: boolean;
+  sourceIds?: string[];
+  sources?: SourceInfo[];
 }
 
 interface Template {
@@ -35,17 +44,30 @@ const LENGTH_OPTIONS: { value: PptConfig["length"]; label: string }[] = [
   { value: "long", label: "Detailed" },
 ];
 
+const MAX_FILES = 5;
+const MAX_TOTAL_BYTES = 50 * 1024 * 1024; // 50 MB
+
+function formatSize(bytes: number | null): string {
+  if (bytes == null || bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 export default function PptConfigModal({
   isOpen,
   onClose,
   onGenerate,
   isGenerating,
+  sourceIds,
+  sources,
 }: PptConfigModalProps) {
   const [templateId, setTemplateId] = useState("");
   const [scene, setScene] = useState("");
   const [audience, setAudience] = useState("");
   const [language, setLanguage] = useState("en");
   const [length, setLength] = useState<PptConfig["length"]>("medium");
+  const [pickedSourceIds, setPickedSourceIds] = useState<Set<string>>(new Set());
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templatePage, setTemplatePage] = useState(1);
@@ -56,18 +78,22 @@ export default function PptConfigModal({
   const [optionsLoaded, setOptionsLoaded] = useState(false);
 
   const pageSize = 8;
-  // Docmee only has Chinese templates; other languages use python-pptx fallback
-  const isChinese = language === "zh" || language === "zh-Hant";
 
-  // Load templates only for Chinese; other languages skip (use clean default)
+  // Determine if sources exceed the limit
+  const allSources = sources ?? [];
+  const totalSize = allSources.reduce((sum, s) => sum + (s.file_size ?? 0), 0);
+  const sourceOverLimit = allSources.length > MAX_FILES || totalSize > MAX_TOTAL_BYTES;
+
+  // Reset picked sources when modal opens — start empty so user picks
+  useEffect(() => {
+    if (isOpen) {
+      setPickedSourceIds(new Set());
+    }
+  }, [isOpen]);
+
+  // Load templates for all languages
   useEffect(() => {
     if (!isOpen) return;
-    if (!isChinese) {
-      setTemplates([]);
-      setTemplateTotal(0);
-      setTemplateId("");
-      return;
-    }
     setTemplateLoading(true);
     setTemplateId("");
     api
@@ -81,7 +107,7 @@ export default function PptConfigModal({
       })
       .catch(() => setTemplates([]))
       .finally(() => setTemplateLoading(false));
-  }, [isOpen, templatePage, isChinese, language]);
+  }, [isOpen, templatePage, language]);
 
   // Load generation options
   useEffect(() => {
@@ -100,12 +126,16 @@ export default function PptConfigModal({
   const totalPages = Math.ceil(templateTotal / pageSize);
 
   const handleGenerate = () => {
+    const effectiveSourceIds = sourceOverLimit
+      ? [...pickedSourceIds]
+      : (sourceIds ?? []);
     onGenerate({
       template_id: templateId,
       scene,
       audience,
       language,
       length,
+      source_ids: effectiveSourceIds.length > 0 ? effectiveSourceIds : undefined,
     });
   };
 
@@ -169,7 +199,7 @@ export default function PptConfigModal({
             ) : templates.length === 0 ? (
               <div className="py-4 px-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
                 <p className="text-sm text-slate-500">
-                  {isChinese ? "No templates found" : "Clean default template will be used"}
+                  No templates found — default template will be used
                 </p>
               </div>
             ) : (
@@ -306,11 +336,56 @@ export default function PptConfigModal({
             </div>
           </div>
 
+          {/* Source picker — only shown when over limit */}
+          {sourceOverLimit && allSources.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Select Sources <span className="text-xs font-normal text-amber-600">(max 5 files, 50 MB total)</span>
+              </label>
+              <div className="border border-slate-200 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-100">
+                {allSources.map((s) => {
+                  const checked = pickedSourceIds.has(s.id);
+                  const pickedList = allSources.filter(x => pickedSourceIds.has(x.id));
+                  const pickedSize = pickedList.reduce((sum, x) => sum + (x.file_size ?? 0), 0);
+                  const wouldExceedFiles = !checked && pickedSourceIds.size >= MAX_FILES;
+                  const wouldExceedSize = !checked && (pickedSize + (s.file_size ?? 0)) > MAX_TOTAL_BYTES;
+                  const disabled = isGenerating || (!checked && (wouldExceedFiles || wouldExceedSize));
+                  return (
+                    <label
+                      key={s.id}
+                      className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 ${disabled && !checked ? "opacity-40 cursor-not-allowed" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => {
+                          setPickedSourceIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(s.id)) next.delete(s.id);
+                            else next.add(s.id);
+                            return next;
+                          });
+                        }}
+                        className="rounded border-slate-300 text-[#5b8c15] focus:ring-[#5b8c15]/30"
+                      />
+                      <span className="flex-1 truncate text-slate-700">{s.filename}</span>
+                      <span className="text-xs text-slate-400 shrink-0">{formatSize(s.file_size)}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                {pickedSourceIds.size} files selected ({formatSize(allSources.filter(s => pickedSourceIds.has(s.id)).reduce((sum, s) => sum + (s.file_size ?? 0), 0))})
+              </p>
+            </div>
+          )}
+
           {/* Generate button */}
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={isGenerating}
+            disabled={isGenerating || (sourceOverLimit && pickedSourceIds.size === 0)}
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
             style={{ backgroundColor: "#5b8c15" }}
           >

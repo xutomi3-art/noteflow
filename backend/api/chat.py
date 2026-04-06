@@ -419,10 +419,27 @@ async def chat_multi(
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
         ]
-        # For non-vision models, build text-only fallback
+        # For non-vision models, use vision model to extract image description first
+        image_description = ""
+        try:
+            from backend.services.qwen_client import qwen_client
+            import tempfile, base64 as b64_mod
+            for att in (req.attachments or []):
+                if att.type.startswith("image/"):
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                        tmp.write(b64_mod.b64decode(att.data))
+                        tmp_path = tmp.name
+                    desc = await qwen_client.analyze_image(tmp_path, att.name)
+                    if desc:
+                        image_description += f"\n[Image: {att.name}]\n{desc}\n"
+                    import os
+                    os.unlink(tmp_path)
+        except Exception as e:
+            logger.warning("Image description extraction failed: %s", e)
+
         text_messages = [
             {"role": "system", "content": system_content},
-            {"role": "user", "content": req.message + "\n\n(Images attached but this model does not support vision)"},
+            {"role": "user", "content": req.message + (f"\n\nImage content description:\n{image_description}" if image_description else "")},
         ]
     else:
         messages = [
@@ -432,8 +449,7 @@ async def chat_multi(
         text_messages = messages
 
     # Call all models in parallel
-    # Vision-capable models get images, others get text fallback
-    non_vision_providers = {"deepseek", "glm"}  # providers that don't support vision
+    non_vision_providers = {"deepseek", "glm"}
     tasks = []
     for m in models:
         if has_images and m.provider in non_vision_providers:
