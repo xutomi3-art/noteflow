@@ -305,7 +305,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
           {/* LLM Settings — green style like Notebook Settings */}
           <div className="relative">
             <button onClick={() => setSettingsOpen(!settingsOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors text-slate-500 hover:bg-slate-100">
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors bg-[#5b8c15] text-white hover:bg-[#4a7311]">
               <Settings className="w-4 h-4" />
               <span className="hidden md:inline">LLM Settings</span>
             </button>
