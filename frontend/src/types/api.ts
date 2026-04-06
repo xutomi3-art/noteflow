@@ -28,6 +28,7 @@ export interface Notebook {
   created_at: string;
   updated_at: string;
   joined_at: string | null;
+  is_just_chat?: boolean;
 }
 
 export interface Source {
@@ -72,6 +73,8 @@ export interface ChatMessage {
     skill_type?: string;
     skill_label?: string;
     suggestions?: Array<{type: string; text: string}>;
+    model_id?: string;
+    model_name?: string;
   } | null;
 }
 
@@ -92,6 +95,14 @@ export interface CustomSkill {
   notebook_id: string;
   all_notebooks: boolean;
   shared_with_team: boolean;
+}
+
+export interface Session {
+  id: string;
+  name: string;
+  notebook_id: string;
+  created_by: string;
+  created_at: string;
 }
 
 export interface InviteLink {

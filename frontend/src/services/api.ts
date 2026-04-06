@@ -1,4 +1,4 @@
-import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member, CustomSkill } from "@/types/api";
+import type { TokenResponse, User, Notebook, Source, ChatMessage, Citation, SavedNote, InviteLink, Member, CustomSkill, Session } from "@/types/api";
 import type { DashboardStats, UserListResponse, SystemSettingItem, ServiceHealth, ResourcesData, UsageStats, ChatLogItem, FeedbackItem } from "@/types/admin";
 
 const API_BASE = "/api";
@@ -303,6 +303,8 @@ class ApiClient {
     onError: (error: string) => void,
     webSearch: boolean = false,
     deepThinking: boolean = false,
+    sessionId?: string,
+    onSessionRenamed?: (sessionId: string, name: string) => void,
   ): { promise: Promise<void>; abort: () => void } {
     const controller = new AbortController();
     const headers: Record<string, string> = {
@@ -318,7 +320,7 @@ class ApiClient {
       const response = await fetch(`${API_BASE}/notebooks/${notebookId}/chat`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null, ...(webSearch ? { web_search: true } : {}), ...(deepThinking ? { deep_thinking: true } : {}) }),
+        body: JSON.stringify({ message, source_ids: sourceIds.length > 0 ? sourceIds : null, ...(webSearch ? { web_search: true } : {}), ...(deepThinking ? { deep_thinking: true } : {}), ...(sessionId ? { session_id: sessionId } : {}) }),
         signal: controller.signal,
       });
 
@@ -381,6 +383,8 @@ class ApiClient {
                 if (timeoutId) clearTimeout(timeoutId);
                 onError(data.message);
                 return;
+              } else if (data.type === "session_renamed") {
+                if (onSessionRenamed) onSessionRenamed(data.session_id, data.name);
               } else if (data.type === "thinking" || data.type === "searching" || data.type === "observation") {
                 resetTimeout(); // thinking/searching counts as activity
                 onToken(`__REACT__${JSON.stringify(data)}__REACT__`);
@@ -403,12 +407,45 @@ class ApiClient {
     return { promise, abort: () => controller.abort() };
   }
 
-  async getChatHistory(notebookId: string): Promise<ChatMessage[]> {
-    return this.request(`/notebooks/${notebookId}/chat/history`);
+  async getChatHistory(notebookId: string, sessionId?: string): Promise<ChatMessage[]> {
+    const params = sessionId ? `?session_id=${sessionId}` : "";
+    return this.request(`/notebooks/${notebookId}/chat/history${params}`);
   }
 
-  async clearChatHistory(notebookId: string): Promise<void> {
-    await this.request(`/notebooks/${notebookId}/chat/history`, { method: "DELETE" });
+  async clearChatHistory(notebookId: string, sessionId?: string): Promise<void> {
+    const params = sessionId ? `?session_id=${sessionId}` : "";
+    await this.request(`/notebooks/${notebookId}/chat/history${params}`, { method: "DELETE" });
+  }
+
+  // Chat models (public, for Just Chat)
+  async getChatModels(notebookId: string): Promise<Array<{ id: string; name: string; provider: string }>> {
+    return this.request(`/notebooks/${notebookId}/chat/models`);
+  }
+
+  // Sessions
+  async getSessions(notebookId: string): Promise<Session[]> {
+    const res = await this.request<{ data: Session[] }>(`/notebooks/${notebookId}/sessions`);
+    return (res as any).data ?? res;
+  }
+
+  async createSession(notebookId: string, name: string = "New Session"): Promise<Session> {
+    const res = await this.request<{ data: Session }>(`/notebooks/${notebookId}/sessions`, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    return (res as any).data ?? res;
+  }
+
+  async renameSession(notebookId: string, sessionId: string, name: string): Promise<Session> {
+    const res = await this.request<{ data: Session }>(`/notebooks/${notebookId}/sessions/${sessionId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    });
+    return (res as any).data ?? res;
+  }
+
+  async deleteSession(notebookId: string, sessionId: string): Promise<void> {
+    await this.request(`/notebooks/${notebookId}/sessions/${sessionId}`, { method: "DELETE" });
   }
 
   async submitChatFeedback(notebookId: string, messageId: string, vote: string, comment?: string): Promise<void> {
@@ -416,6 +453,146 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ message_id: messageId, vote, comment }),
     });
+  }
+
+  // Multi-model chat (Just Chat) — non-streaming fallback
+  async sendMultiChat(notebookId: string, message: string, options?: {
+    sessionId?: string;
+    webSearch?: boolean;
+    modelIds?: string[];
+    attachments?: Array<{ name: string; type: string; data: string }>;
+    sourceIds?: string[];
+  }): Promise<{ user_message_id: string; responses: Array<{ model_name: string; model_id: string; content: string | null; error: string | null }>; session_name?: string }> {
+    return this.request(`/notebooks/${notebookId}/chat/multi`, {
+      method: "POST",
+      body: JSON.stringify({
+        message,
+        session_id: options?.sessionId,
+        web_search: options?.webSearch,
+        model_ids: options?.modelIds,
+        attachments: options?.attachments,
+        source_ids: options?.sourceIds,
+      }),
+    });
+  }
+
+  // Multi-model chat streaming (Just Chat SSE)
+  sendMultiChatStream(
+    notebookId: string,
+    message: string,
+    options: {
+      sessionId?: string;
+      webSearch?: boolean;
+      modelIds?: string[];
+      attachments?: Array<{ name: string; type: string; data: string }>;
+      sourceIds?: string[];
+    },
+    callbacks: {
+      onToken: (modelId: string, token: string) => void;
+      onModelDone: (modelId: string) => void;
+      onModelError: (modelId: string, error: string) => void;
+      onSessionName: (name: string) => void;
+      onAllDone: () => void;
+    },
+  ): { abort: () => void } {
+    const controller = new AbortController();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+    };
+    if (this.accessToken) {
+      headers["Authorization"] = `Bearer ${this.accessToken}`;
+    }
+
+    (async () => {
+      try {
+        const response = await fetch(`${API_BASE}/notebooks/${notebookId}/chat/multi/stream`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            message,
+            session_id: options.sessionId,
+            web_search: options.webSearch,
+            model_ids: options.modelIds,
+            attachments: options.attachments,
+            source_ids: options.sourceIds,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          const body = await response.json().catch(() => ({}));
+          for (const mid of options.modelIds || []) {
+            callbacks.onModelError(mid, body.detail || `Stream failed: ${response.status}`);
+          }
+          callbacks.onAllDone();
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6);
+            if (data === "[DONE]") {
+              callbacks.onAllDone();
+              return;
+            }
+            try {
+              const event = JSON.parse(data);
+              if (event.type === "token") {
+                callbacks.onToken(event.model_id, event.content);
+              } else if (event.type === "done") {
+                callbacks.onModelDone(event.model_id);
+              } else if (event.type === "error") {
+                callbacks.onModelError(event.model_id, event.error);
+              } else if (event.type === "session_name") {
+                callbacks.onSessionName(event.name);
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+        callbacks.onAllDone();
+      } catch (e: unknown) {
+        if ((e as Error).name !== "AbortError") {
+          for (const mid of options.modelIds || []) {
+            callbacks.onModelError(mid, String(e));
+          }
+          callbacks.onAllDone();
+        }
+      }
+    })();
+
+    return { abort: () => controller.abort() };
+  }
+
+  // Admin: LLM models
+  async getLlmModels(): Promise<Array<{ id: string; name: string; provider: string; model_id: string; base_url: string; api_key: string; supports_search: boolean; search_type: string; enabled: boolean; sort_order: number }>> {
+    return this.request("/admin/llm-models");
+  }
+
+  async createLlmModel(data: { name: string; provider: string; model_id: string; base_url: string; api_key: string; supports_search?: boolean; search_type?: string; enabled?: boolean; sort_order?: number }): Promise<any> {
+    return this.request("/admin/llm-models", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  async updateLlmModel(id: string, data: Record<string, any>): Promise<any> {
+    return this.request(`/admin/llm-models/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+  }
+
+  async deleteLlmModel(id: string): Promise<void> {
+    await this.request(`/admin/llm-models/${id}`, { method: "DELETE" });
   }
 
   // Saved Notes
@@ -492,7 +669,7 @@ class ApiClient {
   }
 
   // Studio generation
-  async generateStudioContent(notebookId: string, contentType: string, sourceIds?: string[]): Promise<string> {
+  async generateStudioContent(notebookId: string, contentType: string, sourceIds?: string[], sessionId?: string): Promise<string> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120_000);
     try {
@@ -500,7 +677,7 @@ class ApiClient {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source_ids: sourceIds?.length ? sourceIds : null }),
+        body: JSON.stringify({ source_ids: sourceIds?.length ? sourceIds : null, ...(sessionId ? { session_id: sessionId } : {}) }),
       });
       return data.content;
     } finally {
@@ -531,14 +708,14 @@ class ApiClient {
     await this.request(`/notebooks/${notebookId}/studio/custom-skills/${skillId}`, { method: "DELETE" });
   }
 
-  async executeCustomSkill(notebookId: string, skillId: string, sourceIds?: string[]): Promise<string> {
+  async executeCustomSkill(notebookId: string, skillId: string, sourceIds?: string[], sessionId?: string): Promise<string> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120_000);
     try {
       const data = await this.request<{ content: string }>(`/notebooks/${notebookId}/studio/custom-skills/${skillId}/execute`, {
         method: "POST",
         signal: controller.signal,
-        body: JSON.stringify({ source_ids: sourceIds?.length ? sourceIds : null }),
+        body: JSON.stringify({ source_ids: sourceIds?.length ? sourceIds : null, ...(sessionId ? { session_id: sessionId } : {}) }),
       });
       return data.content;
     } finally {
@@ -584,6 +761,7 @@ class ApiClient {
     audience?: string;
     language?: string;
     length?: string;
+    source_ids?: string[];
   }): Promise<void> {
     const headers: Record<string, string> = {};
     if (this.accessToken) {
