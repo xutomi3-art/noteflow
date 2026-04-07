@@ -65,13 +65,20 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
   const loadSessionMessages = useCallback(async (sessionId: string) => {
     try {
       const messages: ChatMessage[] = await api.getChatHistory(notebookId, sessionId);
+      // First pass: collect which models actually have assistant responses
+      const respondedIds = new Set<string>();
+      for (const msg of messages) {
+        if (msg.role === "assistant" && (msg.metadata as any)?.model_id) {
+          respondedIds.add((msg.metadata as any).model_id as string);
+        }
+      }
+      // Second pass: only show user messages in panels that have responses
       const chats: Record<string, ChatMsg[]> = {};
       for (const msg of messages) {
         if (msg.role === "user") {
-          // User messages go to all model panels
-          for (const m of availableModels) {
-            if (!chats[m.id]) chats[m.id] = [];
-            chats[m.id].push({ role: "user", content: msg.content });
+          for (const mid of respondedIds) {
+            if (!chats[mid]) chats[mid] = [];
+            chats[mid].push({ role: "user", content: msg.content });
           }
         } else if (msg.role === "assistant" && (msg.metadata as any)?.model_id) {
           const modelId = (msg.metadata as any).model_id as string;
@@ -83,7 +90,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     } catch {
       setModelChats({});
     }
-  }, [notebookId, availableModels]);
+  }, [notebookId]);
 
   useEffect(() => {
     api.getSessions(notebookId).then((ss) => {
@@ -104,7 +111,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     Object.values(panelRefs.current).forEach((el) => { if (el) el.scrollTop = el.scrollHeight; });
   }, [modelChats, streamingContent, isLoading]);
 
-  const activeModels = availableModels.filter((m) => selectedModelIds.includes(m.id)).slice(0, gridMode);
+  const activeModels = selectedModelIds.map((id) => availableModels.find((m) => m.id === id)).filter((m): m is LlmModel => !!m).slice(0, gridMode);
 
   const handleSend = useCallback(async () => {
     const msg = input.trim();
