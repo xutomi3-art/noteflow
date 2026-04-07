@@ -107,10 +107,14 @@ export default function MarkdownContent({ content, className }: MarkdownContentP
     [],
   );
 
-  // Pre-process: escape citation markers [N] so markdown parser doesn't eat them
-  // Replace [N] with a placeholder that survives markdown parsing
+  // Pre-process content before markdown parsing
   const processedContent = useMemo(() => {
-    return content.replace(/\[(\d+)\]/g, '⟦$1⟧');
+    let text = content;
+    // Strip wrapping ```markdown ... ``` code fences that some LLMs add around their output
+    text = text.replace(/^```(?:markdown|md)?\s*\n/i, '').replace(/\n```\s*$/, '');
+    // Escape citation markers [N] so markdown parser doesn't eat them
+    text = text.replace(/\[(\d+)\]/g, '⟦$1⟧');
+    return text;
   }, [content]);
 
   return (
