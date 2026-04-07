@@ -18,6 +18,16 @@ from backend.services.source_service import get_source, update_source_status
 
 logger = logging.getLogger(__name__)
 
+
+async def _update_status(sid: uuid.UUID, status: str, **kwargs) -> None:
+    """Update source status using a fresh short-lived DB session.
+
+    Each call opens and closes its own session to avoid conflicts
+    when multiple process_document tasks run concurrently.
+    """
+    async with async_session() as db:
+        await update_source_status(db, sid, status, **kwargs)
+
 _QWEN3_ASR_URL = os.environ.get("QWEN3_ASR_URL", "http://10.200.0.102:9997/v1")
 _QWEN3_ASR_MODEL = "Qwen3-ASR-1.7B"
 
@@ -574,21 +584,22 @@ async def _notify(
 
 
 async def _ensure_dataset(
-    db: "AsyncSession", notebook_id: uuid.UUID  # noqa: F821
+    notebook_id: uuid.UUID,
 ) -> str | None:
     """Ensure notebook has a RAGFlow dataset. Create if needed."""
-    result = await db.execute(select(Notebook).where(Notebook.id == notebook_id))
-    notebook = result.scalar_one_or_none()
-    if notebook is None:
-        return None
+    async with async_session() as db:
+        result = await db.execute(select(Notebook).where(Notebook.id == notebook_id))
+        notebook = result.scalar_one_or_none()
+        if notebook is None:
+            return None
 
-    if notebook.ragflow_dataset_id:
-        return notebook.ragflow_dataset_id
+        if notebook.ragflow_dataset_id:
+            return notebook.ragflow_dataset_id
 
-    dataset_id = await ragflow_client.create_dataset(f"notebook-{notebook_id}")
-    if dataset_id:
-        notebook.ragflow_dataset_id = dataset_id
-        await db.commit()
+        dataset_id = await ragflow_client.create_dataset(f"notebook-{notebook_id}")
+        if dataset_id:
+            notebook.ragflow_dataset_id = dataset_id
+            await db.commit()
         return dataset_id
     return None
 
@@ -610,261 +621,195 @@ async def process_document(
     sid = uuid.UUID(source_id)
     nid = uuid.UUID(notebook_id)
 
-    async with async_session() as db:
-        try:
-            # Step 1: Update status to parsing
-            await update_source_status(db, sid, "parsing", progress=5.0)
-            await _notify(notebook_id, source_id, "parsing", progress=0.05)
+    try:
+        # Step 1: Update status to parsing
+        await _update_status(sid, "parsing", progress=5.0)
+        await _notify(notebook_id, source_id, "parsing", progress=0.05)
 
-            # Step 2: Excel/CSV — upload directly to RAGFlow (native Excel support)
-            if file_type in ("xlsx", "xls", "csv"):
-                # RAGFlow handles Excel parsing, chunking and vectorization natively
-                # with html4excel enabled for better table structure preservation
-                logger.info("Excel/CSV will be processed by RAGFlow: %s", filename)
-                content = None  # Signal to upload original file to RAGFlow
+        # Step 2: Excel/CSV — upload directly to RAGFlow (native Excel support)
+        if file_type in ("xlsx", "xls", "csv"):
+            # RAGFlow handles Excel parsing, chunking and vectorization natively
+            # with html4excel enabled for better table structure preservation
+            logger.info("Excel/CSV will be processed by RAGFlow: %s", filename)
+            content = None  # Signal to upload original file to RAGFlow
 
-            # Step 2b: Route audio to ASR pipeline (Qwen3-ASR via Xinference)
-            elif file_type in AUDIO_EXTENSIONS:
-                logger.info("Processing audio via Qwen3-ASR: %s", filename)
-                transcript = await _transcribe_audio_file(file_path)
+        # Step 2b: Route audio to ASR pipeline (Qwen3-ASR via Xinference)
+        elif file_type in AUDIO_EXTENSIONS:
+            logger.info("Processing audio via Qwen3-ASR: %s", filename)
+            transcript = await _transcribe_audio_file(file_path)
+            md_path = file_path.rsplit(".", 1)[0] + ".md"
+            header = f"# Audio Transcript: {filename}\n\n"
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(header + transcript)
+            content = header + transcript
+            logger.info("ASR transcription complete: %s (%d chars)", filename, len(content))
 
-                # Save transcript as markdown
-                md_path = file_path.rsplit(".", 1)[0] + ".md"
-                header = f"# Audio Transcript: {filename}\n\n"
-                with open(md_path, "w", encoding="utf-8") as f:
-                    f.write(header + transcript)
+        # Step 2c: Route images to vision LLM pipeline
+        elif file_type in IMAGE_EXTENSIONS:
+            logger.info("Processing image via vision LLM: %s", filename)
+            content = await qwen_client.analyze_image(file_path, filename)
+            md_path = file_path.rsplit(".", 1)[0] + ".md"
+            header = f"# Image: {filename}\n\n"
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(header + content)
 
-                content = header + transcript
-                logger.info(
-                    "ASR transcription complete: %s (%d chars)", filename, len(content)
-                )
+        # Step 3: Parse document to markdown/text
+        elif file_type in ("txt", "md"):
+            content = await _read_text_file(file_path)
+            _save_parsed_content(file_path, content)
+        elif file_type in ("pdf", "docx", "pptx"):
+            parse_path = file_path
+            if file_type in ("pptx", "docx"):
+                pdf_path = _convert_to_pdf(file_path)
+                if pdf_path:
+                    parse_path = pdf_path
 
-            # Step 2c: Route images to vision LLM pipeline
-            elif file_type in IMAGE_EXTENSIONS:
-                logger.info("Processing image via vision LLM: %s", filename)
-                content = await qwen_client.analyze_image(file_path, filename)
-                # Save extracted text as .md alongside the image
-                md_path = file_path.rsplit(".", 1)[0] + ".md"
-                header = f"# Image: {filename}\n\n"
-                with open(md_path, "w", encoding="utf-8") as f:
-                    f.write(header + content)
-                # Continue to RAGFlow vectorization with the extracted text
-                # (content variable is set, will be uploaded as .md)
+            logger.info("Parsing %s via MinerU...", filename)
+            await _update_status(sid, "parsing", progress=10.0)
+            await _notify(notebook_id, source_id, "parsing", progress=0.10)
+            parse_name = os.path.splitext(filename)[0] + ".pdf" if parse_path != file_path else filename
+            parsed = await mineru_client.parse_document(parse_path, parse_name)
+            await _update_status(sid, "parsing", progress=15.0)
+            await _notify(notebook_id, source_id, "parsing", progress=0.15)
 
-            # Step 3: Parse document to markdown/text
-            elif file_type in ("txt", "md"):
-                content = await _read_text_file(file_path)
+            async def _img_progress(frac: float) -> None:
+                pct = 15.0 + frac * 70.0
+                await _update_status(sid, "parsing", progress=pct)
+                await _notify(notebook_id, source_id, "parsing", progress=pct / 100.0)
+
+            if parsed:
+                content = _inject_pdf_page_markers(parsed, parse_path)
+                image_texts = []
+                if settings.VISION_ENABLED:
+                    image_texts = await _extract_and_analyze_pdf_images(
+                        parse_path, progress_callback=_img_progress,
+                    )
+                if image_texts:
+                    content += "\n\n" + "\n\n".join(image_texts)
+                    logger.info("Added %d image descriptions to %s", len(image_texts), filename)
                 _save_parsed_content(file_path, content)
-            elif file_type in ("pdf", "docx", "pptx"):
-                # For PPTX/DOCX: convert to PDF first (MinerU only accepts PDF)
-                parse_path = file_path
-                if file_type in ("pptx", "docx"):
-                    pdf_path = _convert_to_pdf(file_path)
-                    if pdf_path:
-                        parse_path = pdf_path
+                await _update_status(sid, "parsing", progress=85.0)
+                await _notify(notebook_id, source_id, "parsing", progress=0.85)
+                logger.info("MinerU parsed %s: %d chars", filename, len(content))
+            else:
+                logger.warning("MinerU returned empty for %s", filename)
+                await _update_status(sid, "parsing", progress=32.0)
+                await _notify(notebook_id, source_id, "parsing", progress=0.32)
+                parts = []
+                if parse_path and os.path.exists(parse_path):
+                    pdf_text = _extract_pdf_text(parse_path)
+                    if pdf_text:
+                        parts.append(pdf_text)
+                await _update_status(sid, "parsing", progress=35.0)
+                await _notify(notebook_id, source_id, "parsing", progress=0.35)
 
-                # Use MinerU for high-quality document parsing
-                logger.info("Parsing %s via MinerU...", filename)
-                await update_source_status(db, sid, "parsing", progress=10.0)
-                await _notify(notebook_id, source_id, "parsing", progress=0.10)
-                parse_name = os.path.splitext(filename)[0] + ".pdf" if parse_path != file_path else filename
-                parsed = await mineru_client.parse_document(parse_path, parse_name)
-                await update_source_status(db, sid, "parsing", progress=15.0)
-                await _notify(notebook_id, source_id, "parsing", progress=0.15)
-
-                # Progress callback for image analysis (maps image progress to 15%-85% range)
-                # Image analysis is the slowest step, give it most of the progress bar
-                async def _img_progress(frac: float) -> None:
-                    pct = 15.0 + frac * 70.0  # 15% -> 85%
-                    await update_source_status(db, sid, "parsing", progress=pct)
+                async def _fallback_img_progress(frac: float) -> None:
+                    pct = 35.0 + frac * 5.0
+                    await _update_status(sid, "parsing", progress=pct)
                     await _notify(notebook_id, source_id, "parsing", progress=pct / 100.0)
 
-                if parsed:
-                    # Inject PDF page markers into markdown for accurate citation page numbers
-                    content = _inject_pdf_page_markers(parsed, parse_path)
-                    # Analyze large images with Vision LLM (MinerU extracts text but can't understand charts/diagrams)
-                    # Cap at 10 images to avoid 30+ min delays on image-heavy docs
-                    image_texts = []
-                    if settings.VISION_ENABLED:
-                        image_texts = await _extract_and_analyze_pdf_images(
-                            parse_path, progress_callback=_img_progress,
-                        )
+                if settings.VISION_ENABLED and parse_path and os.path.exists(parse_path):
+                    image_texts = await _extract_and_analyze_pdf_images(parse_path, progress_callback=_fallback_img_progress)
                     if image_texts:
-                        content += "\n\n" + "\n\n".join(image_texts)
-                        logger.info("Added %d image descriptions to %s", len(image_texts), filename)
+                        parts.extend(image_texts)
+                        logger.info("Vision extracted %d images for %s", len(image_texts), filename)
+                if parts:
+                    content = "\n\n".join(parts)
                     _save_parsed_content(file_path, content)
-                    await update_source_status(db, sid, "parsing", progress=85.0)
-                    await _notify(notebook_id, source_id, "parsing", progress=0.85)
-                    logger.info("MinerU parsed %s: %d chars", filename, len(content))
+                    logger.info("Fallback extracted %d chars for %s (text + vision)", len(content), filename)
                 else:
-                    # MinerU returned empty — extract text + analyze large images from PDF
-                    logger.warning("MinerU returned empty for %s", filename)
-                    await update_source_status(db, sid, "parsing", progress=32.0)
-                    await _notify(notebook_id, source_id, "parsing", progress=0.32)
-                    parts = []
+                    content = None
+        else:
+            logger.info("Using RAGFlow built-in parser for %s", filename)
+            content = None
 
-                    # Extract text from PDF (titles, headings, etc.)
-                    if parse_path and os.path.exists(parse_path):
-                        pdf_text = _extract_pdf_text(parse_path)
-                        if pdf_text:
-                            parts.append(pdf_text)
+        # Step 4: Upload to RAGFlow
+        await _update_status(sid, "vectorizing", progress=88.0)
+        await _notify(notebook_id, source_id, "vectorizing", progress=0.88)
 
-                    await update_source_status(db, sid, "parsing", progress=35.0)
-                    await _notify(notebook_id, source_id, "parsing", progress=0.35)
+        dataset_id = await _ensure_dataset(nid)
+        if dataset_id is None:
+            logger.warning("RAGFlow unavailable, marking source as ready without vectorization")
+            await _update_status(sid, "ready")
+            await _notify(notebook_id, source_id, "ready")
+            await _maybe_trigger_raptor(nid)
+            return
 
-                    # Progress callback for fallback image analysis (maps to 35%-40% range)
-                    async def _fallback_img_progress(frac: float) -> None:
-                        pct = 35.0 + frac * 5.0  # 35% -> 40%
-                        await update_source_status(db, sid, "parsing", progress=pct)
-                        await _notify(notebook_id, source_id, "parsing", progress=pct / 100.0)
+        if content is not None:
+            md_filename = os.path.splitext(filename)[0] + ".md"
+            doc_id = await ragflow_client.upload_document(dataset_id, md_filename, content.encode("utf-8"))
+        else:
+            with open(file_path, "rb") as f:
+                doc_id = await ragflow_client.upload_document(dataset_id, filename, f.read())
 
-                    # Analyze large visible images with vision LLM
-                    if settings.VISION_ENABLED and parse_path and os.path.exists(parse_path):
-                        image_texts = await _extract_and_analyze_pdf_images(parse_path, progress_callback=_fallback_img_progress)
-                        if image_texts:
-                            parts.extend(image_texts)
-                            logger.info("Vision extracted %d images for %s", len(image_texts), filename)
+        if doc_id is None:
+            raise Exception("Failed to upload document to RAGFlow")
 
-                    if parts:
-                        content = "\n\n".join(parts)
-                        _save_parsed_content(file_path, content)
-                        logger.info("Fallback extracted %d chars for %s (text + vision)", len(content), filename)
-                    else:
-                        content = None
-            else:
-                # Unknown type — upload raw file to RAGFlow
-                logger.info("Using RAGFlow built-in parser for %s", filename)
-                content = None
+        await _update_status(sid, "vectorizing", ragflow_dataset_id=dataset_id, ragflow_doc_id=doc_id)
 
-            # Step 4: Upload to RAGFlow
-            await update_source_status(db, sid, "vectorizing", progress=88.0)
-            await _notify(notebook_id, source_id, "vectorizing", progress=0.88)
+        upload_content = content.encode("utf-8") if content is not None else None
+        upload_md_filename = os.path.splitext(filename)[0] + ".md" if content is not None else None
 
-            dataset_id = await _ensure_dataset(db, nid)
-            if dataset_id is None:
-                # RAGFlow not available - mark as ready anyway for demo purposes
-                logger.warning(
-                    "RAGFlow unavailable, marking source as ready without vectorization"
-                )
-                await update_source_status(db, sid, "ready")
+        # Trigger RAGFlow parsing/chunking/embedding with retry on failure
+        retry_count = 0
+        while True:
+            success = await ragflow_client.parse_document(dataset_id, doc_id)
+            if not success:
+                raise Exception("Failed to trigger RAGFlow parsing")
+
+            completed = False
+            failed_status = None
+            last_progress = -1.0
+            for _ in range(180):
+                await asyncio.sleep(5)
+                doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
+                if doc_status is None:
+                    continue
+                run = doc_status.get("run", "UNSTART")
+                chunks = doc_status.get("chunk_count", 0)
+                progress = doc_status.get("progress", 0)
+                if isinstance(progress, (int, float)) and progress != last_progress:
+                    last_progress = progress
+                    overall = 0.88 + progress * 0.12
+                    await _notify(notebook_id, source_id, "vectorizing", progress=overall)
+                if run in ("DONE", "SUCCEEDED") or chunks > 0:
+                    logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
+                    completed = True
+                    break
+                if run in ("FAIL", "FAILED", "CANCEL"):
+                    failed_status = run
+                    break
+
+            if completed:
+                await _update_status(sid, "ready")
                 await _notify(notebook_id, source_id, "ready")
+                logger.info("Document processing complete: %s", filename)
                 await _maybe_trigger_raptor(nid)
-                return
-
-            # Upload to RAGFlow
-            if content is not None:
-                # Upload parsed content as .md
-                md_filename = os.path.splitext(filename)[0] + ".md"
-                doc_id = await ragflow_client.upload_document(
-                    dataset_id, md_filename, content.encode("utf-8")
-                )
-            else:
-                # Upload raw file
-                with open(file_path, "rb") as f:
-                    doc_id = await ragflow_client.upload_document(
-                        dataset_id, filename, f.read()
-                    )
-
-            if doc_id is None:
-                raise Exception("Failed to upload document to RAGFlow")
-
-            # Update source with RAGFlow IDs
-            await update_source_status(
-                db,
-                sid,
-                "vectorizing",
-                ragflow_dataset_id=dataset_id,
-                ragflow_doc_id=doc_id,
-            )
-
-            # Prepare upload args for potential retries
-            upload_content = content.encode("utf-8") if content is not None else None
-            upload_md_filename = os.path.splitext(filename)[0] + ".md" if content is not None else None
-
-            # Trigger RAGFlow parsing/chunking/embedding with retry on failure
-            retry_count = 0
-            while True:
-                success = await ragflow_client.parse_document(dataset_id, doc_id)
-                if not success:
-                    raise Exception("Failed to trigger RAGFlow parsing")
-
-                # Poll for completion (initial wait up to 15 minutes)
-                completed = False
-                failed_status = None
-                last_progress = -1.0
-                for _ in range(180):
-                    await asyncio.sleep(5)
-                    doc_status = await ragflow_client.get_document_status(dataset_id, doc_id)
-                    if doc_status is None:
-                        continue
-                    run = doc_status.get("run", "UNSTART")
-                    chunks = doc_status.get("chunk_count", 0)
-                    progress = doc_status.get("progress", 0)
-                    # Send progress update if changed (avoid spamming)
-                    # Scale RAGFlow 0-1 to overall 0.88-1.0 range
-                    if isinstance(progress, (int, float)) and progress != last_progress:
-                        last_progress = progress
-                        overall = 0.88 + progress * 0.12
-                        await _notify(notebook_id, source_id, "vectorizing", progress=overall)
-                    if run in ("DONE", "SUCCEEDED") or chunks > 0:
-                        logger.info("RAGFlow done for %s: run=%s, chunks=%d", filename, run, chunks)
-                        completed = True
-                        break
-                    if run in ("FAIL", "FAILED", "CANCEL"):
-                        failed_status = run
-                        break
-
-                if completed:
-                    await update_source_status(db, sid, "ready")
-                    await _notify(notebook_id, source_id, "ready")
-                    logger.info("Document processing complete: %s", filename)
-                    await _maybe_trigger_raptor(nid)
-                    break
-                elif failed_status:
-                    # RAGFlow failed — retry with backoff if under limit
-                    if retry_count < MAX_RETRIES:
-                        delay = RETRY_DELAYS[retry_count]
-                        retry_count += 1
-                        logger.warning(
-                            "RAGFlow FAIL for %s (retry %d/%d), waiting %ds before retry",
-                            filename, retry_count, MAX_RETRIES, delay,
-                        )
-                        await update_source_status(
-                            db, sid, "vectorizing", retry_count=retry_count,
-                            error_message=f"Retrying ({retry_count}/{MAX_RETRIES})...",
-                        )
-                        await asyncio.sleep(delay)
-                        # Delete failed doc and re-upload
-                        new_doc_id = await _retry_ragflow_upload(
-                            dataset_id, doc_id, filename,
-                            upload_content, file_path, upload_md_filename,
-                        )
-                        if new_doc_id is None:
-                            raise Exception(f"Failed to re-upload after retry {retry_count}")
-                        doc_id = new_doc_id
-                        await update_source_status(
-                            db, sid, "vectorizing", ragflow_doc_id=doc_id,
-                        )
-                        continue  # retry the while loop
-                    else:
-                        raise Exception(
-                            f"RAGFlow parsing failed with status: {failed_status} (after {MAX_RETRIES} retries)"
-                        )
+                break
+            elif failed_status:
+                if retry_count < MAX_RETRIES:
+                    delay = RETRY_DELAYS[retry_count]
+                    retry_count += 1
+                    logger.warning("RAGFlow FAIL for %s (retry %d/%d), waiting %ds", filename, retry_count, MAX_RETRIES, delay)
+                    await _update_status(sid, "vectorizing", retry_count=retry_count, error_message=f"Retrying ({retry_count}/{MAX_RETRIES})...")
+                    await asyncio.sleep(delay)
+                    new_doc_id = await _retry_ragflow_upload(dataset_id, doc_id, filename, upload_content, file_path, upload_md_filename)
+                    if new_doc_id is None:
+                        raise Exception(f"Failed to re-upload after retry {retry_count}")
+                    doc_id = new_doc_id
+                    await _update_status(sid, "vectorizing", ragflow_doc_id=doc_id)
+                    continue
                 else:
-                    # Still processing after 15min — background poll
-                    logger.info(
-                        "RAGFlow still processing %s after 15min, continuing background poll", filename
-                    )
-                    asyncio.create_task(_background_poll(sid, dataset_id, doc_id, notebook_id, source_id, filename))
-                    break
+                    raise Exception(f"RAGFlow parsing failed with status: {failed_status} (after {MAX_RETRIES} retries)")
+            else:
+                logger.info("RAGFlow still processing %s after 15min, continuing background poll", filename)
+                asyncio.create_task(_background_poll(sid, dataset_id, doc_id, notebook_id, source_id, filename))
+                break
 
-        except Exception as e:
-            logger.error("Document pipeline failed for %s: %s", filename, e)
-            async with async_session() as err_db:
-                await update_source_status(
-                    err_db, sid, "failed", error_message=str(e)
-                )
-            await _notify(notebook_id, source_id, "failed", error=str(e))
+    except Exception as e:
+        logger.error("Document pipeline failed for %s: %s", filename, e)
+        await _update_status(sid, "failed", error_message=str(e))
+        await _notify(notebook_id, source_id, "failed", error=str(e))
 
 
 async def _background_poll(
@@ -890,14 +835,14 @@ async def _background_poll(
                 chunks = doc_status.get("chunk_count", 0)
                 if run in ("DONE", "SUCCEEDED") or chunks > 0:
                     async with async_session() as db:
-                        await update_source_status(db, sid, "ready")
+                        await _update_status(sid, "ready")
                     await _notify(notebook_id, source_id, "ready")
                     logger.info("Background poll: %s ready (chunks=%d)", filename, chunks)
                     await _maybe_trigger_raptor(uuid.UUID(notebook_id))
                     return
                 if run in ("FAIL", "FAILED", "CANCEL"):
                     async with async_session() as db:
-                        await update_source_status(db, sid, "failed", error_message=f"RAGFlow: {run}")
+                        await _update_status(sid, "failed", error_message=f"RAGFlow: {run}")
                     await _notify(notebook_id, source_id, "failed", error=f"RAGFlow: {run}")
                     logger.error("Background poll: %s failed (run=%s)", filename, run)
                     return
@@ -907,7 +852,7 @@ async def _background_poll(
     # 2 hours exceeded — mark as failed
     async with _poll_semaphore:
         async with async_session() as db:
-            await update_source_status(db, sid, "failed", error_message="RAGFlow processing timed out (2h)")
+            await _update_status(sid, "failed", error_message="RAGFlow processing timed out (2h)")
     await _notify(notebook_id, source_id, "failed", error="Processing timed out")
     logger.error("Background poll timed out for %s after 2 hours", filename)
 
