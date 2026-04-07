@@ -39,7 +39,9 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
 
   // Attachments: images stay local, documents get uploaded as sources
+  const uploadIdRef = useRef(0);
   const [attachments, setAttachments] = useState<Array<{
+    uploadId: number;
     name: string;
     url: string;
     file: File;
@@ -224,17 +226,15 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     switchSession(s.id);
   };
 
-  // Upload document as source and poll status — uses file ref to match, not index
-  const uploadDocAsSource = useCallback(async (file: File) => {
-    const fileRef = file; // stable reference to match in attachments
-    const matchFile = (a: { file: File }) => a.file === fileRef;
+  // Upload document as source and poll status — same pattern as NotebookPage
+  const uploadDocAsSource = useCallback(async (file: File, uploadId: number) => {
+    const match = (a: { uploadId: number }) => a.uploadId === uploadId;
     try {
-      setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "uploading" as const, progress: 0 } : a));
       const source = await api.uploadSource(notebookId, file, undefined, (progress: number) => {
-        setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, progress } : a));
+        setAttachments((prev) => prev.map((a) => match(a) ? { ...a, progress } : a));
       });
       if (!source?.id) return;
-      setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, sourceId: source.id, status: "parsing" as const, progress: 100 } : a));
+      setAttachments((prev) => prev.map((a) => match(a) ? { ...a, sourceId: source.id, status: "parsing" as const, progress: 100 } : a));
       // Poll for ready status
       const poll = setInterval(async () => {
         try {
@@ -243,20 +243,19 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
           if (src) {
             if (src.status === "ready") {
               clearInterval(poll);
-              setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "ready" as const } : a));
+              setAttachments((prev) => prev.map((a) => match(a) ? { ...a, status: "ready" as const } : a));
             } else if (src.status === "failed") {
               clearInterval(poll);
-              setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "failed" as const } : a));
+              setAttachments((prev) => prev.map((a) => match(a) ? { ...a, status: "failed" as const } : a));
             } else {
-              setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: src.status as any, progress: src.progress ?? 0 } : a));
+              setAttachments((prev) => prev.map((a) => match(a) ? { ...a, status: src.status as any, progress: src.progress ?? 0 } : a));
             }
           }
         } catch { /* ignore */ }
       }, 3000);
-      // Timeout after 5 min
       setTimeout(() => clearInterval(poll), 300000);
     } catch {
-      setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "failed" as const } : a));
+      setAttachments((prev) => prev.map((a) => match(a) ? { ...a, status: "failed" as const } : a));
     }
   }, [notebookId]);
 
@@ -269,13 +268,13 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
         const file = item.getAsFile();
         if (!file || file.size > 5 * 1024 * 1024) { alert("Image must be under 5MB"); return; }
         const url = URL.createObjectURL(file);
-        setAttachments((prev) => [...prev, { name: file.name || `image-${Date.now()}.png`, url, file, isImage: true }]);
+        setAttachments((prev) => [...prev, { uploadId: ++uploadIdRef.current, name: file.name || `image-${Date.now()}.png`, url, file, isImage: true }]);
         return;
       }
     }
   }, []);
 
-  // File upload handler — images stay local, docs upload immediately
+  // File upload handler — images stay local, docs upload immediately (same pattern as NotebookPage)
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -283,9 +282,10 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name} exceeds 10MB limit`); continue; }
       const url = URL.createObjectURL(file);
       const isImage = file.type.startsWith("image/");
-      setAttachments((prev) => [...prev, { name: file.name, url, file, isImage, status: isImage ? undefined : "uploading" }]);
+      const uid = ++uploadIdRef.current;
+      setAttachments((prev) => [...prev, { uploadId: uid, name: file.name, url, file, isImage, status: isImage ? undefined : "uploading" }]);
       if (!isImage) {
-        uploadDocAsSource(file);
+        uploadDocAsSource(file, uid);
       }
     }
     e.target.value = "";
@@ -445,7 +445,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
       {/* Main */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* Panels */}
-        <div className={`flex-1 min-h-0 relative ${expandedModelId ? "" : `grid ${gridCols}`} gap-px bg-slate-200 overflow-hidden`}>
+        <div className={`flex-1 min-h-0 relative ${expandedModelId ? "" : `grid ${gridCols}`} gap-px bg-slate-100 overflow-hidden`}>
           {activeModels.map((model) => {
             const messages = modelChats[model.id] || [];
             const streaming = streamingContent[model.id];
@@ -469,7 +469,12 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
                 </div>
                 <div ref={(el) => { panelRefs.current[model.id] = el; }} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
                   {messages.length === 0 && !isLoading && !isStreaming && (
-                    <div className="flex items-center justify-center h-full"><p className="text-xs text-slate-300">Start a conversation</p></div>
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
+                        <div className="w-3 h-3 rounded-full bg-indigo-400" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-500">{model.name}</p>
+                    </div>
                   )}
                   {messages.map((msg, i) => (
                     <div key={i} className={msg.role === "user" ? "flex justify-end" : ""}>
