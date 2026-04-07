@@ -475,7 +475,7 @@ export default function NotebookPage() {
     executeCustomSkill,
     reset: resetStudio,
   } = useStudioStore();
-  const { members, fetchMembers, removeMember } = useSharingStore();
+  const { members, fetchMembers, removeMember, updateMemberRole } = useSharingStore();
 
   // Skill output now goes to Chat, no auto-expand needed
 
@@ -2867,7 +2867,21 @@ export default function NotebookPage() {
                     <span className={`text-[11px] flex-1 truncate ${member.status === "pending" ? "text-slate-400 italic" : "text-slate-700"}`}>
                       {member.name || member.email}
                     </span>
-                    <span className="text-[10px] text-slate-400 capitalize shrink-0">{member.role}</span>
+                    {notebook?.user_role === 'owner' && member.role !== 'owner' ? (
+                      <select
+                        value={member.role}
+                        onChange={async (e) => {
+                          await updateMemberRole(id!, member.user_id, e.target.value);
+                          fetchMembers(id!);
+                        }}
+                        className="text-[10px] text-slate-400 bg-transparent border border-slate-200 rounded px-1 py-0.5 cursor-pointer hover:border-slate-300 focus:outline-none focus:border-[#5b8c15] capitalize shrink-0"
+                      >
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Viewer</option>
+                      </select>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 capitalize shrink-0">{member.role}</span>
+                    )}
                   </div>
                 ))}
               </div>
