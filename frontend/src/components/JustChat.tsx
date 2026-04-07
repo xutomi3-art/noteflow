@@ -46,6 +46,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     isImage: boolean;
     sourceId?: string;
     status?: "uploading" | "parsing" | "vectorizing" | "ready" | "failed";
+    progress?: number;
   }>>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -226,10 +227,12 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
   // Upload document as source and poll status
   const uploadDocAsSource = useCallback(async (file: File, idx: number) => {
     try {
-      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "uploading" } : a));
-      const source = await api.uploadSource(notebookId, file);
+      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "uploading", progress: 0 } : a));
+      const source = await api.uploadSource(notebookId, file, undefined, (progress: number) => {
+        setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, progress } : a));
+      });
       if (!source?.id) return;
-      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, sourceId: source.id, status: "parsing" } : a));
+      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, sourceId: source.id, status: "parsing", progress: 100 } : a));
       // Poll for ready status
       const poll = setInterval(async () => {
         try {
@@ -243,7 +246,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
               clearInterval(poll);
               setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "failed" } : a));
             } else {
-              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: src.status as any } : a));
+              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: src.status as any, progress: src.progress ?? 0 } : a));
             }
           }
         } catch { /* ignore */ }
@@ -480,35 +483,54 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
           {/* Attachment preview */}
           {attachments.length > 0 && (
             <div className="flex gap-2 mb-2 max-w-4xl mx-auto flex-wrap">
-              {attachments.map((a, i) => (
+              {attachments.map((a, i) => {
+                const ext = a.name.split('.').pop()?.toUpperCase() || '';
+                const isImg = a.isImage;
+                const statusColor = a.status === "ready" ? "border-green-200 bg-green-50" :
+                  a.status === "failed" ? "border-red-200 bg-red-50" :
+                  a.status ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50";
+                const progress = a.progress ?? 0;
+                return (
                 <div key={i} className="relative group">
-                  {a.isImage ? (
-                    <img src={a.url} alt={a.name} className="w-16 h-16 rounded-lg object-cover border border-slate-200" />
+                  {isImg ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white pr-2 max-w-[200px]">
+                      <img src={a.url} alt={a.name} className="w-10 h-10 rounded-l-lg object-cover shrink-0" />
+                      <span className="text-[12px] text-slate-700 truncate">{a.name}</span>
+                    </div>
                   ) : (
-                    <div className={`w-20 h-16 rounded-lg border flex flex-col items-center justify-center p-1 ${
-                      a.status === "ready" ? "border-green-300 bg-green-50" :
-                      a.status === "failed" ? "border-red-300 bg-red-50" :
-                      "border-amber-300 bg-amber-50"
-                    }`}>
-                      {a.status && a.status !== "ready" && a.status !== "failed" ? (
-                        <Loader2 className="w-4 h-4 text-amber-500 animate-spin mb-0.5" />
-                      ) : a.status === "ready" ? (
-                        <Paperclip className="w-4 h-4 text-green-500 mb-0.5" />
-                      ) : a.status === "failed" ? (
-                        <X className="w-4 h-4 text-red-500 mb-0.5" />
-                      ) : (
-                        <Paperclip className="w-4 h-4 text-slate-400 mb-0.5" />
-                      )}
-                      <span className="text-[8px] text-slate-500 text-center leading-tight truncate w-full">{a.name.split('.').pop()?.toUpperCase()}</span>
+                    <div className={`relative overflow-hidden rounded-lg border ${statusColor} w-[200px]`}>
+                      {/* Progress bar fill */}
                       {a.status && a.status !== "ready" && a.status !== "failed" && (
-                        <span className="text-[7px] text-amber-600 mt-0.5">{a.status}...</span>
+                        <div className="absolute inset-y-0 left-0 bg-green-100/60 transition-all duration-300" style={{ width: `${progress}%` }} />
                       )}
+                      <div className="relative flex items-center gap-2 px-2.5 py-1.5">
+                        <div className={`shrink-0 ${a.status === "failed" ? "text-red-400" : a.status === "ready" ? "text-green-500" : "text-slate-400"}`}>
+                          {a.status && a.status !== "ready" && a.status !== "failed" ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                          ) : a.status === "failed" ? (
+                            <X className="w-3.5 h-3.5" />
+                          ) : (
+                            <Paperclip className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] text-slate-700 truncate">{a.name}</p>
+                          {a.status && a.status !== "ready" && a.status !== "failed" && (
+                            <p className="text-[10px] text-amber-600 font-medium">{a.status} {progress > 0 ? `${progress}%` : ''}</p>
+                          )}
+                          {a.status === "failed" && (
+                            <p className="text-[10px] text-red-500">Failed</p>
+                          )}
+                        </div>
+                        <span className="text-[9px] text-slate-400 font-medium shrink-0">{ext}</span>
+                      </div>
                     </div>
                   )}
                   <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-500 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">×</button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
           <div className="max-w-4xl mx-auto flex items-end gap-2">
