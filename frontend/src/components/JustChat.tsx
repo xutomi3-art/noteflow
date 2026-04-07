@@ -224,15 +224,17 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
     switchSession(s.id);
   };
 
-  // Upload document as source and poll status
-  const uploadDocAsSource = useCallback(async (file: File, idx: number) => {
+  // Upload document as source and poll status — uses file ref to match, not index
+  const uploadDocAsSource = useCallback(async (file: File) => {
+    const fileRef = file; // stable reference to match in attachments
+    const matchFile = (a: { file: File }) => a.file === fileRef;
     try {
-      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "uploading", progress: 0 } : a));
+      setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "uploading" as const, progress: 0 } : a));
       const source = await api.uploadSource(notebookId, file, undefined, (progress: number) => {
-        setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, progress } : a));
+        setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, progress } : a));
       });
       if (!source?.id) return;
-      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, sourceId: source.id, status: "parsing", progress: 100 } : a));
+      setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, sourceId: source.id, status: "parsing" as const, progress: 100 } : a));
       // Poll for ready status
       const poll = setInterval(async () => {
         try {
@@ -241,12 +243,12 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
           if (src) {
             if (src.status === "ready") {
               clearInterval(poll);
-              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "ready" } : a));
+              setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "ready" as const } : a));
             } else if (src.status === "failed") {
               clearInterval(poll);
-              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "failed" } : a));
+              setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "failed" as const } : a));
             } else {
-              setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: src.status as any, progress: src.progress ?? 0 } : a));
+              setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: src.status as any, progress: src.progress ?? 0 } : a));
             }
           }
         } catch { /* ignore */ }
@@ -254,7 +256,7 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
       // Timeout after 5 min
       setTimeout(() => clearInterval(poll), 300000);
     } catch {
-      setAttachments((prev) => prev.map((a, i) => i === idx ? { ...a, status: "failed" } : a));
+      setAttachments((prev) => prev.map((a) => matchFile(a) ? { ...a, status: "failed" as const } : a));
     }
   }, [notebookId]);
 
@@ -281,11 +283,9 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
       if (file.size > 10 * 1024 * 1024) { alert(`${file.name} exceeds 10MB limit`); continue; }
       const url = URL.createObjectURL(file);
       const isImage = file.type.startsWith("image/");
-      const newIdx = attachments.length;
       setAttachments((prev) => [...prev, { name: file.name, url, file, isImage, status: isImage ? undefined : "uploading" }]);
       if (!isImage) {
-        // Upload document as source immediately
-        setTimeout(() => uploadDocAsSource(file, newIdx), 100);
+        uploadDocAsSource(file);
       }
     }
     e.target.value = "";
@@ -329,19 +329,40 @@ export default function JustChat({ notebookId, notebookName }: JustChatProps) {
                     ))}
                   </div>
                 </div>
+                {/* Grid-based model selector — each slot has a dropdown */}
                 <div>
-                  <p className="text-[11px] font-medium text-slate-500 mb-2">Models ({selectedModelIds.length}/{gridMode} selected)</p>
-                  <div className="space-y-1">
-                    {availableModels.map((m) => {
-                      const selected = selectedModelIds.includes(m.id);
+                  <p className="text-[11px] font-medium text-slate-500 mb-2">Models</p>
+                  <div className={`grid gap-2 ${gridMode === 4 ? "grid-cols-2 grid-rows-2" : gridMode === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+                    {Array.from({ length: gridMode }).map((_, slotIdx) => {
+                      const currentModelId = selectedModelIds[slotIdx] || "";
+                      const currentModel = availableModels.find(m => m.id === currentModelId);
+                      // Models not used in other slots (except current)
+                      const usedIds = new Set(selectedModelIds.filter((_, i) => i !== slotIdx));
+                      const options = availableModels.filter(m => !usedIds.has(m.id));
                       return (
-                        <button key={m.id} onClick={() => toggleModel(m.id)}
-                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium transition-colors text-left ${
-                            selected ? "bg-indigo-50 text-indigo-700 border border-indigo-200" : "text-slate-600 hover:bg-slate-50 border border-transparent"
-                          }`}>
-                          <div className={`w-2 h-2 rounded-full ${selected ? "bg-indigo-400" : "bg-slate-300"}`} />
-                          {m.name}
-                        </button>
+                        <div key={slotIdx} className="relative">
+                          <select
+                            value={currentModelId}
+                            onChange={(e) => {
+                              const newId = e.target.value;
+                              setSelectedModelIds(prev => {
+                                const next = [...prev];
+                                while (next.length <= slotIdx) next.push("");
+                                next[slotIdx] = newId;
+                                return next.filter(Boolean);
+                              });
+                            }}
+                            className="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-[12px] font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15] cursor-pointer pr-7"
+                          >
+                            {options.map(m => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          </div>
+                          <span className="absolute -top-1.5 -left-1 bg-white px-1 text-[9px] text-slate-400">#{slotIdx + 1}</span>
+                        </div>
                       );
                     })}
                   </div>
