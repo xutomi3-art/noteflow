@@ -582,6 +582,16 @@ class ApiClient {
     return { abort: () => controller.abort() };
   }
 
+  // Meeting minutes sharing
+  async shareMeetingMinutes(notebookId: string, messageId: string): Promise<{ token: string; view_count: number }> {
+    const res = await this.request<{ data: { token: string; view_count: number } }>(`/notebooks/${notebookId}/chat/${messageId}/share-minutes`, { method: "POST" });
+    return (res as any).data ?? res;
+  }
+
+  async revokeMeetingMinutesShare(notebookId: string, messageId: string): Promise<void> {
+    await this.request(`/notebooks/${notebookId}/chat/${messageId}/share-minutes`, { method: "DELETE" });
+  }
+
   // Admin: LLM models
   async getLlmModels(): Promise<Array<{ id: string; name: string; provider: string; model_id: string; base_url: string; api_key: string; supports_search: boolean; search_type: string; enabled: boolean; sort_order: number }>> {
     return this.request("/admin/llm-models");

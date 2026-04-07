@@ -21,7 +21,8 @@ from backend.models.feedback import Feedback  # noqa: F401
 from backend.models.session import Session  # noqa: F401
 from backend.models.llm_model import LlmModel  # noqa: F401
 from backend.meeting.models import Meeting, MeetingUtterance  # noqa: F401
-from backend.api import auth, notebooks, sources, chat, notes, studio, sharing, overview, admin, asr, feedback, sessions
+from backend.models.shared_minutes import SharedMinutes  # noqa: F401
+from backend.api import auth, notebooks, sources, chat, notes, studio, sharing, overview, admin, asr, feedback, sessions, meeting_share
 from backend.meeting import router as meeting_router
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,7 @@ app.include_router(asr.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(meeting_router.router, prefix="/api")
+app.include_router(meeting_share.router, prefix="/api")
 
 
 @app.get("/api/health")

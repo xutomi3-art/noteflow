@@ -22,6 +22,7 @@ import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import PrivacyPolicyPage from '@/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '@/pages/TermsOfServicePage';
 import HelpCenterPage from '@/pages/HelpCenterPage';
+import PublicMeetingMinutesPage from '@/pages/PublicMeetingMinutesPage';
 import './index.css';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -118,6 +119,7 @@ function App() {
           <Route path="/privacy" element={<PrivacyPolicyPage />} />
           <Route path="/terms" element={<TermsOfServicePage />} />
           <Route path="/help" element={<HelpCenterPage />} />
+          <Route path="/shared/minutes/:token" element={<PublicMeetingMinutesPage />} />
           <Route path="/login" element={<GuestGuard><LoginPage /></GuestGuard>} />
           <Route path="/register" element={<GuestGuard><RegisterPage /></GuestGuard>} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

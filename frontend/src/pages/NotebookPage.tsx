@@ -1560,7 +1560,7 @@ export default function NotebookPage() {
           className={`bg-white border-r border-slate-200 flex-col overflow-x-hidden overflow-y-hidden shrink-0 ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
         >
           {/* Sources section */}
-          <div className="flex-[3] min-h-0 flex flex-col overflow-y-auto overflow-x-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden">
           <div className="h-10 px-3 flex items-center justify-between shrink-0">
             <span className="text-[13px] font-semibold text-slate-700">Sources</span>
             <button
@@ -1984,7 +1984,7 @@ export default function NotebookPage() {
           </div>{/* end Sources section wrapper */}
 
           {/* Chats */}
-          <div className="border-t border-slate-100 flex-[1] min-h-0 flex flex-col overflow-hidden">
+          <div className="border-t border-slate-100 flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="h-10 px-3 flex items-center shrink-0">
               <span className="text-[13px] font-semibold text-slate-700">Chats</span>
             </div>
@@ -2227,6 +2227,7 @@ export default function NotebookPage() {
                       <div className="flex justify-start">
                         <MeetingMinutesMessage
                           message={msg}
+                          notebookId={id!}
                           onSave={() => handleSaveMessageAsNote(msg)}
                           isSaved={savedMessageIds.has(msg.id)}
                           onCopy={() => handleCopyMessage(msg.id, msg.content)}
