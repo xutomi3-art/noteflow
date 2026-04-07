@@ -2937,6 +2937,7 @@ export default function NotebookPage() {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         notebookId={id || ""}
+        userRole={notebook?.user_role}
         sharedChat={notebook?.shared_chat}
         onSharedChatToggle={async (enabled) => {
           if (!id) return;

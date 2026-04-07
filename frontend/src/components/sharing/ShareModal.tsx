@@ -6,6 +6,7 @@ interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   notebookId: string;
+  userRole?: string;
   sharedChat?: boolean;
   onSharedChatToggle?: (enabled: boolean) => void;
   /** Called after successfully adding a member (e.g. to refresh notebook data) */
@@ -18,7 +19,7 @@ interface InvitedEmail {
   status: "sending" | "sent" | "failed";
 }
 
-export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, onSharedChatToggle, onMemberAdded }: ShareModalProps) {
+export default function ShareModal({ isOpen, onClose, notebookId, userRole, sharedChat, onSharedChatToggle, onMemberAdded }: ShareModalProps) {
   const { members, fetchMembers, createInviteLink, sendEmailInvite, removeMember, updateMemberRole } =
     useSharingStore();
 
@@ -383,7 +384,7 @@ export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, on
                     </div>
                     {member.status === "pending" ? (
                       <span className="text-[11px] text-amber-500 font-medium w-14 text-right shrink-0">Pending</span>
-                    ) : (
+                    ) : userRole === 'owner' && member.role !== 'owner' ? (
                       <select
                         value={member.role}
                         onChange={async (e) => {
@@ -395,6 +396,8 @@ export default function ShareModal({ isOpen, onClose, notebookId, sharedChat, on
                         <option value="editor">Editor</option>
                         <option value="viewer">Viewer</option>
                       </select>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 capitalize shrink-0">{member.role}</span>
                     )}
                     <button
                       onClick={() => handleRemoveMember(member.user_id)}
