@@ -321,25 +321,26 @@ def _reduce_noise(pcm_data: bytes) -> bytes:
     """Simple spectral-gating noise reduction using numpy FFT.
 
     Estimates noise floor from the quietest 10% of frames, then gates
-    frequency bins below the noise threshold. Works well for constant
-    background noise (fan, AC, keyboard) without adding dependencies.
+    frequency bins below the noise threshold. Returns same-length PCM.
     """
     import numpy as np
 
-    n = len(pcm_data) // 2
+    original_len = len(pcm_data)
+    n = original_len // 2
     if n < WHISPER_SAMPLE_RATE:  # less than 1 second, skip
         return pcm_data
 
     samples = np.frombuffer(pcm_data[:n * 2], dtype=np.int16).astype(np.float32)
+    orig_n = len(samples)
 
     # STFT parameters
     frame_len = 1024
     hop = 512
-    n_frames = (len(samples) - frame_len) // hop + 1
+    n_frames = (orig_n - frame_len) // hop + 1
     if n_frames < 4:
         return pcm_data
 
-    window = np.hanning(frame_len)
+    window = np.hanning(frame_len).astype(np.float32)
 
     # Compute STFT
     frames = np.array([
@@ -356,27 +357,33 @@ def _reduce_noise(pcm_data: bytes) -> bytes:
     noise_profile = np.mean(magnitudes[noise_indices], axis=0)
 
     # Spectral gate: subtract noise profile with soft threshold
-    gain_factor = 2.0  # how aggressively to gate (higher = more noise removed)
-    threshold = noise_profile * gain_factor
+    threshold = noise_profile * 2.0
     mask = np.clip((magnitudes - threshold) / (magnitudes + 1e-8), 0.0, 1.0)
     cleaned = magnitudes * mask * np.exp(1j * phases)
 
     # Inverse STFT (overlap-add)
-    output = np.zeros(len(samples), dtype=np.float32)
-    window_sum = np.zeros(len(samples), dtype=np.float32)
+    output = np.zeros(orig_n, dtype=np.float32)
+    window_sum = np.zeros(orig_n, dtype=np.float32)
     for i in range(n_frames):
-        frame = np.fft.irfft(cleaned[i], n=frame_len)
+        frame = np.fft.irfft(cleaned[i], n=frame_len).astype(np.float32)
         start = i * hop
-        output[start: start + frame_len] += frame * window
-        window_sum[start: start + frame_len] += window ** 2
+        end = min(start + frame_len, orig_n)
+        length = end - start
+        output[start:end] += frame[:length] * window[:length]
+        window_sum[start:end] += window[:length] ** 2
 
-    # Normalize by window overlap
-    window_sum = np.maximum(window_sum, 1e-8)
-    output = output / window_sum
+    # Normalize by window overlap, keep original where no overlap
+    valid = window_sum > 1e-8
+    output[valid] = output[valid] / window_sum[valid]
+    output[~valid] = samples[~valid]
 
-    # Clip and convert back to int16
-    output = np.clip(output, -32768, 32767).astype(np.int16)
-    return output.tobytes()
+    # Clip, convert to int16, ensure exact same byte length
+    result = np.clip(output, -32768, 32767).astype(np.int16)
+    result_bytes = result.tobytes()
+    # Pad or trim to match original length exactly
+    if len(result_bytes) < original_len:
+        result_bytes += b'\x00' * (original_len - len(result_bytes))
+    return result_bytes[:original_len]
 
 
 def _normalize_audio(pcm_data: bytes, target_rms: int = WHISPER_TARGET_RMS) -> bytes:
