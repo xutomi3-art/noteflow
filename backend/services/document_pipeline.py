@@ -853,11 +853,19 @@ async def process_document(
                 break
             elif failed_status:
                 # RAGFlow native parser failed — try manual chunking as fallback
-                if content and retry_count == 0:
+                # Read content from file if not already in memory
+                fallback_content = content
+                if not fallback_content and file_path and os.path.exists(file_path):
+                    try:
+                        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                            fallback_content = f.read()
+                    except Exception:
+                        pass
+                if fallback_content and retry_count == 0:
                     retry_count = MAX_RETRIES  # skip further retries, go straight to manual
                     logger.warning("RAGFlow parse failed for %s, trying manual chunk upload", filename)
                     await _update_status(sid, "vectorizing", error_message="Manual chunking...")
-                    chunk_texts = _split_into_chunks(content, chunk_size=800)
+                    chunk_texts = _split_into_chunks(fallback_content, chunk_size=800)
                     added = await ragflow_client.add_chunks(dataset_id, doc_id, chunk_texts)
                     if added > 0:
                         logger.info("Manual chunking for %s: %d chunks added", filename, added)
