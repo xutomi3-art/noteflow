@@ -13,7 +13,7 @@ from backend.services.event_bus import event_bus
 from backend.services.mineru_client import mineru_client
 from backend.services.ragflow_client import ragflow_client
 from backend.services.asr_service import AUDIO_EXTENSIONS
-from backend.services.qwen_client import qwen_client, IMAGE_EXTENSIONS
+from backend.services.llm_client import llm_client, IMAGE_EXTENSIONS
 from backend.services.source_service import get_source, update_source_status
 
 logger = logging.getLogger(__name__)
@@ -304,6 +304,46 @@ def _save_parsed_content(file_path: str, content: str) -> str:
     return md_path
 
 
+_DIGEST_PROMPT = """Read the following document carefully and extract a comprehensive digest covering ALL of the following dimensions. Be specific — include actual names, numbers, dates, and details, not vague descriptions.
+
+1. **Document Type & Purpose** — What kind of document is this? What is its purpose?
+2. **Structure** — Main sections/chapters and what each covers
+3. **Key Facts & Data** — Important numbers, dates, amounts, percentages, metrics
+4. **People & Organizations** — Names, roles, relationships mentioned
+5. **Decisions & Conclusions** — Any decisions made, conclusions reached, agreements
+6. **Requirements & Conditions** — Terms, conditions, requirements, constraints
+7. **Risks & Issues** — Problems, risks, challenges, concerns raised
+8. **Action Items** — Tasks, next steps, deadlines, responsibilities
+
+Write in the same language as the document. Use bullet points. Aim for 2000-3000 characters.
+
+DOCUMENT:
+{content}"""
+
+
+async def _generate_digest(file_path: str, content: str) -> None:
+    """Generate a document digest using LLM. Saves as {source_id}_digest.md."""
+    try:
+        digest_path = os.path.splitext(file_path)[0] + "_digest.md"
+        if os.path.exists(digest_path):
+            return  # Already generated
+
+        prompt = _DIGEST_PROMPT.format(content=content[:300000])  # Cap input to avoid extreme cases
+        messages = [
+            {"role": "system", "content": "You are a document analysis assistant. Extract key information concisely."},
+            {"role": "user", "content": prompt},
+        ]
+        digest = await llm_client.generate(messages, max_tokens=4096)
+        if digest and not digest.startswith("[Error"):
+            with open(digest_path, "w", encoding="utf-8") as f:
+                f.write(digest)
+            logger.info("Digest generated: %s (%d chars)", digest_path, len(digest))
+        else:
+            logger.warning("Digest generation returned empty/error for %s", file_path)
+    except Exception as e:
+        logger.warning("Digest generation failed for %s: %s", file_path, e)
+
+
 def _convert_to_pdf(file_path: str) -> str | None:
     """Convert PPTX/DOCX to PDF using LibreOffice. Returns PDF path or None."""
     import subprocess
@@ -353,7 +393,7 @@ async def _render_and_analyze_pages(pdf_path: str) -> list[str]:
                 pix.save(temp_path)
                 import time as _time
                 t_start = _time.time()
-                desc = await qwen_client.analyze_image(
+                desc = await llm_client.analyze_image(
                     temp_path,
                     f"slide_{page_num + 1}.png",
                 )
@@ -523,7 +563,7 @@ async def _extract_and_analyze_pdf_images(
             nonlocal completed
             try:
                 t_start = _time.time()
-                desc = await qwen_client.analyze_image(
+                desc = await llm_client.analyze_image(
                     temp_path, f"page{page_num + 1}_img{xref}.{ext}",
                 )
                 elapsed = round(_time.time() - t_start, 1)
@@ -647,7 +687,7 @@ async def process_document(
         # Step 2c: Route images to vision LLM pipeline
         elif file_type in IMAGE_EXTENSIONS:
             logger.info("Processing image via vision LLM: %s", filename)
-            content = await qwen_client.analyze_image(file_path, filename)
+            content = await llm_client.analyze_image(file_path, filename)
             md_path = file_path.rsplit(".", 1)[0] + ".md"
             header = f"# Image: {filename}\n\n"
             with open(md_path, "w", encoding="utf-8") as f:
@@ -723,6 +763,10 @@ async def process_document(
             logger.info("Using RAGFlow built-in parser for %s", filename)
             content = None
 
+        # Generate digest in background (parallel with RAGFlow vectorization)
+        if content:
+            asyncio.create_task(_generate_digest(file_path, content))
+
         # Step 4: Upload to RAGFlow
         await _update_status(sid, "vectorizing", progress=88.0)
         await _notify(notebook_id, source_id, "vectorizing", progress=0.88)
@@ -735,12 +779,14 @@ async def process_document(
             await _maybe_trigger_raptor(nid)
             return
 
+        # RAGFlow v0.24.0 naive parser fails with non-ASCII filenames (FileNotFoundError).
+        # Use source_id as safe filename for RAGFlow, preserving the extension.
+        safe_name = f"{source_id}.md" if content is not None else f"{source_id}{os.path.splitext(filename)[1]}"
         if content is not None:
-            md_filename = os.path.splitext(filename)[0] + ".md"
-            doc_id = await ragflow_client.upload_document(dataset_id, md_filename, content.encode("utf-8"))
+            doc_id = await ragflow_client.upload_document(dataset_id, safe_name, content.encode("utf-8"))
         else:
             with open(file_path, "rb") as f:
-                doc_id = await ragflow_client.upload_document(dataset_id, filename, f.read())
+                doc_id = await ragflow_client.upload_document(dataset_id, safe_name, f.read())
 
         if doc_id is None:
             raise Exception("Failed to upload document to RAGFlow")
@@ -748,7 +794,7 @@ async def process_document(
         await _update_status(sid, "vectorizing", ragflow_dataset_id=dataset_id, ragflow_doc_id=doc_id)
 
         upload_content = content.encode("utf-8") if content is not None else None
-        upload_md_filename = os.path.splitext(filename)[0] + ".md" if content is not None else None
+        upload_md_filename = safe_name if content is not None else None
 
         # Trigger RAGFlow parsing/chunking/embedding with retry on failure
         retry_count = 0
