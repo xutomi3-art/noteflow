@@ -95,6 +95,7 @@ export interface CustomSkill {
   notebook_id: string;
   all_notebooks: boolean;
   shared_with_team: boolean;
+  full_document: boolean;
 }
 
 export interface Session {

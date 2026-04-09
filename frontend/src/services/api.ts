@@ -704,14 +704,14 @@ class ApiClient {
     return this.request(`/notebooks/${notebookId}/studio/custom-skills`);
   }
 
-  async createCustomSkill(notebookId: string, data: { name: string; prompt: string; icon?: string; all_notebooks?: boolean; shared_with_team?: boolean }): Promise<CustomSkill> {
+  async createCustomSkill(notebookId: string, data: { name: string; prompt: string; icon?: string; all_notebooks?: boolean; shared_with_team?: boolean; full_document?: boolean }): Promise<CustomSkill> {
     return this.request(`/notebooks/${notebookId}/studio/custom-skills`, {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async updateCustomSkill(notebookId: string, skillId: string, data: { name?: string; prompt?: string; all_notebooks?: boolean; shared_with_team?: boolean }): Promise<void> {
+  async updateCustomSkill(notebookId: string, skillId: string, data: { name?: string; prompt?: string; all_notebooks?: boolean; shared_with_team?: boolean; full_document?: boolean }): Promise<void> {
     await this.request(`/notebooks/${notebookId}/studio/custom-skills/${skillId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
