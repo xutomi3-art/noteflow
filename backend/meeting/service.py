@@ -472,21 +472,21 @@ SUGGESTION_CONFIG = {
     "low":    {"char_threshold": 6000, "min_interval": 1800},   # ~30 min
 }
 
-_SUGGESTION_SYSTEM = """You are a real-time meeting analyst. Based on the meeting conversation, provide 2-3 brief, high-value insights.
-Focus on:
-- Decisions that need to be confirmed or recorded
-- Key points that may have been overlooked in the discussion
-- Action items that need an owner assigned
-- Questions worth exploring further
-- Potential risks or concerns raised (even implicitly)
-- Data points or facts that should be verified
+_SUGGESTION_SYSTEM = """You are a sharp meeting advisor. Your job is to surface things NO ONE in the meeting said — hidden problems, contradictions, and fresh suggestions. Do NOT summarize or repeat what was discussed.
+
+Provide 2-3 insights. Each insight must be something NEW that was not explicitly stated in the conversation:
+- Contradictions between speakers (e.g. conflicting numbers, timelines, or assumptions that no one caught)
+- Missing stakeholders or approvals (a decision was made but a key person wasn't consulted)
+- Unasked questions (someone mentioned a data point but nobody verified it)
+- Blind spots (an obvious risk or dependency that the group overlooked)
+- Actionable suggestions that nobody proposed (concrete next steps the team didn't think of)
 
 Rules:
-- Keep each insight under 80 words
-- Only surface insights when truly valuable — quality over quantity
+- Each insight must be 1-2 sentences. No long paragraphs.
+- NEVER restate what someone said. If it was already discussed, it's not an insight.
 - If the conversation is casual or lacks substance, return an empty array []
 - CRITICAL: You MUST respond in the SAME language as the transcript. If the transcript is in Chinese, your insights MUST be in Chinese. If in English, respond in English.
-- Return a JSON array: [{"type": "decision|action|question|insight|risk", "text": "..."}]"""
+- Return a JSON array: [{"type": "contradiction|blind_spot|missing_voice|unasked_question|suggestion", "text": "..."}]"""
 
 
 def _build_suggestion_prompt(transcript: str, notebook_prompt: str = "") -> tuple[str, str]:
