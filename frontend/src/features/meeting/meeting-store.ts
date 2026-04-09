@@ -49,11 +49,18 @@ interface MeetingState {
   _mediaStream: MediaStream | null;
   _workletNode: AudioWorkletNode | null;
   _durationInterval: ReturnType<typeof setInterval> | null;
+  _autoEndTimeout: ReturnType<typeof setTimeout> | null;
+  _pingInterval: ReturnType<typeof setInterval> | null;
+  _pausedAt: number | null; // timestamp when paused due to navigation
 
   startMeeting: (notebookId: string) => Promise<void>;
   resumeExistingMeeting: (notebookId: string, meeting: Meeting) => Promise<void>;
   pauseMeeting: () => void;
   resumeMeeting: () => void;
+  /** Pause recording when user leaves the notebook page */
+  pauseOnLeave: () => void;
+  /** Resume recording when user returns to the notebook page */
+  resumeOnReturn: () => boolean;
   endMeeting: () => Promise<{ source_id: string } | null>;
   renameSpeaker: (speakerId: string, name: string) => void;
   reset: () => void;
@@ -74,6 +81,9 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
   _mediaStream: null,
   _workletNode: null,
   _durationInterval: null,
+  _autoEndTimeout: null,
+  _pingInterval: null,
+  _pausedAt: null,
 
   startMeeting: async (notebookId: string) => {
     try {
@@ -380,6 +390,63 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
     set({ isPaused: false });
   },
 
+  pauseOnLeave: () => {
+    const { isRecording, isPaused, _ws, _autoEndTimeout, _pingInterval } = get();
+    if (!isRecording || isPaused) return;
+
+    // Pause the recording
+    if (_ws?.readyState === WebSocket.OPEN) {
+      _ws.send(JSON.stringify({ type: "pause" }));
+    }
+    set({ isPaused: true, _pausedAt: Date.now() });
+
+    // Start ping keepalive to prevent Nginx proxy_read_timeout during pause
+    if (_pingInterval) clearInterval(_pingInterval);
+    const ping = setInterval(() => {
+      const ws = get()._ws;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 30_000); // every 30s
+
+    // Auto-end after 5 minutes if user doesn't return
+    if (_autoEndTimeout) clearTimeout(_autoEndTimeout);
+    const timeout = setTimeout(() => {
+      const state = get();
+      if (state.isRecording && state.isPaused && state._pausedAt) {
+        state.endMeeting();
+        state.reset();
+      }
+    }, 5 * 60 * 1000);
+    set({ _autoEndTimeout: timeout, _pingInterval: ping });
+  },
+
+  resumeOnReturn: () => {
+    const { isRecording, isPaused, _pausedAt, _ws, _autoEndTimeout, _pingInterval } = get();
+    if (!isRecording || !isPaused || !_pausedAt) return false;
+
+    // Cancel auto-end timer and ping keepalive
+    if (_autoEndTimeout) clearTimeout(_autoEndTimeout);
+    if (_pingInterval) clearInterval(_pingInterval);
+    set({ _autoEndTimeout: null, _pingInterval: null });
+
+    // Check if paused for more than 5 minutes
+    const elapsed = Date.now() - _pausedAt;
+    if (elapsed > 5 * 60 * 1000) {
+      // Too long — auto-end
+      get().endMeeting();
+      get().reset();
+      return false;
+    }
+
+    // Resume
+    if (_ws?.readyState === WebSocket.OPEN) {
+      _ws.send(JSON.stringify({ type: "resume" }));
+    }
+    set({ isPaused: false, _pausedAt: null });
+    return true;
+  },
+
   endMeeting: async () => {
     const { activeMeeting, _ws, _audioContext, _mediaStream, _workletNode, _durationInterval } = get();
     if (!activeMeeting) return null;
@@ -457,8 +524,9 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
   },
 
   reset: () => {
-    const { _durationInterval, _ws, _mediaStream, _audioContext } = get();
+    const { _durationInterval, _ws, _mediaStream, _audioContext, _autoEndTimeout } = get();
     if (_durationInterval) clearInterval(_durationInterval);
+    if (_autoEndTimeout) clearTimeout(_autoEndTimeout);
     if (_ws) _ws.close();
     if (_mediaStream) _mediaStream.getTracks().forEach((t) => t.stop());
     if (_audioContext) _audioContext.close();
@@ -475,6 +543,19 @@ export const useMeetingStore = create<MeetingState>((set, get) => ({
       _mediaStream: null,
       _workletNode: null,
       _durationInterval: null,
+      _autoEndTimeout: null,
+      _pingInterval: null,
+      _pausedAt: null,
     });
   },
 }));
+
+// Pause recording when browser tab/window is closed
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    const state = useMeetingStore.getState();
+    if (state.isRecording && !state.isPaused) {
+      state.pauseOnLeave();
+    }
+  });
+}

@@ -344,6 +344,15 @@ export default function NotebookPage() {
   // Check for active meeting on page load (e.g. after refresh)
   // Skip check for 5s after ending a meeting to avoid false "interrupted" prompt
   const meetingEndedAtRef = useRef(0);
+  // Auto-resume recording if user returns to a notebook with a paused meeting
+  useEffect(() => {
+    if (!id) return;
+    const state = useMeetingStore.getState();
+    if (state.isRecording && state.isPaused && state._pausedAt && state.activeMeeting?.notebook_id === id) {
+      state.resumeOnReturn();
+    }
+  }, [id]);
+
   useEffect(() => {
     if (!id || meetingActive) return;
     if (Date.now() - meetingEndedAtRef.current < 5000) return;
@@ -384,6 +393,7 @@ export default function NotebookPage() {
   const [newSkillPrompt, setNewSkillPrompt] = useState("");
   const [newSkillAllNb, setNewSkillAllNb] = useState(true);
   const [newSkillShared, setNewSkillShared] = useState(true);
+  const [newSkillFullDoc, setNewSkillFullDoc] = useState(true);
   const [isCreatingSkill, setIsCreatingSkill] = useState(false);
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [rightSkillFlex, setRightSkillFlex] = useState(3); // Skills:Team = 3:1 (75%:25%)
@@ -582,9 +592,18 @@ export default function NotebookPage() {
 
     return () => {
       cancelled = true;
-      cleanup();
-      resetChat();
-      resetStudio();
+      // Pause recording FIRST before any cleanup (cleanup closes SSE which can
+      // tear down the shared HTTP/2 connection and kill the meeting WebSocket)
+      const meetingState = useMeetingStore.getState();
+      if (meetingState.isRecording && meetingState.activeMeeting?.notebook_id === id) {
+        meetingState.pauseOnLeave();
+      }
+      // Delay cleanup to let the pause message reach the server
+      setTimeout(() => {
+        cleanup();
+        resetChat();
+        resetStudio();
+      }, 100);
       setSavedMessageIds(new Set());
       setOverviewSaved(false);
     };
@@ -1107,6 +1126,12 @@ export default function NotebookPage() {
   );
 
   const skillDisabled = selectedIds.size === 0 && !meetingActive;
+
+  // Warn if selected sources are very large (>30MB total, like Claude's limit)
+  const selectedTotalSize = useMemo(() => {
+    return sources.filter(s => selectedIds.has(s.id)).reduce((sum, s) => sum + (s.file_size || 0), 0);
+  }, [sources, selectedIds]);
+  const skillSizeWarning = selectedTotalSize > 30 * 1024 * 1024;
 
   const handleStudioAction = useCallback(
     async (action: string) => {
@@ -2586,6 +2611,7 @@ export default function NotebookPage() {
                   Select at least one source to use Skills
                 </div>
               )}
+              {/* Size warning moved to custom skill buttons */}
               {/* Summary */}
               <button
                 onClick={() => handleStudioAction("summary")}
@@ -2669,6 +2695,7 @@ export default function NotebookPage() {
                 )}
                 <div className="text-[11px] font-bold text-rose-900">Presentation</div>
               </button>
+
             </div>
 
             {/* Custom Skills */}
@@ -2692,7 +2719,12 @@ export default function NotebookPage() {
                       ) : (
                         <span className="text-sm mb-2 block">{skill.icon}</span>
                       )}
-                      <div className="text-[11px] font-bold text-slate-700 truncate">{skill.name}</div>
+                      <div className="text-[11px] font-bold text-slate-700 truncate flex items-center gap-1">
+                        {skill.name}
+                        {skill.full_document && skillSizeWarning && (
+                          <span title={`Selected docs total ${(selectedTotalSize / 1024 / 1024).toFixed(1)} MB (exceeds 30MB). Will use document digest instead of full text.`} className="text-amber-500 cursor-help text-[10px]">⚠️</span>
+                        )}
+                      </div>
                       {(skill.created_by === user?.id || notebook?.user_role === 'owner' || notebook?.user_role === 'editor') && (
                         <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
                           <button
@@ -2702,6 +2734,7 @@ export default function NotebookPage() {
                               setNewSkillPrompt(skill.prompt);
                               setNewSkillAllNb(skill.all_notebooks);
                               setNewSkillShared(skill.shared_with_team);
+                              setNewSkillFullDoc(skill.full_document || false);
                               setEditingSkillId(skill.id);
                               setIsCreateSkillOpen(true);
                             }}
@@ -2726,7 +2759,7 @@ export default function NotebookPage() {
             {/* + New Skill */}
             <div className="px-4 mb-4">
               <button
-                onClick={() => { setEditingSkillId(null); setNewSkillName(""); setNewSkillPrompt(""); setNewSkillAllNb(true); setNewSkillShared(false); setIsCreateSkillOpen(true); }}
+                onClick={() => { setEditingSkillId(null); setNewSkillName(""); setNewSkillPrompt(""); setNewSkillAllNb(true); setNewSkillShared(true); setNewSkillFullDoc(true); setIsCreateSkillOpen(true); }}
                 className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-slate-200 text-[12px] text-slate-500 hover:text-[#5b8c15] hover:border-[#5b8c15]/40 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -3189,6 +3222,17 @@ export default function NotebookPage() {
                   <input type="checkbox" checked={newSkillShared} onChange={(e) => setNewSkillShared(e.target.checked)} className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5" />
                   <span className="text-[12px] text-slate-700">Share with team in this notebook</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={newSkillFullDoc} onChange={(e) => setNewSkillFullDoc(e.target.checked)} className="rounded text-[#5b8c15] focus:ring-[#5b8c15] w-3.5 h-3.5" />
+                  <span className="text-[12px] text-slate-700">Full document mode</span>
+                  <span className="text-[10px] text-slate-400">(read entire documents, max 30MB per document)</span>
+                </label>
+                {newSkillFullDoc && skillSizeWarning && (
+                  <div className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
+                    <span className="shrink-0">⚠️</span>
+                    <span>Currently selected documents total {(selectedTotalSize / 1024 / 1024).toFixed(1)} MB. Full document mode may not work well with very large selections.</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
@@ -3200,17 +3244,18 @@ export default function NotebookPage() {
                   setIsCreatingSkill(true);
                   try {
                     if (editingSkillId) {
-                      await api.updateCustomSkill(id, editingSkillId, { name: newSkillName.trim(), prompt: newSkillPrompt.trim(), all_notebooks: newSkillAllNb, shared_with_team: newSkillShared });
+                      await api.updateCustomSkill(id, editingSkillId, { name: newSkillName.trim(), prompt: newSkillPrompt.trim(), all_notebooks: newSkillAllNb, shared_with_team: newSkillShared, full_document: newSkillFullDoc });
                       await fetchCustomSkills(id);
                     } else {
-                      await createCustomSkill(id, { name: newSkillName.trim(), prompt: newSkillPrompt.trim(), all_notebooks: newSkillAllNb, shared_with_team: newSkillShared });
+                      await createCustomSkill(id, { name: newSkillName.trim(), prompt: newSkillPrompt.trim(), all_notebooks: newSkillAllNb, shared_with_team: newSkillShared, full_document: newSkillFullDoc });
                     }
                     setIsCreateSkillOpen(false);
                     setEditingSkillId(null);
                     setNewSkillName("");
                     setNewSkillPrompt("");
                     setNewSkillAllNb(true);
-                    setNewSkillShared(false);
+                    setNewSkillShared(true);
+                    setNewSkillFullDoc(true);
                   } catch { /* silently fail */ }
                   finally { setIsCreatingSkill(false); }
                 }}
@@ -3251,7 +3296,8 @@ export default function NotebookPage() {
                 <p className="text-[11px] text-slate-400 mb-3">Set the AI's response style and role for this notebook</p>
                 {(() => {
                   const PRESETS: { key: string; label: string; description: string; prompt: string }[] = [
-                    { key: "balanced", label: "Balanced", description: "Default", prompt: "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format." },
+                    { key: "balanced", label: "Balanced", description: "Default", prompt: "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format.\n7. Match response length to question complexity: simple factual questions get short direct answers; analytical or multi-part questions get thorough, well-structured responses with headers, bullet points, and numbered lists.\n8. When a topic warrants depth, don't cut short — provide enough context, reasoning, and explanation so the reader fully understands without needing follow-up questions." },
+                    { key: "detailed", label: "Detailed", description: "In-depth", prompt: "You are a thorough, detail-oriented research assistant that provides comprehensive answers:\n\n1. Use the provided documents as your primary source of facts. Cite with [1], [2].\n2. Aim for 500-800 words per response. Cover the topic from multiple angles — don't just answer the surface question.\n3. Structure every response with clear sections using Markdown headers (##), bullet points, and numbered lists.\n4. For each key point, provide: the fact, its context, why it matters, and any implications.\n5. When multiple documents discuss related topics, cross-reference and synthesize them into a unified analysis.\n6. Include relevant background information and context that helps the reader understand the full picture.\n7. For advisory questions, provide detailed pros/cons analysis, risk assessment, and step-by-step recommendations.\n8. End with a brief summary of key takeaways and suggested next steps or follow-up questions.\n9. If information is incomplete, explicitly note what's missing and what additional data would strengthen the analysis.\n10. Use tables for comparisons and structured data when appropriate." },
                     { key: "strict", label: "Strict", description: "Sources only", prompt: "You are a precise, document-grounded research assistant.\n\n1. Answer ONLY based on information explicitly stated in the provided documents. Do not infer, speculate, or add external knowledge — even for advisory questions.\n2. If the documents do not contain the answer, state clearly: \"The provided documents do not contain this information.\" Do not attempt to guess or fill gaps with general knowledge.\n3. If you cannot cite a claim, do not say it. Every statement must be traceable to a specific source.\n4. When multiple documents discuss the same topic, compare and note any differences or contradictions between them.\n5. Preserve the original terminology and phrasing from the documents — do not paraphrase key terms.\n6. If a question is ambiguous, ask for clarification rather than assuming intent.\n7. When presenting information, clearly separate what the documents state from any logical inferences." },
                     { key: "advisor", label: "Advisor", description: "Strategic", prompt: "You are a senior strategic advisor with deep analytical expertise. Your role is to help decision-makers:\n\n1. Go beyond summarizing — provide critical analysis, identify patterns, and surface non-obvious insights that the reader might miss.\n2. For every key finding, assess its implications: What does this mean? What are the risks? What opportunities does it create?\n3. Provide actionable recommendations with clear reasoning. Frame suggestions as \"Consider...\", \"Recommend...\", or \"Priority action:...\"\n4. When relevant, present pros/cons analysis or risk-reward tradeoffs in structured format (tables or bullet points).\n5. Connect information across multiple documents to build a comprehensive picture — don't treat each source in isolation.\n6. Flag any gaps in the available information that would affect decision quality.\n7. Prioritize insights by impact and urgency. Lead with the most important findings.\n8. Add your own expert interpretation on top of document evidence — the user expects analysis, not just summaries." },
                     { key: "concise", label: "Concise", description: "Brief", prompt: "You are a concise, no-nonsense assistant optimized for speed and clarity:\n\n1. Keep every response under 150 words unless the user explicitly asks for more detail.\n2. Use bullet points as the default format. No lengthy paragraphs.\n3. Lead with the direct answer in the first sentence — no preamble or context-setting.\n4. Maximum 3-5 bullet points per response. Each bullet should be one clear, complete thought.\n5. Use bold for key terms, numbers, and names to make scanning easy.\n6. Skip pleasantries, filler phrases (\"Great question!\", \"Based on the documents...\"), and restating the question.\n7. If the answer requires nuance, give the short answer first, then add a \"Details:\" section only if necessary.\n8. For yes/no questions, start with \"Yes\" or \"No\" immediately." },
@@ -3394,7 +3440,11 @@ export default function NotebookPage() {
         const PERSONA_PRESETS: { key: string; label: string; description: string; prompt: string }[] = [
           {
             key: "balanced", label: "Balanced", description: "Default behavior",
-            prompt: "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format.",
+            prompt: "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format.\n7. Match response length to question complexity: simple factual questions get short direct answers; analytical or multi-part questions get thorough, well-structured responses with headers, bullet points, and numbered lists.\n8. When a topic warrants depth, don't cut short — provide enough context, reasoning, and explanation so the reader fully understands without needing follow-up questions.",
+          },
+          {
+            key: "detailed", label: "Detailed", description: "In-depth answers",
+            prompt: "You are a thorough, detail-oriented research assistant that provides comprehensive answers:\n\n1. Use the provided documents as your primary source of facts. Cite with [1], [2].\n2. Aim for 500-800 words per response. Cover the topic from multiple angles — don't just answer the surface question.\n3. Structure every response with clear sections using Markdown headers (##), bullet points, and numbered lists.\n4. For each key point, provide: the fact, its context, why it matters, and any implications.\n5. When multiple documents discuss related topics, cross-reference and synthesize them into a unified analysis.\n6. Include relevant background information and context that helps the reader understand the full picture.\n7. For advisory questions, provide detailed pros/cons analysis, risk assessment, and step-by-step recommendations.\n8. End with a brief summary of key takeaways and suggested next steps or follow-up questions.\n9. If information is incomplete, explicitly note what's missing and what additional data would strengthen the analysis.\n10. Use tables for comparisons and structured data when appropriate.",
           },
           {
             key: "strict", label: "Strict", description: "Only from sources",

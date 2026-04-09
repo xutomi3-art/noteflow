@@ -68,6 +68,27 @@ async def _check_suggestion_trigger(session, meeting_id: str, notebook_id: str, 
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/meetings", tags=["meetings"])
 
+# Separate router for user-level meeting endpoints (no notebook scope)
+user_meeting_router = APIRouter(prefix="/meetings", tags=["meetings"])
+
+
+@user_meeting_router.get("/my-active", response_model=list[MeetingOut])
+async def get_my_active_meetings(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all active (recording/paused) meetings for the current user across all notebooks."""
+    from backend.meeting.models import Meeting
+    from sqlalchemy import select
+    result = await db.execute(
+        select(Meeting).where(
+            Meeting.created_by == user.id,
+            Meeting.status.in_(["recording", "paused"]),
+        )
+    )
+    meetings = list(result.scalars().all())
+    return [_to_out(m) for m in meetings]
+
 
 @router.post("", response_model=MeetingOut)
 async def create_meeting(
@@ -287,6 +308,8 @@ async def websocket_audio(
                         asr_client.pause_session(meeting_id)
                     elif msg.get("type") == "resume":
                         asr_client.resume_session(meeting_id)
+                    elif msg.get("type") == "ping":
+                        pass  # keepalive — just keeps the connection alive
                     elif msg.get("type") == "end":
                         break
         except WebSocketDisconnect:
@@ -380,12 +403,31 @@ async def websocket_audio(
     for task in pending:
         task.cancel()
 
-    # Cleanup: only close ASR session if it's still the one we started
-    # (a new WebSocket may have created a new session via resume)
+    # On disconnect: pause (not end) the ASR session, schedule auto-end in 5 min.
+    # If user reconnects within 5 min (resume), the new WS handler will cancel this.
     current_session = asr_client.get_session(meeting_id)
     try:
-        if current_session is session:
-            await asr_client.end_session(meeting_id)
+        if current_session is session and not current_session.is_ended:
+            asr_client.pause_session(meeting_id)
+            logger.info("Meeting WS disconnected, ASR paused: %s (auto-end in 5 min)", meeting_id)
+
+            # Schedule auto-end after 5 minutes
+            async def _auto_end_after_disconnect():
+                await asyncio.sleep(300)  # 5 minutes
+                cur = asr_client.get_session(meeting_id)
+                if cur is session and cur.is_paused and not cur.is_ended:
+                    logger.info("Meeting %s auto-ending after 5 min disconnect", meeting_id)
+                    final = await asr_client.end_session(meeting_id)
+                    # Finalize meeting in DB
+                    try:
+                        async with async_session() as db:
+                            await service.end_meeting(db, uuid.UUID(meeting_id), final)
+                    except Exception as e2:
+                        logger.error("Auto-end DB finalize failed: %s", e2)
+
+            asyncio.create_task(_auto_end_after_disconnect())
+        elif current_session is session and current_session.is_ended:
+            pass  # Already ended normally
     except Exception as e:
         logger.warning("Meeting ASR cleanup error: %s", e)
 
