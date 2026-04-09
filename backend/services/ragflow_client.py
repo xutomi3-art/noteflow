@@ -145,6 +145,28 @@ class RAGFlowClient:
             logger.error("RAGFlow parse_document failed: %s", e)
             return False
 
+    async def add_chunks(self, dataset_id: str, document_id: str, chunks: list[str]) -> int:
+        """Manually add pre-split chunks to a document (bypasses RAGFlow's parser).
+
+        Returns number of successfully added chunks.
+        """
+        added = 0
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT, limits=_POOL_LIMITS) as client:
+                for chunk_text in chunks:
+                    if not chunk_text.strip():
+                        continue
+                    resp = await client.post(
+                        f"{self.base_url}/api/v1/datasets/{dataset_id}/documents/{document_id}/chunks",
+                        headers=self._headers,
+                        json={"content": chunk_text},
+                    )
+                    if resp.status_code == 200 and resp.json().get("code") == 0:
+                        added += 1
+        except Exception as e:
+            logger.error("RAGFlow add_chunks failed after %d chunks: %s", added, e)
+        return added
+
     async def get_document_status(
         self, dataset_id: str, document_id: str
     ) -> dict | None:

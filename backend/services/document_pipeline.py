@@ -606,6 +606,25 @@ async def _extract_and_analyze_pdf_images(
     return descriptions
 
 
+def _split_into_chunks(text: str, chunk_size: int = 800) -> list[str]:
+    """Split text into chunks by paragraph boundaries, respecting chunk_size (in chars)."""
+    paragraphs = text.split("\n\n")
+    chunks: list[str] = []
+    current = ""
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        if current and len(current) + len(para) + 2 > chunk_size:
+            chunks.append(current)
+            current = para
+        else:
+            current = current + "\n\n" + para if current else para
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 async def _notify(
     notebook_id: str, source_id: str, status: str,
     error: str | None = None, progress: float | None = None,
@@ -796,7 +815,7 @@ async def process_document(
         upload_content = content.encode("utf-8") if content is not None else None
         upload_md_filename = safe_name if content is not None else None
 
-        # Trigger RAGFlow parsing/chunking/embedding with retry on failure
+        # Trigger RAGFlow parsing/chunking/embedding with retry + manual chunk fallback
         retry_count = 0
         while True:
             success = await ragflow_client.parse_document(dataset_id, doc_id)
@@ -833,6 +852,23 @@ async def process_document(
                 await _maybe_trigger_raptor(nid)
                 break
             elif failed_status:
+                # RAGFlow native parser failed — try manual chunking as fallback
+                if content and retry_count == 0:
+                    retry_count = MAX_RETRIES  # skip further retries, go straight to manual
+                    logger.warning("RAGFlow parse failed for %s, trying manual chunk upload", filename)
+                    await _update_status(sid, "vectorizing", error_message="Manual chunking...")
+                    chunk_texts = _split_into_chunks(content, chunk_size=800)
+                    added = await ragflow_client.add_chunks(dataset_id, doc_id, chunk_texts)
+                    if added > 0:
+                        logger.info("Manual chunking for %s: %d chunks added", filename, added)
+                        await _update_status(sid, "ready")
+                        await _notify(notebook_id, source_id, "ready")
+                        logger.info("Document processing complete (manual chunks): %s", filename)
+                        await _maybe_trigger_raptor(nid)
+                        break
+                    else:
+                        raise Exception(f"Manual chunking also failed for {filename}")
+
                 if retry_count < MAX_RETRIES:
                     delay = RETRY_DELAYS[retry_count]
                     retry_count += 1
