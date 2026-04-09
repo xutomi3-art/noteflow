@@ -26,7 +26,7 @@ interface StudioState {
   openPdf: (sourceId: string, filename: string, page: number) => void;
   closePdf: () => void;
   fetchCustomSkills: (notebookId: string) => Promise<void>;
-  createCustomSkill: (notebookId: string, data: { name: string; prompt: string; icon?: string; all_notebooks?: boolean; shared_with_team?: boolean }) => Promise<CustomSkill>;
+  createCustomSkill: (notebookId: string, data: { name: string; prompt: string; icon?: string; all_notebooks?: boolean; shared_with_team?: boolean; full_document?: boolean }) => Promise<CustomSkill>;
   deleteCustomSkill: (notebookId: string, skillId: string) => Promise<void>;
   executeCustomSkill: (notebookId: string, skillId: string, sourceIds?: string[], sessionId?: string) => Promise<void>;
   reset: () => void;
