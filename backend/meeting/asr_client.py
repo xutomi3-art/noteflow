@@ -1,10 +1,10 @@
 """
-ASR Client — supports Volcengine Seed-ASR (WebSocket streaming) and
-local Whisper via Xinference (HTTP chunked).
+ASR Client — supports multiple ASR providers.
 
 The active client is selected by ASR_PROVIDER setting:
-  "volcengine" (default) — Volcengine Seed-ASR 2.0
-  "whisper"              — Local Belle-whisper via OpenAI-compatible API
+  "qwen3-asr" (default) — Qwen3-ASR-1.7B via Xinference OpenAI-compatible API
+  "volcengine"           — Volcengine Seed-ASR 2.0 (WebSocket streaming)
+  "comparison"           — Multi-provider comparison mode (deprecated)
 """
 import asyncio
 import gzip
@@ -48,7 +48,7 @@ class MeetingSession:
     is_ended: bool = False
     session_start: float = 0.0
     _seen_definite: set = field(default_factory=set)
-    # Whisper-specific fields
+    # Qwen3-ASR-specific fields
     _audio_buffer: bytearray = field(default_factory=bytearray)
     _result_queue: asyncio.Queue | None = None
     _flush_task: asyncio.Task | None = None
@@ -301,13 +301,13 @@ class VolcengineASRClient:
         return "\n".join(lines)
 
 
-# ── Whisper ASR Client (local Belle-whisper via Xinference) ────────
+# ── Qwen3 ASR Client (Qwen3-ASR via Xinference) ──────────────────
 
 WHISPER_IDLE_TIMEOUT = 1800  # 30 minutes — auto-end meeting if no speech
 WHISPER_MIN_AUDIO_SECS = 1.0  # skip chunks shorter than this
-WHISPER_MAX_AUDIO_SECS = 30  # Force flush after 30s of continuous speech
-WHISPER_SILENCE_MS = 1000  # silence duration (ms) to trigger sentence boundary (1s)
-WHISPER_SILENCE_THRESHOLD = 200  # PCM RMS below this = silence
+WHISPER_MAX_AUDIO_SECS = 30  # Force flush after 30s (shorter = better ASR accuracy)
+WHISPER_SILENCE_MS = 2000  # silence duration (ms) to trigger sentence boundary (2s)
+WHISPER_SILENCE_THRESHOLD = 50  # PCM RMS below this = silence (lowered for quiet mics)
 WHISPER_SPEECH_RATIO = 0.05  # at least 5% of samples must exceed peak threshold
 WHISPER_PEAK_THRESHOLD = 400  # individual sample amplitude for speech detection
 WHISPER_SAMPLE_RATE = 16000
@@ -317,6 +317,68 @@ WHISPER_CHECK_INTERVAL = 0.15  # check VAD every 150ms (was 200ms)
 WHISPER_TARGET_RMS = 3000  # target RMS amplitude for normalization
 
 
+def _reduce_noise(pcm_data: bytes) -> bytes:
+    """Simple spectral-gating noise reduction using numpy FFT.
+
+    Estimates noise floor from the quietest 10% of frames, then gates
+    frequency bins below the noise threshold. Works well for constant
+    background noise (fan, AC, keyboard) without adding dependencies.
+    """
+    import numpy as np
+
+    n = len(pcm_data) // 2
+    if n < WHISPER_SAMPLE_RATE:  # less than 1 second, skip
+        return pcm_data
+
+    samples = np.frombuffer(pcm_data[:n * 2], dtype=np.int16).astype(np.float32)
+
+    # STFT parameters
+    frame_len = 1024
+    hop = 512
+    n_frames = (len(samples) - frame_len) // hop + 1
+    if n_frames < 4:
+        return pcm_data
+
+    window = np.hanning(frame_len)
+
+    # Compute STFT
+    frames = np.array([
+        np.fft.rfft(samples[i * hop: i * hop + frame_len] * window)
+        for i in range(n_frames)
+    ])
+    magnitudes = np.abs(frames)
+    phases = np.angle(frames)
+
+    # Estimate noise floor from quietest 10% of frames
+    frame_energy = np.sum(magnitudes ** 2, axis=1)
+    noise_count = max(1, n_frames // 10)
+    noise_indices = np.argsort(frame_energy)[:noise_count]
+    noise_profile = np.mean(magnitudes[noise_indices], axis=0)
+
+    # Spectral gate: subtract noise profile with soft threshold
+    gain_factor = 2.0  # how aggressively to gate (higher = more noise removed)
+    threshold = noise_profile * gain_factor
+    mask = np.clip((magnitudes - threshold) / (magnitudes + 1e-8), 0.0, 1.0)
+    cleaned = magnitudes * mask * np.exp(1j * phases)
+
+    # Inverse STFT (overlap-add)
+    output = np.zeros(len(samples), dtype=np.float32)
+    window_sum = np.zeros(len(samples), dtype=np.float32)
+    for i in range(n_frames):
+        frame = np.fft.irfft(cleaned[i], n=frame_len)
+        start = i * hop
+        output[start: start + frame_len] += frame * window
+        window_sum[start: start + frame_len] += window ** 2
+
+    # Normalize by window overlap
+    window_sum = np.maximum(window_sum, 1e-8)
+    output = output / window_sum
+
+    # Clip and convert back to int16
+    output = np.clip(output, -32768, 32767).astype(np.int16)
+    return output.tobytes()
+
+
 def _normalize_audio(pcm_data: bytes, target_rms: int = WHISPER_TARGET_RMS) -> bytes:
     """Normalize PCM audio volume to target RMS. Prevents VAD instability from volume swings."""
     if len(pcm_data) < 4:
@@ -324,10 +386,10 @@ def _normalize_audio(pcm_data: bytes, target_rms: int = WHISPER_TARGET_RMS) -> b
     n = len(pcm_data) // 2
     samples = list(struct.unpack(f"<{n}h", pcm_data[:n * 2]))
     rms = (sum(s * s for s in samples) / n) ** 0.5
-    if rms < 10:  # near silence, don't amplify noise
+    if rms < 1:  # truly digital silence, don't amplify
         return pcm_data
     gain = target_rms / rms
-    gain = min(gain, 5.0)  # cap at 5x amplification to avoid distortion
+    gain = min(gain, 20.0)  # allow up to 20x amplification for quiet mics
     normalized = [max(-32768, min(32767, int(s * gain))) for s in samples]
     return struct.pack(f"<{n}h", *normalized)
 
@@ -356,18 +418,20 @@ def _has_speech(pcm_data: bytes) -> bool:
     # Check 1: RMS energy must exceed threshold
     rms = (sum(s * s for s in samples) / n_samples) ** 0.5
     if rms < WHISPER_SILENCE_THRESHOLD:
+        logger.debug("_has_speech: RMS=%.0f < threshold=%d → silent", rms, WHISPER_SILENCE_THRESHOLD)
         return False
 
     # Check 2: at least SPEECH_RATIO of samples must be "loud" (above peak threshold)
     loud_count = sum(1 for s in samples if abs(s) > WHISPER_PEAK_THRESHOLD)
     ratio = loud_count / n_samples
     if ratio < WHISPER_SPEECH_RATIO:
+        logger.debug("_has_speech: RMS=%.0f OK but speech_ratio=%.3f < %.3f → silent", rms, ratio, WHISPER_SPEECH_RATIO)
         return False
 
     return True
 
 
-# Common ASR hallucination patterns (FireRedASR + Whisper)
+# Common ASR hallucination patterns
 _HALLUCINATION_PATTERNS = [
     r'^.{0,2}$',                          # Too short (1-2 chars)
     r'^(.)\1{3,}',                         # Single char repeated 4+ times: 嗯嗯嗯嗯
@@ -382,6 +446,10 @@ _VALID_SHORT_RESPONSES = {
     "是", "对", "好", "嗯", "啊", "哦", "行", "没", "不", "有",
     "是的", "好的", "对的", "嗯嗯", "好吧", "对吧", "没有", "不是",
     "可以", "知道", "明白", "好啊", "对啊", "是啊",
+    # With punctuation (ASR often adds 。)
+    "是。", "对。", "好。", "嗯。", "啊。", "哦。", "行。", "哎。",
+    "是的。", "好的。", "对的。", "嗯嗯。", "好吧。", "没有。", "不是。",
+    "可以。", "知道。", "明白。",
 }
 
 
@@ -474,8 +542,8 @@ def _add_punctuation(text: str) -> str:
     return result
 
 
-class WhisperASRClient:
-    """Local ASR client (FunASR/Whisper) with LLM rewrite.
+class Qwen3ASRClient:
+    """Qwen3-ASR client via Xinference OpenAI-compatible API, with LLM rewrite.
 
     Buffers PCM audio, flushes on VAD sentence boundary.
     Accumulates N raw sentences, then sends batch to LLM for polishing.
@@ -597,7 +665,8 @@ class WhisperASRClient:
             if not should_flush:
                 continue
 
-            # Extract audio up to (but not including) the trailing silence
+            # Extract audio with overlap for continuity
+            overlap_bytes = int(0.5 * bytes_per_sec)  # 0.5s overlap
             if consecutive_silence_bytes > 0 and buf_len > consecutive_silence_bytes:
                 speech_end = buf_len - consecutive_silence_bytes
                 pcm_data = bytes(session._audio_buffer[:speech_end])
@@ -607,29 +676,71 @@ class WhisperASRClient:
                 session._audio_buffer.extend(remaining)
             else:
                 pcm_data = bytes(session._audio_buffer)
-                session._audio_buffer.clear()
+                # Keep last 0.5s as overlap for next chunk to avoid word truncation
+                if len(pcm_data) > overlap_bytes:
+                    remaining = pcm_data[-overlap_bytes:]
+                    session._audio_buffer.clear()
+                    session._audio_buffer.extend(remaining)
+                else:
+                    session._audio_buffer.clear()
 
             consecutive_silence_bytes = 0
             speech_started = False
 
+            # Normalize volume before speech detection
+            pcm_data = _normalize_audio(pcm_data)
+
+            # Noise reduction — remove constant background noise before ASR
+            try:
+                pcm_data = _reduce_noise(pcm_data)
+            except Exception:
+                pass  # fallback to un-denoised audio
+
             # Skip if mostly silence
+            audio_secs = len(pcm_data) / bytes_per_sec
             if not _has_speech(pcm_data):
+                logger.info("VAD skip (no speech detected): %.1fs audio, %d bytes", audio_secs, len(pcm_data))
                 continue
 
+            logger.info("VAD flush: %.1fs audio → sending to ASR", audio_secs)
             elapsed_ms = int((time.monotonic() - session.session_start) * 1000)
             duration_ms = int(len(pcm_data) / bytes_per_sec * 1000)
             start_ms = max(0, elapsed_ms - duration_ms)
 
-            # Context from previous utterances
-            prompt_parts = [u.text for u in session.utterances[-2:]]
-            prompt = "".join(prompt_parts) if prompt_parts else ""
+            # Context: hotwords + previous utterances for better recognition
+            hotwords = get_hotwords(session.notebook_id) if session.notebook_id else []
+            hotword_prefix = "，".join(hotwords[:20]) + "。" if hotwords else ""
+            prompt_parts = [u.text for u in session.utterances[-3:]]
+            prompt = hotword_prefix + "".join(prompt_parts) if prompt_parts or hotword_prefix else ""
 
             try:
                 wav_data = _pcm_to_wav(pcm_data)
+                # Debug: save first 3 chunks for analysis
+                _debug_count = getattr(session, '_debug_save_count', 0)
+                if _debug_count < 3:
+                    _debug_path = f"/tmp/asr_debug_{meeting_id[:8]}_{_debug_count}.wav"
+                    with open(_debug_path, "wb") as _df:
+                        _df.write(wav_data)
+                    # Also log audio stats
+                    _n = len(pcm_data) // 2
+                    _samples = struct.unpack(f"<{_n}h", pcm_data[:_n*2])
+                    _rms = (sum(s*s for s in _samples) / _n) ** 0.5
+                    _peak = max(abs(s) for s in _samples)
+                    logger.info("DEBUG audio chunk %d: saved to %s, RMS=%.0f, Peak=%d, duration=%.1fs",
+                                _debug_count, _debug_path, _rms, _peak, audio_secs)
+                    session._debug_save_count = _debug_count + 1
                 text = await self._transcribe(wav_data, prompt=prompt)
                 text = (text or "").strip()
 
-                if not text or _is_hallucination(text):
+                if not text:
+                    logger.info("ASR returned empty text for %.1fs audio, skipping", audio_secs)
+                    continue
+                if _is_hallucination(text):
+                    if audio_secs > 3.0:
+                        # Long audio returning short garbage — log as warning
+                        logger.warning("ASR poor quality: %.1fs audio → '%s' (possible model issue)", audio_secs, text[:50])
+                    else:
+                        logger.info("ASR hallucination filtered: '%s' (%.1fs)", text[:50], audio_secs)
                     continue
 
                 # Add punctuation (FireRedASR-AED strips all punctuation)
@@ -696,8 +807,8 @@ class WhisperASRClient:
         """POST audio to ASR API and return text."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             form_data: dict[str, str] = {
-                "model": "FunASR-SenseVoiceSmall",
-                "language": "zh",
+                "model": "Qwen3-ASR-1.7B",
+                "language": "Chinese",
                 "temperature": "0",
                 "response_format": "json",
             }
@@ -713,7 +824,7 @@ class WhisperASRClient:
                 data = resp.json()
                 return data.get("text", "")
             else:
-                logger.error("Whisper API returned %d: %s", resp.status_code, resp.text[:200])
+                logger.error("Qwen3-ASR API returned %d: %s", resp.status_code, resp.text[:200])
                 return ""
 
     async def receive_results(self, meeting_id: str):
@@ -722,7 +833,7 @@ class WhisperASRClient:
         if not session or not session._result_queue:
             return
 
-        logger.info("Whisper receive_results started for meeting %s", meeting_id)
+        logger.info("Qwen3-ASR receive_results started for meeting %s", meeting_id)
         while not session.is_ended:
             try:
                 utt = await asyncio.wait_for(session._result_queue.get(), timeout=1.0)
@@ -764,7 +875,7 @@ class WhisperASRClient:
                         is_final=True, sequence=session.sequence_counter,
                     ))
             except Exception as e:
-                logger.error("Whisper final flush failed: %s", e)
+                logger.error("Qwen3-ASR final flush failed: %s", e)
 
         # Flush remaining pending rewrite batch
         pending = self._pending_rewrite.pop(meeting_id, [])
@@ -1168,7 +1279,7 @@ async def load_hotwords_from_db(db, notebook_id: str) -> list[str]:
 async def _llm_rewrite(texts: list[str], notebook_id: str = "") -> list[str]:
     """Send batch of ASR sentences to LLM for polishing."""
     try:
-        from backend.services.qwen_client import qwen_client
+        from backend.services.llm_client import llm_client
         combined = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
 
         # Build hotwords hint
@@ -1182,7 +1293,7 @@ async def _llm_rewrite(texts: list[str], notebook_id: str = "") -> list[str]:
             {"role": "system", "content": prompt},
             {"role": "user", "content": combined},
         ]
-        result = await qwen_client.generate(messages, temperature=0.0, max_tokens=2000)
+        result = await llm_client.generate(messages, temperature=0.0, max_tokens=2000)
         if not result or result.startswith("[Error"):
             return texts  # fallback to original
 
@@ -1209,19 +1320,21 @@ async def _llm_rewrite(texts: list[str], notebook_id: str = "") -> list[str]:
 
 # ── Singleton: select provider ─────────────────────────────────────
 
-_ASR_PROVIDER = os.getenv("ASR_PROVIDER", "funasr").lower()
+_ASR_PROVIDER = os.getenv("ASR_PROVIDER", "qwen3-asr").lower()
 
-if _ASR_PROVIDER == "funasr":
-    _funasr_url = os.getenv("FUNASR_ASR_URL", "http://10.200.0.102:8202/v1")
-    asr_client = WhisperASRClient(base_url=_funasr_url)
-    logger.info("ASR provider: FunASR at %s (with LLM rewrite)", _funasr_url)
+if _ASR_PROVIDER in ("qwen3-asr", "funasr"):
+    # "funasr" is a legacy alias for "qwen3-asr"
+    _qwen3_asr_url = os.getenv("QWEN3_ASR_URL", os.getenv("FUNASR_ASR_URL", "http://10.200.0.102:9997/v1"))
+    asr_client = Qwen3ASRClient(base_url=_qwen3_asr_url)
+    logger.info("ASR provider: Qwen3-ASR at %s (with LLM rewrite)", _qwen3_asr_url)
 elif _ASR_PROVIDER == "comparison":
     asr_client = ComparisonASRClient()
-    logger.info("ASR provider: Comparison mode (3-way)")
-elif _ASR_PROVIDER == "whisper":
-    _whisper_url = os.getenv("WHISPER_BASE_URL", "http://10.200.0.102:8200/v1")
-    asr_client = WhisperASRClient(base_url=_whisper_url)
-    logger.info("ASR provider: Whisper (local) at %s", _whisper_url)
-else:
+    logger.info("ASR provider: Comparison mode (3-way, deprecated)")
+elif _ASR_PROVIDER == "volcengine":
     asr_client = VolcengineASRClient()
     logger.info("ASR provider: Volcengine Seed-ASR 2.0")
+else:
+    # Unknown provider, default to Qwen3-ASR
+    _qwen3_asr_url = os.getenv("QWEN3_ASR_URL", "http://10.200.0.102:9997/v1")
+    asr_client = Qwen3ASRClient(base_url=_qwen3_asr_url)
+    logger.warning("Unknown ASR_PROVIDER '%s', falling back to Qwen3-ASR at %s", _ASR_PROVIDER, _qwen3_asr_url)
