@@ -14,7 +14,7 @@ from backend.meeting.models import Meeting, MeetingUtterance
 from backend.models.source import Source
 from backend.services.document_pipeline import process_document
 from backend.services.event_bus import event_bus
-from backend.services.qwen_client import qwen_client
+from backend.services.llm_client import llm_client
 from backend.services.source_service import update_source_status
 
 logger = logging.getLogger(__name__)
@@ -229,7 +229,7 @@ async def end_meeting(
                 "根据以下会议转录内容，用中文生成一个简短的主题词（2-6个字，不要日期，不要引号）。"
                 "例如：产品评审、锵锵三人行、周会纪要、技术方案讨论\n\n" + preview
             )
-            generated = await qwen_client.generate(
+            generated = await llm_client.generate(
                 messages=[{"role": "user", "content": title_prompt}],
                 max_tokens=30,
             )
@@ -393,7 +393,7 @@ async def _generate_meeting_minutes(
     )
 
     # Generate via LLM
-    minutes_text = await qwen_client.generate(
+    minutes_text = await llm_client.generate(
         messages=[{"role": "user", "content": prompt}],
         max_tokens=4096,
     )
@@ -485,7 +485,7 @@ Rules:
 - Keep each insight under 80 words
 - Only surface insights when truly valuable — quality over quantity
 - If the conversation is casual or lacks substance, return an empty array []
-- Respond in the same language as the conversation (e.g. Chinese conversation → Chinese insights)
+- CRITICAL: You MUST respond in the SAME language as the transcript. If the transcript is in Chinese, your insights MUST be in Chinese. If in English, respond in English.
 - Return a JSON array: [{"type": "decision|action|question|insight|risk", "text": "..."}]"""
 
 
@@ -512,7 +512,7 @@ async def generate_meeting_suggestion(
 
     system_msg, user_msg = _build_suggestion_prompt(transcript, custom_prompt)
 
-    result = await qwen_client.generate(
+    result = await llm_client.generate(
         messages=[
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg},
