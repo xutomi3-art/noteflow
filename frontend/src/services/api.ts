@@ -104,6 +104,13 @@ class ApiClient {
     return this.request("/auth/me");
   }
 
+  async updateProfile(data: { name?: string }): Promise<User> {
+    return this.request("/auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
   async forgotPassword(email: string): Promise<void> {
     await this.request("/auth/forgot-password", {
       method: "POST",

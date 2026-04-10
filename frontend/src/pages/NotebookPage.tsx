@@ -386,6 +386,7 @@ export default function NotebookPage() {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [sourceFlex, setSourceFlex] = useState(2); // Sources flex ratio (vs team=1)
+  const [sourceChatFlex, setSourceChatFlex] = useState(1); // Sources:Chats ratio in left panel
   const [urlInput, setUrlInput] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCreateSkillOpen, setIsCreateSkillOpen] = useState(false);
@@ -464,7 +465,7 @@ export default function NotebookPage() {
 
   // Stores
   const { user, logout } = useAuthStore();
-  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt, highlightSeq, raptorStatus, setOnMeetingUtterance } =
+  const { sources, selectedIds, toggleSelect, selectAll, deselectAll, fetchSources, uploadSource, deleteSource, subscribeStatus, cleanup, activeSourceId, activeSourceContent, isLoadingContent, setActiveSource, clearActiveSource, highlightExcerpt, highlightSeq, raptorStatus, setOnMeetingUtterance, setOnMeetingEnded } =
     useSourceStore();
   const { messages, isStreaming, streamingContent, fetchHistory, sendMessage, stopStream, clearHistory, deepThinking, setDeepThinking, thinkingSteps, reset: resetChat, currentSessionId, setCurrentSessionId, setOnSessionRenamed } = useChatStore();
   const {
@@ -536,6 +537,15 @@ export default function NotebookPage() {
     });
     return () => setOnMeetingUtterance(null);
   }, [otherMeetingActive, setOnMeetingUtterance]);
+
+  // Listen for meeting_ended SSE to clear otherMeetingActive
+  useEffect(() => {
+    setOnMeetingEnded(() => {
+      setOtherMeetingActive(false);
+      setLiveUtterances([]);
+    });
+    return () => setOnMeetingEnded(null);
+  }, [setOnMeetingEnded]);
 
   // Derived
   const readySources = sources.filter((s) => s.status === "ready");
@@ -1125,7 +1135,7 @@ export default function NotebookPage() {
     [handleSaveNote, clearContent],
   );
 
-  const skillDisabled = selectedIds.size === 0 && !meetingActive;
+  const skillDisabled = selectedIds.size === 0 && !meetingActive && !otherMeetingActive;
 
   // Warn if selected sources are very large (>30MB total, like Claude's limit)
   const selectedTotalSize = useMemo(() => {
@@ -1585,7 +1595,7 @@ export default function NotebookPage() {
           className={`bg-white border-r border-slate-200 flex-col overflow-x-hidden overflow-y-hidden shrink-0 ${!isDragging ? "transition-all duration-300" : ""} ${isLeftCollapsed && !isMobile ? "w-0 border-none" : ""} ${isMobile ? (mobileTab === "sources" ? "flex w-full" : "hidden") : "flex"}`}
         >
           {/* Sources section */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden">
+          <div className="min-h-0 flex flex-col overflow-y-auto overflow-x-hidden" style={{ flex: sourceChatFlex }}>
           <div className="h-10 px-3 flex items-center justify-between shrink-0">
             <span className="text-[13px] font-semibold text-slate-700">Sources</span>
             <button
@@ -1685,7 +1695,7 @@ export default function NotebookPage() {
             {/* Inline Recording Card — owner is recording */}
             {meetingActive && (
               <div className="w-full mb-3 rounded-xl border border-red-200 bg-red-50/50 overflow-hidden shrink-0">
-                <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center justify-between px-3 py-2 sticky top-0 z-10 bg-red-50 border-b border-red-200">
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
                       <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${meetPaused ? "bg-amber-400" : "bg-red-400"} opacity-75`} />
@@ -2008,8 +2018,45 @@ export default function NotebookPage() {
           {/* Team section moved to right Skill panel */}
           </div>{/* end Sources section wrapper */}
 
+          {/* Divider between Sources and Chats */}
+          <div
+            className="h-2 cursor-row-resize bg-slate-50 hover:bg-slate-200 active:bg-slate-300 transition-colors shrink-0 flex items-center justify-center border-y border-slate-100 select-none"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startY = e.clientY;
+              const sourcesEl = e.currentTarget.previousElementSibling as HTMLElement | null;
+              const chatsEl = e.currentTarget.nextElementSibling as HTMLElement | null;
+              if (!sourcesEl || !chatsEl) return;
+              const startSourceH = sourcesEl.getBoundingClientRect().height;
+              const startChatH = chatsEl.getBoundingClientRect().height;
+              const total = startSourceH + startChatH;
+              document.body.style.cursor = 'row-resize';
+              document.body.style.userSelect = 'none';
+              const onMove = (ev: MouseEvent) => {
+                const delta = ev.clientY - startY;
+                const newSourceH = Math.max(60, Math.min(total - 60, startSourceH + delta));
+                const ratio = newSourceH / (total - newSourceH);
+                sourcesEl.style.flex = `${ratio} 1 0%`;
+                chatsEl.style.flex = '1 1 0%';
+              };
+              const onUp = () => {
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                const finalH = sourcesEl.getBoundingClientRect().height;
+                const finalChatH = chatsEl.getBoundingClientRect().height;
+                setSourceChatFlex(finalH / (finalChatH || 1));
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+              };
+              document.addEventListener('mousemove', onMove);
+              document.addEventListener('mouseup', onUp);
+            }}
+          >
+            <div className="w-8 h-0.5 rounded-full bg-slate-300 group-hover:bg-slate-400" />
+          </div>
+
           {/* Chats */}
-          <div className="border-t border-slate-100 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <div className="h-10 px-3 flex items-center shrink-0">
               <span className="text-[13px] font-semibold text-slate-700">Chats</span>
             </div>

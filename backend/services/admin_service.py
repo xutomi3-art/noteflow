@@ -334,11 +334,36 @@ async def check_service_health(db: AsyncSession | None = None) -> dict:
     rerank_model = settings.RAG_RERANK_ID or "gte-rerank"
     services["rerank"]["message"] = rerank_model + (f" — {services['rerank']['message']}" if services["rerank"].get("message") else "")
 
-    # ASR (Qwen3-ASR via Xinference)
+    # ASR (Qwen3-ASR via Xinference) — end-to-end test with real transcription call
     import os
-    asr_url = os.environ.get("QWEN3_ASR_URL", "http://10.200.0.102:9997/v1")
-    services["asr"] = await _check_http(f"{asr_url.rstrip('/')}/models")
-    services["asr"]["message"] = "Qwen3-ASR" + (f" — {services['asr']['message']}" if services["asr"].get("message") else "")
+    import struct
+    import io
+    import wave
+    asr_url = os.environ.get("QWEN3_ASR_URL", os.environ.get("FUNASR_ASR_URL", "http://10.200.0.102:9997/v1"))
+    try:
+        # Generate 0.5s of silent PCM audio (16kHz, 16-bit, mono)
+        n_samples = 8000  # 0.5s
+        pcm_data = struct.pack(f"<{n_samples}h", *([0] * n_samples))
+        wav_buf = io.BytesIO()
+        with wave.open(wav_buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(pcm_data)
+        wav_bytes = wav_buf.getvalue()
+
+        async with httpx.AsyncClient(timeout=15.0) as c:
+            resp = await c.post(
+                f"{asr_url.rstrip('/')}/audio/transcriptions",
+                files={"file": ("test.wav", wav_bytes, "audio/wav")},
+                data={"model": "Qwen3-ASR-1.7B", "language": "Chinese", "response_format": "json"},
+            )
+        if resp.status_code == 200:
+            services["asr"] = {"status": "healthy", "message": "Qwen3-ASR — transcription OK"}
+        else:
+            services["asr"] = {"status": "unhealthy", "message": f"Qwen3-ASR — HTTP {resp.status_code}: {resp.text[:100]}"}
+    except Exception as e:
+        services["asr"] = {"status": "unhealthy", "message": f"Qwen3-ASR — {str(e)[:100]}"}
 
     return services
 

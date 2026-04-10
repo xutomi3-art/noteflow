@@ -58,7 +58,7 @@ async def send_invite_email(
 
 
 async def send_health_alert_email(to_email: str, failed_services: list[dict]) -> None:
-    subject = f"[Noteflow Alert] {len(failed_services)} service(s) down"
+    subject = f"[Noteflowalpha Alert] {len(failed_services)} service(s) down"
     rows = ""
     for svc in failed_services:
         rows += f"""<tr>
@@ -67,7 +67,7 @@ async def send_health_alert_email(to_email: str, failed_services: list[dict]) ->
         </tr>"""
     html = f"""\
 <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:520px;margin:0 auto;padding:32px">
-  <h2 style="font-size:18px;margin:0 0 16px;color:#dc2626">Service Health Alert</h2>
+  <h2 style="font-size:18px;margin:0 0 16px;color:#dc2626">Service Health Alert <span style="font-size:12px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-weight:600">ALPHA</span></h2>
   <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 16px">
     The following service(s) are currently unreachable:
   </p>
@@ -92,7 +92,7 @@ async def send_resource_alert_email(
     containers: list[dict],
 ) -> None:
     """Send an email alert when host/container resource thresholds are exceeded."""
-    subject = f"[Noteflow Alert] Resource usage high — {len(breaches)} threshold(s) breached"
+    subject = f"[Noteflowalpha Alert] Resource usage high — {len(breaches)} threshold(s) breached"
 
     # Breach details
     breach_rows = ""
@@ -142,7 +142,7 @@ async def send_resource_alert_email(
 
     html = f"""\
 <div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:580px;margin:0 auto;padding:32px">
-  <h2 style="font-size:18px;margin:0 0 16px;color:#ea580c">Resource Usage Alert</h2>
+  <h2 style="font-size:18px;margin:0 0 16px;color:#ea580c">Resource Usage Alert <span style="font-size:12px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-weight:600">ALPHA</span></h2>
   <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 16px">
     The following resource threshold(s) have been exceeded for 2+ consecutive checks:
   </p>

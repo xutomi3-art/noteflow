@@ -1,5 +1,5 @@
 import logging
-from backend.services.qwen_client import qwen_client
+from backend.services.llm_client import llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ async def route_query(question: str, schema: str | None = None) -> str:
 
     try:
         prompt = ROUTER_PROMPT.format(schema=schema, question=question)
-        result = await qwen_client.generate(
+        result = await llm_client.generate(
             [{"role": "user", "content": prompt}],
             max_tokens=10,
         )

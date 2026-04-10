@@ -64,19 +64,26 @@ export default function PublicMeetingMinutesPage() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-            <ClipboardList className="w-5 h-5 text-amber-600" />
+          <a href="/" className="flex items-center gap-2 shrink-0 mr-2">
+            <img src="/logo.png" alt="Noteflow" className="w-6 h-6 rounded-md" />
+            <span className="text-sm font-semibold text-slate-700 hidden sm:inline">Noteflow</span>
+          </a>
+          <div className="w-px h-6 bg-slate-200 shrink-0" />
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+            <ClipboardList className="w-4 h-4 text-amber-600" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-bold text-slate-900 truncate">{data.title}</h1>
             <p className="text-xs text-slate-500">
               {data.created_by} &middot; {dateStr}
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <img src="/logo.png" alt="Noteflow" className="w-6 h-6 rounded-md" />
-            <span className="text-sm font-semibold text-slate-600 hidden sm:inline">Noteflow</span>
-          </div>
+          <a
+            href="/"
+            className="shrink-0 px-4 py-2 bg-[#5b8c15] hover:bg-[#4a7311] text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Try Noteflow
+          </a>
         </div>
       </header>
 

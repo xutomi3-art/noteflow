@@ -133,7 +133,7 @@ async def optimize_prompt(
     if not raw_prompt:
         raise HTTPException(status_code=400, detail='Prompt is required')
 
-    from backend.services.qwen_client import qwen_client
+    from backend.services.llm_client import llm_client
 
     meta_prompt = """You are an AI prompt engineer. The user has written a custom instruction for an AI knowledge-base assistant.
 Your job is to rewrite it into a clear, effective system prompt that:
@@ -150,7 +150,7 @@ IMPORTANT: Output ONLY the optimized prompt text. No explanation, no preamble, n
         {"role": "user", "content": f"Please optimize this instruction:\n\n{raw_prompt}"},
     ]
 
-    result = await qwen_client.generate(messages, temperature=0.3, max_tokens=500)
+    result = await llm_client.generate(messages, temperature=0.3, max_tokens=500)
 
     if result.startswith("[Error"):
         raise HTTPException(status_code=502, detail='AI optimization failed')

@@ -16,7 +16,7 @@ from backend.models.saved_note import SavedNote
 from backend.models.source import Source
 from backend.core.config import settings
 from backend.services.ragflow_client import ragflow_client
-from backend.services.qwen_client import qwen_client
+from backend.services.llm_client import llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,9 @@ _SOFT_RULES = """Default behavior (may be adjusted by custom instructions below)
 3. For advisory/analytical questions (suggestions, strategies, risks, pros/cons, "what should we do"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.
 4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.
 5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.
-6. When the question asks about a specific date, scan ALL chunks for that date in any format."""
+6. When the question asks about a specific date, scan ALL chunks for that date in any format.
+7. Match response length to question complexity: simple factual questions get short direct answers; analytical or multi-part questions get thorough, well-structured responses with headers, bullet points, and numbered lists.
+8. When a topic warrants depth, don't cut short — provide enough context, reasoning, and explanation so the reader fully understands without needing follow-up questions."""
 
 
 def _build_system_prompt(notebook_prompt: str = "") -> str:
@@ -203,68 +205,55 @@ async def _rewrite_query_for_retrieval(message: str) -> tuple[str, str]:
     """Rewrite query for dual-path retrieval (bilingual).
 
     Returns (q1, q2):
-      q1 = original message + same-language keywords
-      q2 = translation + target-language keywords
+      q1 = original message (unmodified — best for same-language retrieval)
+      q2 = short translation to the other language (for cross-language retrieval)
+
+    Key insight: Adding keywords/synonyms to queries HURTS retrieval quality.
+    Short, focused queries outperform long queries with appended synonyms.
+    Also, expanding abbreviations (SAS→Shanghai American School) dilutes the
+    query and causes BM25/vector to match irrelevant chunks.
     """
     try:
         rewrite_messages = [
             {"role": "system", "content": (
-                "You are a search query optimizer. Given a user question, output EXACTLY 3 lines:\n"
-                "Line 1: Translate the question to the OTHER language (Chinese→English or English→Chinese). Expand abbreviations to full names.\n"
-                "Line 2: 3-5 English search keywords/synonyms (comma-separated)\n"
-                "Line 3: 3-5 Chinese search keywords/synonyms (comma-separated)\n\n"
+                "You are a translator for search queries. Given a user question, "
+                "translate it to the OTHER language (Chinese→English or English→Chinese).\n\n"
                 "Rules:\n"
-                "- Output ONLY 3 lines, no labels, no numbering, no extra text\n"
-                "- Expand abbreviations: SAS→Shanghai American School, BOT→Board of Trustees\n"
-                "- Include synonyms: founded→established, created, inception\n\n"
+                "- Output ONLY the translated question, one line, nothing else\n"
+                "- Translate naturally and concisely — do NOT add extra words or synonyms\n\n"
                 "Examples:\n"
-                "Input: 美校成立时间\n"
-                "When was Shanghai American School established?\n"
-                "established, founding, creation, inception date\n"
-                "成立, 创办, 创立, 建校时间\n\n"
-                "Input: When was the Board last expanded?\n"
-                "董事会最近一次扩充是什么时候？\n"
-                "Board expansion, enlarged, added members, board size\n"
-                "董事会, 扩充, 扩大, 增加席位, 成员变动\n\n"
-                "Input: Tell me about tuition\n"
-                "介绍一下学费情况\n"
-                "tuition, fees, cost, annual tuition, school fees\n"
-                "学费, 费用, 收费, 年度学费"
+                "Input: SAS的历史学费趋势如何？\n"
+                "What is the historical tuition trend at SAS?\n\n"
+                "Input: What are the board policies for student travel?\n"
+                "董事会对学生旅行有什么政策？\n\n"
+                "Input: SAS目前的学费是多少？\n"
+                "What is the current tuition at SAS?\n\n"
+                "Input: How does SAS compare to benchmark schools?\n"
+                "SAS与标杆学校相比如何？"
             )},
             {"role": "user", "content": message},
         ]
         rewrite_model = settings.RAG_REWRITE_MODEL or None
-        result = await qwen_client.generate(
+        result = await llm_client.generate(
             rewrite_messages,
             model=rewrite_model,
             temperature=0.0,
-            max_tokens=200,
+            max_tokens=100,
         )
         result = result.strip().strip('"').strip("'")
         if not result or result.startswith("[Error"):
             return message, message
 
+        # Take only the first non-empty line (ignore any extra output)
         lines = [l.strip() for l in result.split("\n") if l.strip()]
-        if len(lines) < 3:
-            logger.warning("Query rewrite returned %d lines (expected 3), fallback", len(lines))
+        if not lines:
             return message, message
 
         translation = lines[0]
-        en_keywords = lines[1]
-        zh_keywords = lines[2]
 
-        # Detect input language (simple heuristic: has CJK chars = Chinese)
-        is_chinese = any('\u4e00' <= c <= '\u9fff' for c in message)
-
-        if is_chinese:
-            q1 = f"{message}\n{zh_keywords}"
-            q2 = f"{translation}\n{en_keywords}"
-        else:
-            q1 = f"{message}\n{en_keywords}"
-            q2 = f"{translation}\n{zh_keywords}"
-
-        logger.info("Dual rewrite: q1=[%s] q2=[%s]", q1.replace('\n', ' | '), q2.replace('\n', ' | '))
-        return q1, q2
+        # q1 = original (unmodified), q2 = translation (unmodified)
+        logger.info("Dual rewrite: q1=[%s] q2=[%s]", message, translation)
+        return message, translation
 
     except Exception as e:
         logger.warning("Query rewrite failed, using original: %s", e)
@@ -301,7 +290,7 @@ REACT_MAX_ROUNDS = settings.RAG_THINK_ROUNDS or 5
 async def _react_step(messages: list[dict], model: str | None = None) -> str:
     """Run one ReAct step: get Thought + Search queries or Answer from LLM."""
     decompose_model = model or settings.RAG_DECOMPOSE_MODEL or None
-    return await qwen_client.generate(
+    return await llm_client.generate(
         messages,
         model=decompose_model,
         temperature=0.0,
@@ -566,7 +555,19 @@ async def stream_chat(
                     )
         t_ragflow_end = time.time()
 
+        # NOTE: PageIndex tree-guided retrieval disabled for Chat.
+        # Testing showed it selects wrong sections for meeting-style documents,
+        # crowding out correct RAGFlow chunks and reducing accuracy.
+        # PageIndex is still used for Skills (tree summaries as context).
+        # TODO: Re-enable when tree navigation accuracy improves for unstructured docs.
+
         context, citation_metadata = _build_context_prompt(chunks, sources_map)
+
+        if False:  # PageIndex chat retrieval disabled
+            if context:
+                context = f"[Document Sections]\n{pageindex_context}\n\n---\n\n[Retrieved Details]\n{context}"
+            else:
+                context = f"[Document Sections]\n{pageindex_context}"
 
         # Inject live meeting transcript as primary context (if active)
         from backend.meeting.service import get_live_transcript_for_notebook_async
@@ -606,7 +607,7 @@ The uploaded documents do not contain information relevant to this question. Ple
         # RAG best practice: 5-10 rounds. More history dilutes retrieval relevance.
         MAX_HISTORY_ROUNDS = 10
         MAX_HISTORY_CHARS = 20000
-        history = await get_chat_history(db, notebook_id, user_id, session_id=session_id)
+        history = await get_chat_history(db, notebook_id, user_id, shared=is_shared_chat, session_id=session_id)
         history = [h for h in history if h.id != user_msg.id]
         # If last assistant message was an error, skip all history to avoid content filter loops
         last_assistant = next((h for h in reversed(history) if h.role == "assistant"), None)
@@ -676,7 +677,7 @@ Follow these rules strictly:
         yield ": keepalive\n\n"
         full_response = ""
         t_llm_start = time.time()
-        async for token in qwen_client.stream_chat(messages, enable_search=web_search):
+        async for token in llm_client.stream_chat(messages, enable_search=web_search):
             if token.startswith("\n\n[Error:"):
                 # Don't save error tokens to full_response (prevents poisoning chat history)
                 if "maximum context length" in token:
@@ -684,7 +685,12 @@ Follow these rules strictly:
                 elif "内容安全审核" in token or "content filter" in token.lower():
                     friendly = "内容安全审核误拦截，请尝试换个方式提问或减少勾选的文档。"
                 else:
-                    friendly = token.replace("\n\n[Error: ", "").rstrip("]")
+                    raw = token.replace("\n\n[Error: ", "").rstrip("]")
+                    logger.error("LLM stream error: %s", raw[:300])
+                    if "connect" in raw.lower() or "timeout" in raw.lower() or "500" in raw:
+                        friendly = "Service temporarily unavailable. Please try again in a moment. (服务暂时不可用，请稍后重试)"
+                    else:
+                        friendly = "Something went wrong. Please try again. (出了点问题，请重试)"
                 # Save error to ChatLog so admin panel shows it correctly
                 try:
                     err_log = ChatLog(
@@ -787,7 +793,7 @@ Follow these rules strictly:
                         {"role": "system", "content": "Generate a short title (max 6 words) for this chat session based on the user's message. Return ONLY the title, no quotes or punctuation."},
                         {"role": "user", "content": message[:200]},
                     ]
-                    title = await qwen_client.generate(title_messages)
+                    title = await llm_client.generate(title_messages)
                     title = title.strip().strip('"').strip("'")[:60]
                     if title:
                         sess = await db.get(SessionModel, session_id)
@@ -829,14 +835,16 @@ Follow these rules strictly:
         except Exception:
             pass
         error_str = str(e)
+        logger.error("Chat stream error: %s", error_str[:500])
         if "maximum context length" in error_str or "too many tokens" in error_str.lower():
             friendly = "Selected sources contain too much data. Please select fewer sources and try again."
-            yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
         elif "data_inspection_failed" in error_str.lower() or "DataInspectionFailed" in error_str:
             friendly = "The AI content filter flagged this query. Please try rephrasing your question. (内容安全审核误拦截，请尝试换个方式提问)"
-            yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
+        elif "connect" in error_str.lower() or "timeout" in error_str.lower() or "500" in error_str:
+            friendly = "Service temporarily unavailable. Please try again in a moment. (服务暂时不可用，请稍后重试)"
         else:
-            yield f"data: {json.dumps({'type': 'error', 'message': error_str})}\n\n"
+            friendly = "Something went wrong. Please try again. (出了点问题，请重试)"
+        yield f"data: {json.dumps({'type': 'error', 'message': friendly})}\n\n"
 
 
 async def get_chat_history(

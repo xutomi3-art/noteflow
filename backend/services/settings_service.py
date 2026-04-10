@@ -15,7 +15,7 @@ CONFIGURABLE_KEYS = {
     "llm_base_url", "llm_model", "llm_max_output_tokens", "llm_context_window", "rag_top_k", "rag_similarity_threshold", "rag_vector_weight", "rag_rewrite_model", "rag_decompose_model", "rag_think_rounds", "rag_rerank_id",
     "qwen_api_key",
     "llm_backup_enabled", "llm_backup_base_url", "llm_backup_model", "llm_backup_api_key", "llm_backup_context_window",
-    "ragflow_api_key", "ragflow_base_url", "raptor_enabled", "query_rewrite_enabled",
+    "ragflow_api_key", "ragflow_base_url", "raptor_enabled", "query_rewrite_enabled", "pageindex_enabled",
     "llm_vision_model", "llm_vision_base_url", "llm_vision_api_key", "vision_enabled",
     "docmee_api_key",
     "max_file_size_mb",
@@ -56,6 +56,7 @@ _ENV_MAP = {
     "ragflow_base_url": "RAGFLOW_BASE_URL",
     "raptor_enabled": "RAPTOR_ENABLED",
     "query_rewrite_enabled": "QUERY_REWRITE_ENABLED",
+    "pageindex_enabled": "PAGEINDEX_ENABLED",
     "llm_vision_model": "LLM_VISION_MODEL",
     "llm_vision_base_url": "LLM_VISION_BASE_URL",
     "llm_vision_api_key": "LLM_VISION_API_KEY",
@@ -140,14 +141,14 @@ async def set_setting(db: AsyncSession, key: str, value: str, user_id: uuid.UUID
         else:
             setattr(settings, attr, value)
 
-    # Reinitialize qwen_client if LLM credentials changed
+    # Reinitialize llm_client if LLM credentials changed
     if key in ("qwen_api_key", "llm_base_url", "llm_model"):
-        from backend.services.qwen_client import qwen_client
-        qwen_client.__init__()
+        from backend.services.llm_client import llm_client
+        llm_client.__init__()
     # Reinitialize backup client if backup settings changed
     elif key in ("llm_backup_enabled", "llm_backup_base_url", "llm_backup_model", "llm_backup_api_key"):
-        from backend.services.qwen_client import qwen_client
-        qwen_client._init_backup()
+        from backend.services.llm_client import llm_client
+        llm_client._init_backup()
 
 
 async def load_db_settings() -> None:
@@ -167,18 +168,18 @@ async def load_db_settings() -> None:
                     setattr(settings, attr, float(row.value))
                 else:
                     setattr(settings, attr, row.value)
-    # Reinitialize qwen_client with DB-loaded settings
-    from backend.services.qwen_client import qwen_client
-    qwen_client.__init__()
+    # Reinitialize llm_client with DB-loaded settings
+    from backend.services.llm_client import llm_client
+    llm_client.__init__()
     logger.info(
         "Loaded DB settings — LLM_MODEL=%s, LLM_BASE_URL=%s, RAG_TOP_K=%s, QWEN_API_KEY=%s...",
         settings.LLM_MODEL, settings.LLM_BASE_URL, settings.RAG_TOP_K,
         settings.QWEN_API_KEY[:15] if settings.QWEN_API_KEY else "empty",
     )
-    # Verify qwen_client was reinitialized correctly
+    # Verify llm_client was reinitialized correctly
     logger.info(
-        "qwen_client reinit — model=%s, base_url=%s",
-        qwen_client.model, str(qwen_client.client.base_url),
+        "llm_client reinit — model=%s, base_url=%s",
+        llm_client.model, str(llm_client.client.base_url),
     )
 
 

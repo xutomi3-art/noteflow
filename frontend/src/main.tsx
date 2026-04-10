@@ -23,6 +23,7 @@ import PrivacyPolicyPage from '@/pages/PrivacyPolicyPage';
 import TermsOfServicePage from '@/pages/TermsOfServicePage';
 import HelpCenterPage from '@/pages/HelpCenterPage';
 import PublicMeetingMinutesPage from '@/pages/PublicMeetingMinutesPage';
+import SettingsPage from '@/pages/SettingsPage';
 import './index.css';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -126,6 +127,7 @@ function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/join/:token" element={<AuthGuard><JoinPage /></AuthGuard>} />
           <Route path="/notebook/:id" element={<AuthGuard><NotebookPage /></AuthGuard>} />
+          <Route path="/settings" element={<AuthGuard><SettingsPage /></AuthGuard>} />
           <Route path="/dashboard" element={<AuthGuard><DashboardPage /></AuthGuard>} />
           <Route path="/admin" element={<AuthGuard><AdminGuard><AdminLayout /></AdminGuard></AuthGuard>}>
             <Route index element={<AdminDashboardPage />} />

@@ -27,7 +27,7 @@ from backend.models.source import Source
 from backend.models.user import User
 from pydantic import BaseModel
 
-from backend.services.qwen_client import qwen_client
+from backend.services.llm_client import llm_client
 from backend.services.ragflow_client import ragflow_client
 from backend.services import permission_service
 from backend.services.tts_client import text_to_speech
@@ -440,6 +440,205 @@ async def _get_source_context(db: AsyncSession, notebook_id: uuid.UUID, source_i
     return "\n\n".join(context_parts)
 
 
+async def _get_full_source_context(db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None = None) -> str:
+    """Read FULL document content from _parsed.md files — no truncation.
+
+    Used by full-document skills that need the complete text.
+    Falls back to RAGFlow chunk reconstruction if _parsed.md is missing.
+    """
+    query = select(Source).where(
+        Source.notebook_id == notebook_id,
+        Source.status == "ready",
+    )
+    if source_ids:
+        query = query.where(Source.id.in_([uuid.UUID(sid) for sid in source_ids]))
+    result = await db.execute(query)
+    sources = list(result.scalars().all())
+    if not sources:
+        return ""
+
+    context_parts: list[str] = []
+
+    for source in sources:
+        if not source.storage_url:
+            continue
+
+        content = None
+        base_path = os.path.splitext(source.storage_url)[0]
+
+        # Try parsed content files (same logic as /content endpoint)
+        candidates = [base_path + "_parsed.md", base_path + ".md"]
+        if source.file_type in ("txt", "md"):
+            candidates.insert(0, source.storage_url)
+
+        for path in candidates:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                break
+
+        # Fallback: reconstruct from RAGFlow chunks
+        if not content and source.ragflow_dataset_id and source.ragflow_doc_id:
+            try:
+                chunks = await ragflow_client.list_chunks(source.ragflow_dataset_id, source.ragflow_doc_id)
+                if chunks:
+                    content = "\n\n".join(c.get("content", "") for c in chunks if c.get("content"))
+            except Exception:
+                pass
+
+        if content and content.strip():
+            context_parts.append(f"--- {source.filename} ---\n{content}")
+
+    return "\n\n".join(context_parts)
+
+
+async def _get_tiered_skill_context(db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None = None) -> str:
+    """Tiered context strategy for skills: full text → tree summaries + RAG → digest + RAG.
+
+    Tier 1: If total parsed text fits in context window → use full text (most accurate)
+    Tier 2: If PageIndex trees available → tree summaries (structured) + RAG chunks (details)
+    Tier 3: Fallback → digest + RAG chunks
+    """
+    import os
+
+    # Get all ready sources
+    stmt = select(Source).where(Source.notebook_id == notebook_id, Source.status == "ready")
+    if source_ids:
+        stmt = stmt.where(Source.id.in_([uuid.UUID(s) for s in source_ids]))
+    result = await db.execute(stmt)
+    sources = list(result.scalars().all())
+    if not sources:
+        return ""
+
+    # Tier 1: Check if full text fits in context window
+    budget_chars = settings.LLM_CONTEXT_WINDOW * 2 * 0.6  # ~60% of context window in chars
+    total_chars = 0
+    parsed_paths = []
+    for source in sources:
+        if source.storage_url:
+            parsed_path = os.path.splitext(source.storage_url)[0] + "_parsed.md"
+            if os.path.exists(parsed_path):
+                total_chars += os.path.getsize(parsed_path)
+                parsed_paths.append((source.filename, parsed_path))
+
+    if total_chars > 0 and total_chars < budget_chars:
+        # Full text fits — read everything
+        parts = []
+        for filename, path in parsed_paths:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                parts.append(f"--- {filename} ---\n{f.read()}")
+        logger.info("Skill context: Tier 1 full text, %d chars from %d files", total_chars, len(parts))
+        return "\n\n".join(parts)
+
+    # Tier 2 or 3: structured overview + RAG details
+    overview = ""
+    tier_name = ""
+
+    # Try PageIndex tree summaries first
+    if settings.PAGEINDEX_ENABLED:
+        overview = await _get_pageindex_context(db, notebook_id, source_ids=source_ids)
+        if overview:
+            tier_name = "Tier 2 tree+RAG"
+
+    # No tree summaries → fall back to digest
+    if not overview:
+        # Check if actual digest files exist
+        import os as _os
+        has_digest_files = any(
+            _os.path.exists(_os.path.splitext(s.storage_url or "")[0] + "_digest.md")
+            for s in sources if s.storage_url
+        )
+        overview = await _get_digest_context(db, notebook_id, source_ids=source_ids)
+        if overview:
+            tier_name = "Tier 3 digest+RAG" if has_digest_files else "Tier 3 RAG-only (no digest files)"
+
+    # Add RAG details
+    parts = []
+    if overview:
+        parts.append(f"[Document Overview]\n{overview}")
+    rag_context = await _get_source_context(db, notebook_id, source_ids=source_ids)
+    if rag_context:
+        parts.append(f"[Document Details]\n{rag_context}")
+
+    if parts:
+        logger.info("Skill context: %s, %d parts", tier_name or "RAG only", len(parts))
+        return "\n\n---\n\n".join(parts)
+
+    return ""
+
+
+async def _get_pageindex_context(db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None = None) -> str:
+    """Build skill context from PageIndex tree node summaries."""
+    query = select(Source).where(
+        Source.notebook_id == notebook_id,
+        Source.status == "ready",
+        Source.page_index_tree.isnot(None),
+    )
+    if source_ids:
+        query = query.where(Source.id.in_([uuid.UUID(s) for s in source_ids]))
+    result = await db.execute(query)
+    sources = list(result.scalars().all())
+
+    if not sources:
+        return ""
+
+    from backend.services.pageindex_service import get_tree_context_for_skills
+    return get_tree_context_for_skills(sources)
+
+
+async def _get_digest_context(db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None = None) -> str:
+    """Read document digests (_digest.md). Falls back to RAG if digest not available."""
+    query = select(Source).where(
+        Source.notebook_id == notebook_id,
+        Source.status == "ready",
+    )
+    if source_ids:
+        query = query.where(Source.id.in_([uuid.UUID(sid) for sid in source_ids]))
+    result = await db.execute(query)
+    sources = list(result.scalars().all())
+    if not sources:
+        return ""
+
+    context_parts: list[str] = []
+    missing_digest: list[Source] = []
+
+    for source in sources:
+        if not source.storage_url:
+            continue
+        base_path = os.path.splitext(source.storage_url)[0]
+        digest_path = base_path + "_digest.md"
+        if os.path.exists(digest_path):
+            with open(digest_path, "r", encoding="utf-8", errors="replace") as f:
+                digest = f.read()
+            if digest.strip():
+                context_parts.append(f"--- {source.filename} (digest) ---\n{digest}")
+                continue
+        missing_digest.append(source)
+
+    # Fallback: use RAG for sources without digest
+    if missing_digest:
+        logger.info("Digest missing for %d sources, falling back to RAG", len(missing_digest))
+        fallback = await _get_source_context(db, notebook_id, source_ids=[str(s.id) for s in missing_digest])
+        if fallback:
+            context_parts.append(fallback)
+
+    return "\n\n".join(context_parts)
+
+
+async def _get_full_or_digest_context(db: AsyncSession, notebook_id: uuid.UUID, source_ids: list[str] | None = None) -> str:
+    """Try full document content first; fall back to digest if content exceeds context window."""
+    from backend.core.config import settings
+    max_chars = (settings.LLM_CONTEXT_WINDOW - 20000) * 2  # Reserve tokens for prompt + output
+
+    full_text = await _get_full_source_context(db, notebook_id, source_ids=source_ids)
+    if len(full_text) <= max_chars:
+        logger.info("Full doc context: %d chars (within %d limit)", len(full_text), max_chars)
+        return full_text
+
+    logger.info("Full doc context too large (%d chars > %d), falling back to digest", len(full_text), max_chars)
+    return await _get_digest_context(db, notebook_id, source_ids=source_ids)
+
+
 class PptGenerateRequest(BaseModel):
     template_id: str = ""
     scene: str = ""
@@ -603,7 +802,7 @@ async def generate_ppt(
         verbosity="standard",
         language=cfg.language or "zh",
     )
-    raw = await qwen_client.generate(
+    raw = await llm_client.generate(
         [{"role": "system", "content": "Return only valid JSON."},
          {"role": "user", "content": prompt}]
     )
@@ -747,7 +946,7 @@ async def generate_podcast(
 
     # Generate dialogue
     prompt = PODCAST_PROMPT.format(context=context[:6000])
-    dialogue = await qwen_client.generate(
+    dialogue = await llm_client.generate(
         [{"role": "system", "content": "Generate engaging podcast dialogue. Follow the format exactly."},
          {"role": "user", "content": prompt}]
     )
@@ -823,6 +1022,7 @@ class CustomSkillCreate(BaseModel):
     icon: str = "💡"
     all_notebooks: bool = True
     shared_with_team: bool = False
+    full_document: bool = False
 
 
 class CustomSkillUpdate(BaseModel):
@@ -831,6 +1031,7 @@ class CustomSkillUpdate(BaseModel):
     icon: str | None = None
     all_notebooks: bool | None = None
     shared_with_team: bool | None = None
+    full_document: bool | None = None
 
 
 class CustomSkillResponse(BaseModel):
@@ -895,6 +1096,7 @@ async def list_custom_skills(
                 "id": str(s.id), "name": s.name, "prompt": s.prompt, "icon": s.icon,
                 "created_by": str(s.created_by), "notebook_id": str(s.notebook_id),
                 "all_notebooks": s.all_notebooks, "shared_with_team": s.shared_with_team,
+                "full_document": getattr(s, 'full_document', False),
             })
     return unique
 
@@ -918,6 +1120,7 @@ async def create_custom_skill(
         notebook_id=uuid.UUID(notebook_id),
         all_notebooks=body.all_notebooks,
         shared_with_team=body.shared_with_team,
+        full_document=body.full_document,
     )
     db.add(skill)
     await db.commit()
@@ -926,6 +1129,7 @@ async def create_custom_skill(
         "id": str(skill.id), "name": skill.name, "prompt": skill.prompt, "icon": skill.icon,
         "created_by": str(skill.created_by), "notebook_id": str(skill.notebook_id),
         "all_notebooks": skill.all_notebooks, "shared_with_team": skill.shared_with_team,
+        "full_document": skill.full_document,
     }
 
 
@@ -956,6 +1160,8 @@ async def update_custom_skill(
         skill.all_notebooks = body.all_notebooks
     if body.shared_with_team is not None:
         skill.shared_with_team = body.shared_with_team
+    if body.full_document is not None:
+        skill.full_document = body.full_document
     await db.commit()
     return {"data": {"message": "Skill updated"}}
 
@@ -999,8 +1205,18 @@ async def execute_custom_skill(
     live_transcript = await get_live_transcript_for_notebook_async(notebook_id)
     if live_transcript:
         context = live_transcript
+    elif getattr(skill, 'full_document', False):
+        # Try full text first, then fall back to tiered strategy
+        full_text = await _get_full_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
+        max_chars = (settings.LLM_CONTEXT_WINDOW - 20000) * 2
+        if full_text and len(full_text) <= max_chars:
+            context = full_text
+            logger.info("Custom skill full_document: using full text (%d chars)", len(full_text))
+        else:
+            logger.info("Custom skill full_document: full text too large (%d chars), using tiered strategy", len(full_text) if full_text else 0)
+            context = await _get_tiered_skill_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
     else:
-        context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
+        context = await _get_tiered_skill_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
 
     if not context:
         raise HTTPException(status_code=400, detail="No ready sources available")
@@ -1012,7 +1228,12 @@ async def execute_custom_skill(
         {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},
     ]
-    content = await qwen_client.generate(messages)
+    try:
+        content = await llm_client.generate(messages, max_tokens=8192)
+    except Exception as e:
+        if "context" in str(e).lower() or "token" in str(e).lower() or "length" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Document content too long. Please select fewer sources and try again.")
+        raise
 
     # Save as ChatMessage
     from backend.models.chat_message import ChatMessage
@@ -1066,7 +1287,8 @@ async def generate_content(
         context = live_transcript
         logger.info("Studio %s: using live meeting transcript (%d chars)", content_type, len(context))
     else:
-        context = await _get_source_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
+        # Tiered context strategy: full text → tree summaries + RAG → digest + RAG
+        context = await _get_tiered_skill_context(db, uuid.UUID(notebook_id), source_ids=source_ids)
 
     t_context = time.time()
     if not context:
@@ -1084,7 +1306,12 @@ async def generate_content(
         {"role": "system", "content": system_msg},
         {"role": "user", "content": prompt},
     ]
-    content = await qwen_client.generate(messages)
+    try:
+        content = await llm_client.generate(messages, max_tokens=8192)
+    except Exception as e:
+        if "context" in str(e).lower() or "token" in str(e).lower() or "length" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Document content too long. Please select fewer sources and try again.")
+        raise
     t_llm = time.time()
 
     logger.info("Skill %s: LLM generation %.1fs, %d chars output. Total: %.1fs", content_type, t_llm - t_context, len(content), t_llm - t_start)

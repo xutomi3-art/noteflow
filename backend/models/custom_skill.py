@@ -19,5 +19,6 @@ class CustomSkill(Base):
     notebook_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("notebooks.id", ondelete="CASCADE"))
     all_notebooks: Mapped[bool] = mapped_column(Boolean, default=True)
     shared_with_team: Mapped[bool] = mapped_column(Boolean, default=False)
+    full_document: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

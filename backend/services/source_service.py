@@ -48,18 +48,20 @@ async def get_source(db: AsyncSession, source_id: uuid.UUID) -> Source | None:
 async def update_source_status(
     db: AsyncSession,
     source_id: uuid.UUID,
-    status: str,
+    status: str | None = None,
     error_message: str | None = None,
     ragflow_dataset_id: str | None = None,
     ragflow_doc_id: str | None = None,
     duckdb_path: str | None = None,
     retry_count: int | None = None,
     progress: float | None = None,
+    page_index_tree: dict | None = None,
 ) -> Source | None:
     source = await get_source(db, source_id)
     if source is None:
         return None
-    source.status = status
+    if status is not None:
+        source.status = status
     if progress is not None:
         source.progress = progress
     if error_message is not None:
@@ -72,6 +74,8 @@ async def update_source_status(
         source.duckdb_path = duckdb_path
     if retry_count is not None:
         source.retry_count = retry_count
+    if page_index_tree is not None:
+        source.page_index_tree = page_index_tree
     await db.commit()
     await db.refresh(source)
     return source

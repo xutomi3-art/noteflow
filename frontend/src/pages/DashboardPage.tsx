@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon, Bug, MoreHorizontal, Pencil, Sparkles } from 'lucide-react';
+import { Plus, User, Users, ChevronRight, X, Upload, LogOut, Star, FileText, Loader2, Shield, Trash2, Globe, Link as LinkIcon, Bug, MoreHorizontal, Pencil, Sparkles, Mic, Settings } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotebookStore } from '@/stores/notebook-store';
 import { api } from '@/services/api';
@@ -8,6 +8,7 @@ import { setPendingUploadFiles, setPendingUploadUrls } from '@/stores/pending-up
 import type { Notebook } from '@/types/api';
 import ShareModal from '@/components/sharing/ShareModal';
 import FeedbackModal from '@/components/FeedbackModal';
+import { useMeetingStore } from '@/features/meeting/meeting-store';
 
 const EMOJIS = ['📝', '🚀', '🔬', '📈', '💡', '💰', '⚡', '🎨', '🏷️', '📋', '⚙️', '📅', '🌟', '🎯', '📚', '🧪', '🔥', '🌈', '🎵', '🧠'];
 const COLORS = ['#ecfccb', '#dbeafe', '#d1fae5', '#fef08a', '#fed7aa', '#f3e8ff', '#cffafe', '#fce7f3', '#e0e7ff', '#ffedd5'];
@@ -44,6 +45,32 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { notebooks, isLoading, fetchNotebooks, createNotebook, deleteNotebook } = useNotebookStore();
+  // Recording indicator: combine client-side store + server-side active meetings
+  const storeRecNotebookId = useMeetingStore((s) => s.isRecording ? s.activeMeeting?.notebook_id : null);
+  const storeRecPaused = useMeetingStore((s) => s.isPaused);
+  const [serverActiveMeetings, setServerActiveMeetings] = useState<Record<string, 'recording' | 'paused'>>({});
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+    fetch('/api/meetings/my-active', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((meetings: Array<{ notebook_id: string; status: string }>) => {
+        const map: Record<string, 'recording' | 'paused'> = {};
+        for (const m of meetings) {
+          map[m.notebook_id] = m.status as 'recording' | 'paused';
+        }
+        setServerActiveMeetings(map);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Merge: client store takes priority (real-time), server fills in for other tabs/sessions
+  const getRecordingStatus = (notebookId: string): 'recording' | 'paused' | null => {
+    if (storeRecNotebookId === notebookId) return storeRecPaused ? 'paused' : 'recording';
+    if (serverActiveMeetings[notebookId]) return serverActiveMeetings[notebookId];
+    return null;
+  };
 
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -73,17 +100,45 @@ export default function DashboardPage() {
   const [notebookName, setNotebookName] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [showCustomPrompt, setShowCustomPrompt] = useState(true);
+  const [personaPreset, setPersonaPreset] = useState<string>("balanced");
   const [isCreating, setIsCreating] = useState(false);
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const [pendingUrls, setPendingUrlsList] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [urlError, setUrlError] = useState<string | null>(null);
   const [showUrlInput, setShowUrlInput] = useState(true);
+  const [showHotwords, setShowHotwords] = useState(false);
+  const [hotwords, setHotwords] = useState<string[]>([]);
+  const [hotwordInput, setHotwordInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createMenuRef = useRef<HTMLDivElement>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuHoverRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load hotwords
+  useEffect(() => {
+    // Use any notebook id to fetch user-level hotwords (they're per-user, not per-notebook)
+    const nbId = notebooks[0]?.id;
+    if (!nbId) return;
+    fetch(`/api/notebooks/${nbId}/meetings/hotwords`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` },
+    })
+      .then((r) => r.json())
+      .then((d) => setHotwords(d.words || []))
+      .catch(() => {});
+  }, [notebooks]);
+
+  const saveHotwords = (words: string[]) => {
+    const nbId = notebooks[0]?.id;
+    if (!nbId) return;
+    setHotwords(words);
+    fetch(`/api/notebooks/${nbId}/meetings/hotwords`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("access_token") || ""}` },
+      body: JSON.stringify({ words }),
+    }).catch(() => {});
+  };
 
   useEffect(() => {
     fetchNotebooks();
@@ -399,6 +454,20 @@ export default function DashboardPage() {
                     </button>
                   )}
                   <button
+                    onClick={() => { setIsProfileMenuOpen(false); navigate('/settings'); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={() => { setIsProfileMenuOpen(false); setShowHotwords(true); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Mic className="w-4 h-4" />
+                    ASR Hotwords
+                  </button>
+                  <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 font-medium transition-colors"
                   >
@@ -506,6 +575,12 @@ export default function DashboardPage() {
                     style={{ backgroundColor: cardColor(notebook) }}
                   >
                     <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                      {getRecordingStatus(notebook.id) && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${getRecordingStatus(notebook.id) === 'paused' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
+                          {getRecordingStatus(notebook.id) === 'recording' && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" /></span>}
+                          {getRecordingStatus(notebook.id) === 'paused' ? 'PAUSED' : 'REC'}
+                        </span>
+                      )}
                       <button
                         onClick={(e) => toggleStarred(notebook.id, e)}
                         className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
@@ -638,7 +713,13 @@ export default function DashboardPage() {
                         <Users className="w-3.5 h-3.5" /> {notebook.member_count}
                       </div>
                     </div>
-                    <div className="absolute top-3 right-3 z-10">
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                      {getRecordingStatus(notebook.id) && (
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${getRecordingStatus(notebook.id) === 'paused' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}`}>
+                          {getRecordingStatus(notebook.id) === 'recording' && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" /></span>}
+                          {getRecordingStatus(notebook.id) === 'paused' ? 'PAUSED' : 'REC'}
+                        </span>
+                      )}
                       <button
                         onClick={(e) => toggleStarred(notebook.id, e)}
                         className="bg-white/80 backdrop-blur-sm p-1.5 rounded-full shadow-sm hover:bg-white transition-colors"
@@ -915,18 +996,55 @@ export default function DashboardPage() {
                   </button>
                   <div className="flex-1 h-px bg-slate-200" />
                 </div>
-                {showCustomPrompt && (
+                {showCustomPrompt && (() => {
+                  const presets = [
+                    { key: "balanced", label: "Balanced", prompt: "1. Use the provided documents as your primary source of facts.\n2. For factual questions (dates, names, numbers, policies), answer strictly based on documents.\n3. For advisory/analytical questions (suggestions, strategies, risks, \"what should we do\"), go beyond summarizing — provide your own insights, critical thinking, and actionable recommendations while still citing relevant document facts.\n4. If the context does not directly answer the question, present any related information and synthesize it. Only if there is truly NO related content, state that the documents do not contain this information.\n5. Be thorough and comprehensive — draw from all relevant context, not just the most obvious match.\n6. When the question asks about a specific date, scan ALL chunks for that date in any format." },
+                    { key: "strict", label: "Strict", prompt: "You are a precise, document-grounded research assistant.\n\n1. Answer ONLY based on information explicitly stated in the provided documents. Do not infer, speculate, or add external knowledge — even for advisory questions.\n2. If the documents do not contain the answer, state clearly: \"The provided documents do not contain this information.\" Do not attempt to guess or fill gaps with general knowledge.\n3. If you cannot cite a claim, do not say it. Every statement must be traceable to a specific source.\n4. When multiple documents discuss the same topic, compare and note any differences or contradictions between them.\n5. Preserve the original terminology and phrasing from the documents — do not paraphrase key terms.\n6. If a question is ambiguous, ask for clarification rather than assuming intent.\n7. When presenting information, clearly separate what the documents state from any logical inferences." },
+                    { key: "advisor", label: "Advisor", prompt: "You are a senior strategic advisor with deep analytical expertise. Your role is to help decision-makers:\n\n1. Go beyond summarizing — provide critical analysis, identify patterns, and surface non-obvious insights that the reader might miss.\n2. For every key finding, assess its implications: What does this mean? What are the risks? What opportunities does it create?\n3. Provide actionable recommendations with clear reasoning. Frame suggestions as \"Consider...\", \"Recommend...\", or \"Priority action:...\"\n4. When relevant, present pros/cons analysis or risk-reward tradeoffs in structured format (tables or bullet points).\n5. Connect information across multiple documents to build a comprehensive picture — don't treat each source in isolation.\n6. Flag any gaps in the available information that would affect decision quality.\n7. Prioritize insights by impact and urgency. Lead with the most important findings.\n8. Add your own expert interpretation on top of document evidence — the user expects analysis, not just summaries." },
+                    { key: "concise", label: "Concise", prompt: "You are a concise, no-nonsense assistant optimized for speed and clarity:\n\n1. Keep every response under 150 words unless the user explicitly asks for more detail.\n2. Use bullet points as the default format. No lengthy paragraphs.\n3. Lead with the direct answer in the first sentence — no preamble or context-setting.\n4. Maximum 3-5 bullet points per response. Each bullet should be one clear, complete thought.\n5. Use bold for key terms, numbers, and names to make scanning easy.\n6. Skip pleasantries, filler phrases (\"Great question!\", \"Based on the documents...\"), and restating the question.\n7. If the answer requires nuance, give the short answer first, then add a \"Details:\" section only if necessary.\n8. For yes/no questions, start with \"Yes\" or \"No\" immediately." },
+                    { key: "teacher", label: "Teacher", prompt: "You are a patient, encouraging tutor who makes complex information accessible:\n\n1. Explain concepts step by step, building from simple to complex. Never assume prior knowledge.\n2. Use analogies and real-world examples to make abstract ideas concrete.\n3. Break long explanations into numbered steps or clearly labeled sections.\n4. After explaining a concept, briefly summarize the key takeaway in one sentence.\n5. When introducing technical terms or jargon from the documents, define them in simple language.\n6. Use questions to guide thinking: \"Notice how...\" or \"Consider why this matters...\"\n7. If the topic is complex, offer to break it into smaller parts: \"Let me explain this in three parts...\"\n8. Encourage deeper exploration: suggest follow-up questions the user might want to ask.\n9. Use a warm, supportive tone — treat every question as a good question." },
+                    { key: "custom", label: "Custom", prompt: "" },
+                  ];
+                  const isCustom = personaPreset === "custom";
+                  const currentPreset = presets.find(p => p.key === personaPreset);
+                  const displayValue = isCustom ? customPrompt : (currentPreset?.prompt || "");
+                  return (
                   <div className="mt-3">
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {presets.map((p) => (
+                        <button key={p.key} type="button"
+                          onClick={() => {
+                            setPersonaPreset(p.key);
+                            if (p.key === "custom") {
+                              setCustomPrompt("");
+                            } else {
+                              setCustomPrompt(p.prompt);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${
+                            personaPreset === p.key
+                              ? "bg-[#5b8c15] text-white border-[#5b8c15]"
+                              : "bg-white text-slate-600 border-slate-200 hover:border-[#5b8c15]/40 hover:text-[#5b8c15]"
+                          }`}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                     <textarea
-                      placeholder={"e.g. You are a legal consultant, respond concisely and professionally\ne.g. For factual questions, strictly base answers on documents; for advisory questions, think broadly\ne.g. Always respond with bullet points, keep it under 3 sentences"}
-                      value={customPrompt}
-                      onChange={(e) => setCustomPrompt(e.target.value)}
+                      placeholder={isCustom ? "Write your custom persona instructions here..." : ""}
+                      value={displayValue}
+                      onChange={(e) => { if (isCustom) setCustomPrompt(e.target.value); }}
+                      readOnly={!isCustom}
                       rows={4}
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20 resize-none"
+                      className={`w-full px-4 py-3 rounded-xl border border-slate-200 text-sm outline-none transition-all resize-none ${
+                        !isCustom ? "bg-slate-50 text-slate-500 cursor-default" : "bg-white text-slate-900 focus:border-[#5b8c15] focus:ring-2 focus:ring-[#5b8c15]/20"
+                      }`}
                     />
                     <div className="mt-1 flex items-center justify-between">
-                      <p className="text-xs text-slate-400">Set the AI's response style and role for this notebook</p>
-                      <button
+                      <p className="text-xs text-slate-400">
+                        {isCustom ? "Write your own or use AI Optimize" : "Read-only preview — select Custom to edit"}
+                      </p>
+                      {isCustom && <button
                         type="button"
                         onClick={async () => {
                           if (!customPrompt.trim()) return;
@@ -945,10 +1063,11 @@ export default function DashboardPage() {
                       >
                         <Sparkles className="w-3 h-3" />
                         {isOptimizingPrompt ? "Optimizing..." : "AI Optimize"}
-                      </button>
+                      </button>}
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* Action buttons */}
                 <div className="mt-6 flex flex-col items-center gap-3">
@@ -1003,6 +1122,70 @@ export default function DashboardPage() {
 
       {/* Feedback Modal */}
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+
+      {/* Hotwords Modal */}
+      {showHotwords && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={() => setShowHotwords(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-[380px] max-h-[70vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="text-base font-semibold text-slate-900">ASR Hotwords</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Improve transcription accuracy with proper nouns and technical terms. Applied globally across all notebooks.</p>
+            </div>
+            <div className="px-5 py-3 border-b border-slate-100">
+              <p className="text-[11px] text-slate-500 mb-2">Industry presets (click to add, click again to remove)</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["AI", "Education", "Finance", "Healthcare"] as const).map(industry => {
+                  const presets: Record<string, string[]> = {
+                    AI: ["GPT-4o","GPT-4","Claude","Gemini","LLaMA","Qwen","DeepSeek","Mistral","ChatGPT","Copilot","Dify","LangChain","LlamaIndex","RAG","LLM","NLP","Transformer","BERT","LoRA","QLoRA","Fine-tuning","Embedding","Vector Database","Pinecone","Weaviate","Milvus","ChromaDB","FAISS","Prompt Engineering","Chain-of-Thought","ReAct","AutoGPT","Agent","Multi-Agent","MCP","Function Calling","Tool Use","Tokenizer","Attention","Diffusion","Stable Diffusion","Midjourney","DALL-E","ComfyUI","TensorFlow","PyTorch","Hugging Face","ONNX","vLLM","Ollama"],
+                    Education: ["IB","AP","A-Level","SAT","ACT","IELTS","TOEFL","GPA","IGCSE","MYP","PYP","Diploma Programme","Common App","Naviance","PowerSchool","Schoology","Canvas","Google Classroom","Turnitin","Managebac","WASC","CIS","NEASC","EARCOS","ACAMIS","SAS","ISB","HKIS","TAS","Curriculum","Rubric","Differentiation","Scaffolding","Formative Assessment","Summative Assessment","IEP","EAL","ESL","STEAM","SEL","Homeroom","Advisory","Capstone","Extended Essay","CAS","TOK","Internal Assessment","College Counseling","Transcript","Valedictorian"],
+                    Finance: ["ROI","EBITDA","P&L","GAAP","IFRS","IPO","M&A","PE Ratio","EPS","NAV","AUM","ETF","Hedge Fund","Venture Capital","Series A","Series B","Unicorn","Cap Table","Convertible Note","SAFE","Term Sheet","Due Diligence","LBO","DCF","WACC","Beta","Alpha","Sharpe Ratio","Yield Curve","Treasury","Fed Rate","Basis Points","Forex","Swap","Derivative","Compliance","KYC","AML","Basel III","Fintech","DeFi","Stablecoin","SWIFT","ACH","SEPA","Wire Transfer","Escrow","Amortization","Depreciation","Working Capital"],
+                    Healthcare: ["EHR","EMR","HIPAA","FDA","ICD-10","CPT","DRG","Telemedicine","Telehealth","mRNA","CRISPR","Biomarker","Clinical Trial","Phase III","Placebo","Double-Blind","IRB","Informed Consent","Adverse Event","Pharmacovigilance","GMP","GCP","CRO","CMO","API","Biosimilar","Monoclonal Antibody","Immunotherapy","CAR-T","PD-1","Oncology","Radiology","Pathology","MRI","CT Scan","Ultrasound","CBC","A1C","BMI","ICU","OR","ER","Triage","Diagnosis","Prognosis","Contraindication","Comorbidity","Epidemiology","WHO","CDC"],
+                  };
+                  const preset = presets[industry] || [];
+                  const isActive = preset.length > 0 && preset.every(w => hotwords.includes(w));
+                  return (
+                    <button key={industry} onClick={() => {
+                      if (isActive) { const s = new Set(preset); saveHotwords(hotwords.filter(w => !s.has(w))); }
+                      else { saveHotwords([...new Set([...hotwords, ...preset])]); }
+                    }} className={`px-2.5 py-1 rounded-lg border text-[11px] transition-colors ${isActive ? "bg-[#5b8c15]/10 border-[#5b8c15]/40 text-[#5b8c15] font-medium" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-[#5b8c15]/5 hover:border-[#5b8c15]/30 hover:text-[#5b8c15]"}`}>
+                      {isActive ? `✓ ${industry}` : industry}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="px-5 py-3 max-h-[40vh] overflow-y-auto">
+              {hotwords.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">No hotwords yet</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] text-slate-500">{hotwords.length} words</span>
+                    <button onClick={() => saveHotwords([])} className="text-[11px] text-red-500 hover:text-red-600 font-medium transition-colors">Clear All</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {hotwords.map((w) => (
+                      <span key={w} className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 rounded-lg text-sm text-slate-700">
+                        {w}
+                        <button onClick={() => saveHotwords(hotwords.filter((h) => h !== w))} className="text-slate-400 hover:text-red-500 transition-colors"><X className="w-3 h-3" /></button>
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100">
+              <form onSubmit={(e) => { e.preventDefault(); const w = hotwordInput.trim(); if (w && !hotwords.includes(w)) { saveHotwords([...hotwords, w]); setHotwordInput(""); } }} className="flex gap-2">
+                <input type="text" value={hotwordInput} onChange={(e) => setHotwordInput(e.target.value)} placeholder="e.g. Dify, JOTO, GPT-4o" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#5b8c15]/30 focus:border-[#5b8c15]" />
+                <button type="submit" className="px-3 py-2 bg-[#5b8c15] text-white rounded-lg text-sm font-medium hover:bg-[#4a7012] transition-colors">Add</button>
+              </form>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
+              <button onClick={() => setShowHotwords(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

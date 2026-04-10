@@ -108,6 +108,7 @@ app.include_router(asr.router, prefix="/api")
 app.include_router(feedback.router, prefix="/api")
 app.include_router(sessions.router, prefix="/api")
 app.include_router(meeting_router.router, prefix="/api")
+app.include_router(meeting_router.user_meeting_router, prefix="/api")
 app.include_router(meeting_share.router, prefix="/api")
 
 

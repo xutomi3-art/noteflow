@@ -495,6 +495,39 @@ def _is_hallucination(text: str) -> bool:
     return False
 
 
+def _clean_repetitions(text: str) -> str:
+    """Clean up ASR repetition artifacts.
+
+    Qwen3-ASR-1.7B produces repeated characters in long sessions due to
+    KV cache degradation (GitHub issues #129, #126, #140).
+    Examples: "说说说这个" → "说这个", "是是是" → "是", "有有有了" → "有了"
+
+    Uses a universal regex approach — no content-specific patterns.
+    """
+    if not text or len(text) < 3:
+        return text
+
+    # Single character repeated 2+ times: 说说说 → 说, 是是是 → 是
+    # But preserve intentional doubles like 谢谢, 哈哈, 嗯嗯
+    INTENTIONAL_REPEATS = {'谢谢', '哈哈', '呵呵', '嘻嘻', '嗯嗯', '哦哦', '啊啊', '喂喂', '妈妈', '爸爸', '姐姐', '哥哥', '弟弟', '妹妹', '宝宝', '慢慢', '常常', '往往', '刚刚', '仅仅', '渐渐', '频频', '偏偏'}
+
+    def _dedup_char(m: re.Match) -> str:
+        char = m.group(1)
+        repeat_count = len(m.group(0))
+        # Keep intentional repeats (谢谢, 哈哈, 嗯嗯 etc.) as doubles
+        if char + char in INTENTIONAL_REPEATS:
+            return char * min(repeat_count, 2)  # 哈哈哈 → 哈哈, 哈哈哈哈 → 哈哈
+        return char
+
+    # Match any single CJK character repeated 2+ times
+    text = re.sub(r'([\u4e00-\u9fff])\1{2,}', _dedup_char, text)
+
+    # 2-char phrase repeated 3+ times: "对对对对" → "对", but keep "对对" (acknowledgment)
+    text = re.sub(r'([\u4e00-\u9fff]{2})\1{2,}', r'\1', text)
+
+    return text
+
+
 def _add_punctuation(text: str) -> str:
     """Add basic Chinese/English punctuation to unpunctuated ASR output.
 
@@ -752,6 +785,9 @@ class Qwen3ASRClient:
 
                 # Add punctuation (FireRedASR-AED strips all punctuation)
                 text = _add_punctuation(text)
+
+                # Clean up ASR repetition artifacts (e.g., "说说说" → "说", "是是是" → "是")
+                text = _clean_repetitions(text)
 
                 if session.utterances and session.utterances[-1].text == text:
                     continue

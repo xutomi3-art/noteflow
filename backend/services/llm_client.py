@@ -72,7 +72,7 @@ def _build_extra(model: str, context_window: int, base_url: str = "", enable_sea
     return extra
 
 
-class QwenClient:
+class LlmClient:
     """OpenAI-compatible LLM client with automatic backup fallback.
 
     Primary: local GPU model (fast, no cost).
@@ -371,4 +371,4 @@ class QwenClient:
             return f"[Image: {filename} — analysis failed: {e}]"
 
 
-qwen_client = QwenClient()
+llm_client = LlmClient()

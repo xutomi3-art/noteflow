@@ -69,6 +69,21 @@ class ResetPasswordRequest(BaseModel):
         return v
 
 
+class UpdateProfileRequest(BaseModel):
+    name: str | None = None
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v: str | None) -> str | None:
+        if v is not None:
+            v = v.strip()
+            if not v:
+                raise ValueError('Name cannot be empty')
+            if len(v) > 100:
+                raise ValueError('Name must be 100 characters or less')
+        return v
+
+
 class UserResponse(BaseModel):
     id: str
     email: str

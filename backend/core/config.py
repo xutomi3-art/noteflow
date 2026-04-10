@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     RAGFLOW_API_KEY: str = ""
     RAPTOR_ENABLED: bool = False
     QUERY_REWRITE_ENABLED: bool = False
+    PAGEINDEX_ENABLED: bool = False
 
     # Vision LLM (for extracting text from chart images in PDFs)
     # Uses separate config since main LLM may be on a different provider

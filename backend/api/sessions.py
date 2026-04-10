@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
@@ -107,6 +107,27 @@ async def create_session(
     nb_uuid = uuid.UUID(notebook_id)
     if not await permission_service.check_permission(db, nb_uuid, user.id, "chat"):
         raise HTTPException(status_code=403, detail="No access to this notebook")
+
+    # Auto-cleanup: keep max 20 sessions per notebook, delete oldest if exceeded
+    MAX_SESSIONS = 20
+    count_result = await db.execute(
+        select(func.count()).select_from(Session).where(Session.notebook_id == nb_uuid)
+    )
+    session_count = count_result.scalar() or 0
+
+    if session_count >= MAX_SESSIONS:
+        # Find the oldest sessions to delete (keep newest MAX_SESSIONS - 1 to make room)
+        excess = session_count - MAX_SESSIONS + 1
+        oldest_result = await db.execute(
+            select(Session.id)
+            .where(Session.notebook_id == nb_uuid)
+            .order_by(Session.created_at.asc())
+            .limit(excess)
+        )
+        oldest_ids = [row[0] for row in oldest_result.all()]
+        if oldest_ids:
+            await db.execute(delete(Session).where(Session.id.in_(oldest_ids)))
+            logger.info("Auto-cleaned %d oldest sessions for notebook %s", len(oldest_ids), notebook_id)
 
     session = Session(
         name=req.name,

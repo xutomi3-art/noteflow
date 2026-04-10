@@ -14,7 +14,7 @@ from backend.core.deps import get_current_user
 from backend.models.notebook import Notebook
 from backend.models.user import User
 from backend.models.source import Source
-from backend.services.qwen_client import qwen_client
+from backend.services.llm_client import llm_client
 from backend.services.excel_service import excel_to_markdown
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ async def get_overview(
         {"role": "system", "content": f"You are a helpful assistant that analyzes documents. You MUST write your entire response in {lang}. Do NOT use any other language."},
         {"role": "user", "content": prompt},
     ]
-    raw = await qwen_client.generate(messages, temperature=0.5, max_tokens=500)
+    raw = await llm_client.generate(messages, temperature=0.5, max_tokens=500)
     t_llm = time.time()
     result = _parse_overview_response(raw)
 

@@ -304,6 +304,44 @@ def _save_parsed_content(file_path: str, content: str) -> str:
     return md_path
 
 
+def _get_parsed_path(file_path: str) -> str | None:
+    """Get the _parsed.md path for a source file."""
+    md_path = os.path.splitext(file_path)[0] + "_parsed.md"
+    return md_path if os.path.exists(md_path) else None
+
+
+async def _build_and_store_pageindex(source_id: uuid.UUID, parsed_md_path: str, file_path: str, content: str) -> None:
+    """Build PageIndex tree and store in Source.page_index_tree. Runs as background task.
+
+    If tree quality is "skip" (no usable headings), falls back to digest generation.
+    """
+    try:
+        from backend.services.pageindex_service import build_page_index_tree, store_page_index_tree
+        tree = await build_page_index_tree(parsed_md_path)
+        if tree:
+            quality = tree.get('_quality', 'skip')
+            await store_page_index_tree(source_id, tree)
+            node_count = sum(1 for _ in _iter_nodes(tree.get('structure', [])))
+            logger.info("PageIndex tree stored for source %s: %d nodes, quality=%s", source_id, node_count, quality)
+            if quality == 'skip':
+                logger.info("PageIndex quality=skip, also generating digest for %s", file_path)
+                await _generate_digest(file_path, content)
+        else:
+            logger.warning("PageIndex returned empty tree for %s, falling back to digest", parsed_md_path)
+            await _generate_digest(file_path, content)
+    except Exception as e:
+        logger.error("PageIndex build failed for %s: %s, falling back to digest", parsed_md_path, e)
+        await _generate_digest(file_path, content)
+
+
+def _iter_nodes(nodes: list):
+    """Iterate all nodes in a tree structure (for counting)."""
+    for node in nodes:
+        yield node
+        if node.get('nodes'):
+            yield from _iter_nodes(node['nodes'])
+
+
 _DIGEST_PROMPT = """Read the following document carefully and extract a comprehensive digest covering ALL of the following dimensions. Be specific — include actual names, numbers, dates, and details, not vague descriptions.
 
 1. **Document Type & Purpose** — What kind of document is this? What is its purpose?
@@ -782,9 +820,17 @@ async def process_document(
             logger.info("Using RAGFlow built-in parser for %s", filename)
             content = None
 
-        # Generate digest in background (parallel with RAGFlow vectorization)
+        # Generate document index in background (parallel with RAGFlow vectorization)
         if content:
-            asyncio.create_task(_generate_digest(file_path, content))
+            if settings.PAGEINDEX_ENABLED:
+                parsed_md_path = _get_parsed_path(file_path)
+                if parsed_md_path and os.path.exists(parsed_md_path):
+                    asyncio.create_task(_build_and_store_pageindex(sid, parsed_md_path, file_path, content))
+                else:
+                    logger.warning("PageIndex: no parsed .md file for %s, falling back to digest", filename)
+                    asyncio.create_task(_generate_digest(file_path, content))
+            else:
+                asyncio.create_task(_generate_digest(file_path, content))
 
         # Step 4: Upload to RAGFlow
         await _update_status(sid, "vectorizing", progress=88.0)

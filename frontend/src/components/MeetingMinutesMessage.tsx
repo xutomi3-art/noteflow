@@ -95,6 +95,43 @@ export default function MeetingMinutesMessage({ message, notebookId, onSave, isS
               </button>
             )}
           </div>
+          {/* Share button — always visible on the card */}
+          {!expanded && (
+            <div className="relative shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleShare(); }}
+                disabled={shareLoading}
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg transition-colors ${
+                  shareToken ? "text-blue-500 hover:bg-blue-50" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                }`}
+                title="Share meeting minutes"
+              >
+                {shareLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5" />}
+                <span className="text-[12px]">Share</span>
+              </button>
+              {shareOpen && shareToken && (
+                <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200 p-4 z-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-semibold text-slate-800">Share Meeting Minutes</h4>
+                    <button onClick={(e) => { e.stopPropagation(); setShareOpen(false); }} className="p-0.5 text-slate-400 hover:text-slate-600">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mb-3">Anyone with this link can view without logging in. Expires in 30 days.</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      <Link className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <input readOnly value={shareUrl} className="flex-1 text-[11px] text-slate-600 bg-transparent outline-none truncate" onClick={(e) => { e.stopPropagation(); (e.target as HTMLInputElement).select(); }} />
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); handleCopyLink(); }} className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors shrink-0 ${shareCopied ? "bg-[#5b8c15] text-white" : "bg-slate-800 text-white hover:bg-slate-700"}`}>
+                      {shareCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); handleRevoke(); }} className="mt-3 text-[11px] text-red-500 hover:text-red-600 transition-colors">Revoke link</button>
+                </div>
+              )}
+            </div>
+          )}
           {expanded && (
             <button
               onClick={() => setExpanded(false)}

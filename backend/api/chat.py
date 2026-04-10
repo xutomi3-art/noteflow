@@ -29,7 +29,7 @@ async def _disconnect_aware_stream(request: Request, generator):
 
     Every 5s checks request.is_disconnected() while waiting for the next chunk.
     When the client disconnects, cancels the pending LLM task and closes the
-    generator to trigger cleanup (including response.close() in qwen_client).
+    generator to trigger cleanup (including response.close() in llm_client).
     """
     it = generator.__aiter__()
     chunk_task: asyncio.Task | None = None
@@ -431,14 +431,14 @@ async def chat_multi(
         # For non-vision models, use vision model to extract image description first
         image_description = ""
         try:
-            from backend.services.qwen_client import qwen_client
+            from backend.services.llm_client import llm_client
             import tempfile, base64 as b64_mod
             for att in (req.attachments or []):
                 if att.type.startswith("image/"):
                     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                         tmp.write(b64_mod.b64decode(att.data))
                         tmp_path = tmp.name
-                    desc = await qwen_client.analyze_image(tmp_path, att.name)
+                    desc = await llm_client.analyze_image(tmp_path, att.name)
                     if desc:
                         image_description += f"\n[Image: {att.name}]\n{desc}\n"
                     import os
@@ -495,12 +495,12 @@ async def chat_multi(
                 )
             )).scalar() or 0
             if msg_count <= 1:
-                from backend.services.qwen_client import qwen_client
+                from backend.services.llm_client import llm_client
                 title_messages = [
                     {"role": "system", "content": "Generate a short title (max 6 words) for this chat session. Return ONLY the title, no quotes."},
                     {"role": "user", "content": req.message[:200]},
                 ]
-                title = await qwen_client.generate(title_messages)
+                title = await llm_client.generate(title_messages)
                 title = title.strip().strip('"').strip("'")[:60]
                 if title:
                     sess = await db.get(SessionModel, session_uuid)
@@ -773,8 +773,8 @@ async def chat_multi_stream(
                     )
                 )).scalar() or 0
                 if msg_count <= 1:
-                    from backend.services.qwen_client import qwen_client
-                    title = await qwen_client.generate([
+                    from backend.services.llm_client import llm_client
+                    title = await llm_client.generate([
                         {"role": "system", "content": "Generate a short title (max 6 words) for this chat session. Return ONLY the title, no quotes."},
                         {"role": "user", "content": req.message[:200]},
                     ])

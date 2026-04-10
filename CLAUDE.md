@@ -16,7 +16,15 @@ Full product spec: `PRD_KnowledgeBase_v4.md`
 - **Backend** (`backend/`): Python 3.12 FastAPI + SQLAlchemy 2.0 (async) + Pydantic 2
 - **Nginx** routes `/api/*` → FastAPI:8000, `/*` → Vite:3000 — no CORS needed
 
-Communication: REST + SSE (Server-Sent Events) for streaming. No WebSocket — SSE handles both chat streaming and document processing status.
+Communication: REST + SSE (Server-Sent Events) for streaming. **WebSocket is used for meeting audio streaming** (`/api/notebooks/{id}/meetings/{id}/audio`).
+
+**Critical: Nginx WebSocket proxy** — The `/api/` location block in `nginx.local.conf` MUST include WebSocket upgrade headers (`proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`). Without these, meeting audio WebSocket connections fail silently. Never remove these headers when editing nginx config.
+
+**Critical: ASR Provider** — ASR uses Qwen3-ASR-1.7B on Xinference at `http://10.200.0.102:9997/v1` via `ASR_PROVIDER=qwen3-asr` + `QWEN3_ASR_URL`. Do NOT use `comparison` mode (deprecated). `funasr` is a legacy alias for `qwen3-asr`.
+
+**Critical: docker compose env vars** — When changing environment variables in `docker-compose.override.yml`, you must run `docker compose up -d` (not just `docker compose restart`) to recreate the container with new env vars. `restart` does NOT pick up env var changes.
+
+**Critical: Linter overwrites** — A linter/formatter runs on save and may revert code changes (especially in `NotebookPage.tsx`). After editing, always verify the deployed file on the server matches your intent. When the linter reverts changes, edit directly on the server with `sed` and sync back to local.
 
 **Important**: The backend uses `backend.` package prefix for all imports (e.g., `from backend.core.config import settings`). All backend commands (uvicorn, pytest, alembic) must run from the **project root**, not from `backend/`.
 
@@ -43,11 +51,13 @@ RAGFlow is used **only for retrieval** — LLM generation is handled directly vi
 
 - `backend/services/ragflow_client.py` — RAGFlow HTTP API wrapper (dataset CRUD, document upload, retrieval)
 - `backend/services/mineru_client.py` — MinerU document parsing
-- `backend/services/qwen_client.py` — Qwen API for LLM generation + embedding
-- `backend/services/document_pipeline.py` — Orchestrates upload → parse → index → ready
-- `backend/services/chat_service.py` — AI response generation with citation assembly
-- `backend/services/query_router.py` — Routes queries between standard RAG, Excel/DuckDB, and deep-thinking modes
-- `backend/meeting/` — Self-contained meeting transcription module (ASR + speaker diarization) with its own models, schemas, router, and service
+- `backend/services/llm_client.py` — Unified LLM client (replaces old `qwen_client.py`): text generation, embedding, vision. Auto-fallback to DashScope cloud (`LLM_BACKUP_ENABLED`) when local GPU vLLM is unreachable
+- `backend/services/document_pipeline.py` — Orchestrates upload → parse → index → ready. `recover_stuck_sources()` runs on startup to resume interrupted processing
+- `backend/services/chat_service.py` — AI response generation with citation assembly. Hard rules + soft rules system prompt architecture
+- `backend/services/query_router.py` — Routes queries: if source has `duckdb_path` → SQL via DuckDB (`excel_service.py`), otherwise → standard RAG retrieval
+- `backend/services/event_bus.py` — In-process SSE pub/sub (`asyncio.Queue` per notebook). Used by document pipeline + meeting to push status updates to frontend
+- `backend/services/pageindex_service.py` — Page index tree builder (controlled by `PAGEINDEX_ENABLED`, off by default)
+- `backend/meeting/` — Self-contained meeting module with own models, schemas, router, service. WebSocket audio streaming → ASR (Qwen3-ASR) → speaker diarization → live transcript → auto-generate meeting minutes on end
 
 ### External Services
 
@@ -58,6 +68,8 @@ Beyond Qwen (main LLM), the backend integrates several external APIs configured 
 - **Email**: Resend (`RESEND_API_KEY`) — primary; SMTP as legacy fallback
 - **PPT**: Docmee API (`DOCMEE_API_KEY`) — alternative to python-pptx
 - **Web Scraping**: Jina Reader — URL-to-document import
+- **Web Search**: Serper — used in JustChat mode for grounded answers
+- **Backup LLM**: DashScope cloud (qwen3.5-plus, 1M context) — auto-fallback when local GPU vLLM unreachable (`LLM_BACKUP_ENABLED=True`)
 
 ### RAG Tuning (backend/core/config.py)
 
@@ -78,23 +90,17 @@ Key retrieval knobs — change these to tune answer quality:
 - `backend/core/` — Config (Pydantic BaseSettings), database engine, security, dependency injection
 - `backend/tests/` — pytest tests (conftest uses in-memory SQLite with UUID/DateTime type adapters; `asyncio_mode = auto` in pytest.ini)
 
-### State Management (Frontend)
+### Frontend Structure
 
-Zustand stores in `frontend/src/stores/` with cross-panel coordination:
-- `authStore` — JWT token, user profile, refresh logic
-- `notebookStore` — notebook list, current notebook
-- `sourceStore` — document sources per notebook
-- `chatStore` — messages, streaming state, selected source IDs for scoped queries
-- `studioStore` — generated outputs (summary, FAQ, study guide), saved notes
-- `sharingStore` — notebook sharing, members, invite links
-- `adminStore` — admin panel state
-- `pendingUploadStore` — tracks in-progress file uploads
+Zustand stores in `frontend/src/stores/` (each has co-located `.test.ts`). Path alias: `@/*` → `./src/*`.
 
-Path alias: `@/*` → `./src/*` (configured in tsconfig + vite). Each store has a co-located `.test.ts` file.
+Meeting feature is isolated in `frontend/src/features/meeting/` — own store (`meeting-store.ts`), components (`MeetingPanel`, `MeetingControls`, `UtteranceList`, `SpeakerLabel`), and AudioWorklet PCM capture.
+
+**JustChat mode**: When `Notebook.is_just_chat=True`, skips document retrieval and goes direct to LLM with optional web search (Serper). No Sources panel shown.
 
 ### Auth
 
-Custom JWT issued by FastAPI (not NextAuth). 24h expiry + refresh token rotation. Tokens stored in httpOnly cookies via Nginx.
+Custom JWT issued by FastAPI (not NextAuth). 24h expiry + refresh token rotation. Frontend stores tokens in `localStorage`; `ApiClient` auto-refreshes on 401.
 
 ### Citation Contract
 
@@ -110,6 +116,22 @@ interface Citation {
 }
 ```
 This contract must be preserved end-to-end: MinerU/parser tags chunks with location metadata → RAGFlow preserves it through indexing → retrieval response includes it → FastAPI assembles Citation objects.
+
+### Meeting Module Details (`backend/meeting/`)
+
+WebSocket endpoint: `WS /api/notebooks/{id}/meetings/{meeting_id}/audio`
+- Client sends: binary PCM (16-bit 16kHz mono, ~200ms chunks) or JSON control (`pause`/`resume`/`end`/`ping`)
+- Server sends: JSON utterance events, `reconnecting`/`reconnected`/`error`
+- Auto-reconnects ASR up to 50 times (~2.5 hours)
+- On WS disconnect: pauses ASR, schedules 5-minute auto-end
+
+**End meeting flow**: Close ASR → merge DB + final utterances → apply speaker map → format transcript (Beijing TZ) → LLM title generation (`YYMMDD 主题`) → save `.md` file → create Source record → trigger `process_document()` → SSE `meeting_ended` → generate meeting minutes (async)
+
+**AI Suggestions** (live): Configurable per notebook (`suggestion_level`: off/low/medium/high). Sends insights (contradictions, blind spots, missing voices) as `meeting_suggestion` chat messages.
+
+### Multi-Session Chat
+
+Each notebook supports multiple chat sessions (`backend/api/sessions.py`, `backend/models/session.py`). Messages are scoped by `session_id`. Frontend tracks `currentSessionId` in `chatStore`.
 
 ## Tech Stack
 
@@ -198,7 +220,7 @@ Tests use **in-memory SQLite** (no PostgreSQL needed). Key patterns in `backend/
 
 - **Frontend style**: Apple-inspired — clean, generous whitespace, rounded corners, subtle shadows, system font stack (SF Pro style)
 - **API format**: `{ "data": ... }` for success, `{ "error": { "code": "...", "message": "..." } }` for errors
-- **Real-time**: SSE only (no WebSocket) for both chat streaming and status updates
+- **Real-time**: SSE for chat streaming and status updates; **WebSocket** only for meeting audio streaming
 
 ## Feature Status
 

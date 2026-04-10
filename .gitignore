@@ -57,3 +57,5 @@ test_bad_file.exe
 
 # Login credentials (sensitive)
 LOGIN.md
+frontend/ios/
+frontend/android/

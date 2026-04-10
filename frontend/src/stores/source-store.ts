@@ -15,6 +15,8 @@ interface SourceState {
   raptorStatus: "idle" | "running" | "done" | "failed";
   onMeetingUtterance: ((event: Record<string, unknown>) => void) | null;
   setOnMeetingUtterance: (cb: ((event: Record<string, unknown>) => void) | null) => void;
+  onMeetingEnded: (() => void) | null;
+  setOnMeetingEnded: (cb: (() => void) | null) => void;
 
   fetchSources: (notebookId: string) => Promise<void>;
   uploadSource: (notebookId: string, file: File) => Promise<Source>;
@@ -42,6 +44,8 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   raptorStatus: "idle",
   onMeetingUtterance: null,
   setOnMeetingUtterance: (cb) => set({ onMeetingUtterance: cb }),
+  onMeetingEnded: null,
+  setOnMeetingEnded: (cb) => set({ onMeetingEnded: cb }),
 
   fetchSources: async (notebookId: string) => {
     set({ isLoading: true });
@@ -202,6 +206,12 @@ export const useSourceStore = create<SourceState>((set, get) => ({
             });
           });
         });
+      }
+
+      // Meeting ended — notify listeners (e.g., clear otherMeetingActive)
+      if (event.type === "meeting_ended") {
+        const cb = get().onMeetingEnded;
+        if (cb) cb();
       }
 
       // Meeting suggestion or minutes ready — add to chat

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import String, BigInteger, DateTime, ForeignKey, Text, Integer, Float
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.core.database import Base
@@ -25,4 +25,5 @@ class Source(Base):
     retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     progress: Mapped[float | None] = mapped_column(Float, nullable=True)
     duckdb_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    page_index_tree: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

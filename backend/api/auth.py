@@ -18,7 +18,7 @@ from backend.core.deps import get_current_user
 from backend.core.security import create_access_token, create_refresh_token, create_password_reset_token, decode_password_reset_token, hash_password
 from backend.models.notebook import Notebook
 from backend.models.user import User
-from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
+from backend.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse, UpdateProfileRequest, ForgotPasswordRequest, ResetPasswordRequest
 from backend.services import auth_service
 from backend.services import google_auth_service
 from backend.services import microsoft_auth_service
@@ -215,6 +215,26 @@ async def refresh(req: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)):
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        avatar=user.avatar,
+        is_admin=user.is_admin,
+        auth_provider=user.auth_provider,
+    )
+
+
+@router.patch("/profile")
+async def update_profile(
+    req: UpdateProfileRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if req.name is not None:
+        user.name = req.name
+    await db.commit()
+    await db.refresh(user)
     return UserResponse(
         id=str(user.id),
         email=user.email,
